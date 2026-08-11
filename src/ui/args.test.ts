@@ -1,37 +1,48 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {parseArgs} from './args.js';
 
-test('parseArgs reads the workspace', () => {
-  const options = parseArgs(['--workspace', process.cwd()]);
+test('parseArgs works on the current directory', () => {
+  const options = parseArgs([], process.cwd());
 
   assert.equal(options.workspaceRoot, process.cwd());
 });
 
+test('parseArgs refuses to run in the home directory', () => {
+  assert.throws(() => parseArgs([], os.homedir()), /home directory/);
+});
+
+test('parseArgs refuses to run in the filesystem root', () => {
+  assert.throws(
+    () => parseArgs([], path.parse(process.cwd()).root),
+    /filesystem root/,
+  );
+});
+
+test('parseArgs rejects the removed workspace option', () => {
+  assert.throws(
+    () => parseArgs(['--workspace', process.cwd()]),
+    /--workspace was removed/,
+  );
+});
+
 test('parseArgs rejects a task argument', () => {
   assert.throws(
-    () => parseArgs(['--workspace', process.cwd(), 'fix', 'the', 'bug']),
+    () => parseArgs(['fix', 'the', 'bug']),
     /unexpected argument: fix/,
   );
 });
 
 test('parseArgs rejects the removed sandbox opt-out', () => {
-  assert.throws(
-    () => parseArgs(['--workspace', process.cwd(), '--no-sandbox']),
-    /unknown option/,
-  );
+  assert.throws(() => parseArgs(['--no-sandbox']), /unknown option/);
 });
 
 test('parseArgs rejects unknown options', () => {
-  assert.throws(
-    () => parseArgs(['--workspace', process.cwd(), '--unknown']),
-    /unknown option/,
-  );
+  assert.throws(() => parseArgs(['--unknown']), /unknown option/);
 });
 
 test('parseArgs rejects removed debug option', () => {
-  assert.throws(
-    () => parseArgs(['--workspace', process.cwd(), '--debug']),
-    /unknown option: --debug/,
-  );
+  assert.throws(() => parseArgs(['--debug']), /unknown option: --debug/);
 });

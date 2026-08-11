@@ -1,34 +1,42 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 export type CliOptions = {
   workspaceRoot: string;
 };
 
-export function parseArgs(args: string[]): CliOptions {
-  let workspace: string | null = null;
+function refuse(root: string): void {
+  const hint = 'cd into a project folder first';
+  if (root === path.resolve(os.homedir())) {
+    throw new Error(`refusing to run in your home directory; ${hint}`);
+  }
+  if (path.parse(root).root === root) {
+    throw new Error(`refusing to run in the filesystem root; ${hint}`);
+  }
+}
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+export function parseArgs(
+  args: string[],
+  cwd: string = process.cwd(),
+): CliOptions {
+  for (const arg of args) {
     if (arg === '--workspace') {
-      const value = args[index + 1];
-      if (!value) throw new Error('missing value for --workspace');
-      workspace = value;
-      index += 1;
-    } else if (arg.startsWith('-')) {
-      throw new Error(`unknown option: ${arg}`);
-    } else {
-      throw new Error(`unexpected argument: ${arg}`);
+      throw new Error(
+        '--workspace was removed; cd into the folder you want to work on',
+      );
     }
+    if (arg.startsWith('-')) throw new Error(`unknown option: ${arg}`);
+    throw new Error(`unexpected argument: ${arg}`);
   }
 
-  if (!workspace) throw new Error('missing required --workspace argument');
-  const workspaceRoot = path.resolve(workspace);
+  const workspaceRoot = path.resolve(cwd);
+  refuse(workspaceRoot);
   if (!fs.existsSync(workspaceRoot)) {
-    throw new Error(`workspace does not exist: ${workspaceRoot}`);
+    throw new Error(`folder does not exist: ${workspaceRoot}`);
   }
   if (!fs.statSync(workspaceRoot).isDirectory()) {
-    throw new Error(`workspace is not a directory: ${workspaceRoot}`);
+    throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
   return {workspaceRoot};
