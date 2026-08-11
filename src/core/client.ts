@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import {loadEnvFiles} from './env.js';
 import type {Host, Usage} from './host.js';
 import type {ToolDefinition} from './tools/registry.js';
 
@@ -55,23 +56,27 @@ export type ModelChoice = {
   contextWindow: number;
 };
 
-function hasKey(id: string): boolean {
+export const DEFAULT_MODEL = 'deepseek-v4-flash';
+
+function hasKey(id: string, env: NodeJS.ProcessEnv): boolean {
   const info = MODELS[id];
-  return info ? Boolean(process.env[PROVIDERS[info.provider]!.keyEnv]) : false;
+  return info ? Boolean(env[PROVIDERS[info.provider]!.keyEnv]) : false;
 }
 
-function defaultModel(): string {
-  const explicit = process.env.ACC_MODEL;
+export function chooseModel(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.ACC_MODEL;
   if (explicit) return explicit;
-  const usable = Object.keys(MODELS).find(hasKey);
-  return usable ?? Object.keys(MODELS)[0]!;
+  if (hasKey(DEFAULT_MODEL, env)) return DEFAULT_MODEL;
+  return Object.keys(MODELS).find((id) => hasKey(id, env)) ?? DEFAULT_MODEL;
 }
 
-export function createClient(modelId = defaultModel()): ModelChoice {
-  const info = MODELS[modelId];
+export function createClient(modelId?: string): ModelChoice {
+  loadEnvFiles();
+  const resolved = modelId ?? chooseModel();
+  const info = MODELS[resolved];
   if (!info) {
     throw new Error(
-      `Unknown model '${modelId}'. Choose one of: ${Object.keys(MODELS).join(', ')}.`,
+      `Unknown model '${resolved}'. Choose one of: ${Object.keys(MODELS).join(', ')}.`,
     );
   }
   const provider = PROVIDERS[info.provider]!;
@@ -81,7 +86,7 @@ export function createClient(modelId = defaultModel()): ModelChoice {
   }
   return {
     client: new OpenAI({apiKey, baseURL: provider.baseUrl}),
-    model: modelId,
+    model: resolved,
     label: info.label,
     contextWindow: info.contextWindow,
   };
