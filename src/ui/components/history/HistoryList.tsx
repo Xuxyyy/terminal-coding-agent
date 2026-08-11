@@ -81,12 +81,18 @@ function workspaceRoot(items: Item[]): string | undefined {
   return undefined;
 }
 
-export function HistoryList({items}: {items: Item[]}) {
+export function HistoryList({
+  items,
+  awaitingApproval = false,
+}: {
+  items: Item[];
+  awaitingApproval?: boolean;
+}) {
   const rows = useMemo(() => historyRows(items), [items]);
   const root = useMemo(() => workspaceRoot(items), [items]);
   const {done, live} = useMemo(() => splitRows(rows), [rows]);
 
-  const render = (row: HistoryRow) =>
+  const render = (row: HistoryRow, waiting = false) =>
     row.kind === 'tool' ? (
       <ToolEntry
         key={row.id}
@@ -95,6 +101,7 @@ export function HistoryList({items}: {items: Item[]}) {
         result={row.result}
         diff={row.diff}
         workspaceRoot={root}
+        awaitingApproval={waiting}
       />
     ) : (
       <Entry key={row.id} item={row.item} />
@@ -103,7 +110,9 @@ export function HistoryList({items}: {items: Item[]}) {
   return (
     <Box flexDirection="column">
       <Static items={done}>{(row) => render(row)}</Static>
-      {live.map((row) => render(row))}
+      {live.map((row) =>
+        render(row, awaitingApproval && row.kind === 'tool' && row.result === null),
+      )}
     </Box>
   );
 }

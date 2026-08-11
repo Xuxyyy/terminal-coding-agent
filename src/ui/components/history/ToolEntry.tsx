@@ -18,8 +18,9 @@ function statusNode(
   name: string,
   result: string | null,
   diff: DiffPayload | null,
+  awaitingApproval: boolean,
 ): ReactNode {
-  if (result === null) return 'running…';
+  if (result === null) return awaitingApproval ? 'waiting for approval…' : 'running…';
   const status = resultStatus(name, result);
   if (status !== 'done' && status !== 'exit 0') return status;
   if (diff && diffSummary(diff)) {
@@ -58,15 +59,17 @@ export function ToolEntry({
   result,
   diff,
   workspaceRoot,
+  awaitingApproval = false,
 }: {
   name: string;
   args: unknown;
   result: string | null;
   diff: DiffPayload | null;
   workspaceRoot?: string;
+  awaitingApproval?: boolean;
 }) {
   const description = toolDescription(name, args);
-  const status = statusNode(name, result, diff);
+  const status = statusNode(name, result, diff, awaitingApproval);
   const summaryArgs = formatArgs(name, args, workspaceRoot);
   const failure = result === null ? null : failureOutput(name, result);
   const notice = result === null ? null : noticeText(result);

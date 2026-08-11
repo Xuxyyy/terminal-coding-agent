@@ -116,7 +116,11 @@ export function App({
 
   return (
     <Box flexDirection="column">
-      <HistoryList key={generation} items={committed} />
+      <HistoryList
+        key={generation}
+        items={committed}
+        awaitingApproval={phase.kind === 'confirming'}
+      />
       <Box flexDirection="column" marginTop={1}>
         {visibleStream ? <Markdown text={visibleStream} /> : null}
         {phase.kind === 'confirming' ? (
