@@ -77,7 +77,8 @@ function sessionsDir(workspace: string, home: string): string {
 }
 
 function byNewest(a: Entry, b: Entry): number {
-  return a.meta.id < b.meta.id ? 1 : -1;
+  const key = (entry: Entry): string => `${entry.meta.startedAt} ${entry.meta.id}`;
+  return key(a) < key(b) ? 1 : -1;
 }
 
 function entriesIn(dir: string): Entry[] {
