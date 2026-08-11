@@ -12,7 +12,7 @@ import {
 } from '../core/session.js';
 import type {Item, Phase, ReadyInfo} from './events.js';
 
-export const PERMISSION_LABEL = 'bash asks, edits allowed';
+export const PERMISSION_LABEL = 'asks before anything git cannot undo';
 
 export type Agent = {
   committed: Item[];
