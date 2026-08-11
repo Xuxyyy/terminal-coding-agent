@@ -13,6 +13,8 @@ These are **not tracked by git**, so they will not be in a fresh clone or a
   anything under `src/core/permission/`. It explains the rule the code follows
   ("git can undo it, or it cannot"), the five levels, and why the port drops
   Python's dead `UNDOABLE` level.
+- `docs/PLAN-v3.md` — v3: reliability. Not built yet. The turn-limit checkpoint,
+  narrow stream retry, and session resume.
 - `notes/` — session handoffs. Scratch, safe to ignore. This stays at the root
   because that is where the handoff tooling writes.
 
