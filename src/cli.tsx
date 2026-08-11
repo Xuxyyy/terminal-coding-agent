@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import {render} from 'ink';
 import {createClient} from './core/client.js';
 import {App} from './ui/app.js';
