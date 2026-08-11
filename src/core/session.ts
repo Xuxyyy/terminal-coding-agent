@@ -41,6 +41,7 @@ export function recordUsage(session: Session, usage: Usage): void {
 
 export function clearSession(session: Session): void {
   session.messages = [{role: 'system', content: session.systemPrompt}];
+  session.allowed.clear();
   session.lastContextTokens = 0;
 }
 
