@@ -185,13 +185,12 @@ export function loadSession(
 export function evictSessions(
   home: string = accHome(),
   now: Date = new Date(),
+  keep: number = SESSION_KEEP,
 ): number {
-  const all = allEntries(home);
   const cutoff = now.getTime() - SESSION_MAX_AGE_DAYS * 86_400_000;
-  const doomed =
-    all.length > SESSION_KEEP
-      ? all.slice(SESSION_KEEP)
-      : all.filter((entry) => Date.parse(entry.meta.startedAt) < cutoff);
+  const doomed = allEntries(home)
+    .slice(keep)
+    .filter((entry) => Date.parse(entry.meta.startedAt) < cutoff);
 
   for (const entry of doomed) {
     fs.rmSync(entry.dir, {recursive: true, force: true});

@@ -144,7 +144,7 @@ test('an old session is evicted, a recent one is kept', () => {
   recent.appendTurn([user('recent')], usage(5));
   recent.close();
 
-  const removed = evictSessions(root, new Date('2026-08-11T10:00:00Z'));
+  const removed = evictSessions(root, new Date('2026-08-11T10:00:00Z'), 1);
 
   assert.equal(removed, 1);
   assert.equal(fs.existsSync(old.dir), false);
