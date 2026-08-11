@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import {streamTurn, type ModelChoice} from './client.js';
+import {StreamFailure, streamTurn, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
 import {recordUsage, type Session} from './session.js';
 import type {SessionStore} from './store.js';
@@ -34,6 +34,8 @@ function assistantMessage(
   };
 }
 
+const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
+
 export async function runAgent(
   session: Session,
   choice: ModelChoice,
@@ -43,9 +45,43 @@ export async function runAgent(
 ): Promise<void> {
   const definitions = toolDefinitions(registry);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
+  let warned = false;
+  let checkpoints = true;
+
+  const save = (usage: Usage): void => {
+    if (!store) return;
+    try {
+      store.appendTurn(session.messages, usage);
+    } catch {
+      if (warned) return;
+      warned = true;
+      host.onEvent({
+        type: 'error',
+        message: 'could not save the session; the run continues',
+      });
+    }
+  };
 
   try {
-    for (let turn = 0; turn < MAX_TURNS; turn += 1) {
+    for (let turn = 0; ; turn += 1) {
+      if (host.signal.aborted) return;
+      if (checkpoints && turn > 0 && turn % MAX_TURNS === 0) {
+        const answer = await host.confirm({
+          command: 'continue',
+          reason: `${turn} turns without finishing`,
+          suppressible: true,
+        });
+        if (answer === 'deny') {
+          host.onEvent({
+            type: 'error',
+            message: `stopped after ${turn} turns without finishing`,
+          });
+          host.onEvent({type: 'turn_end', usage: total});
+          return;
+        }
+        if (answer === 'session') checkpoints = false;
+      }
+
       const result = await streamTurn(choice, session.messages, definitions, host);
       recordUsage(session, result.usage);
       total.prompt += result.usage.prompt;
@@ -60,6 +96,7 @@ export async function runAgent(
             message: 'the model hit its output limit; ask it to continue',
           });
         }
+        save(result.usage);
         host.onEvent({type: 'turn_end', usage: total});
         return;
       }
@@ -96,14 +133,15 @@ export async function runAgent(
           diff: output.diff ?? null,
         });
       }
+      save(result.usage);
     }
-    host.onEvent({
-      type: 'error',
-      message: `stopped after ${MAX_TURNS} turns without finishing`,
-    });
-    host.onEvent({type: 'turn_end', usage: total});
   } catch (error) {
     if (aborted(error, host)) return;
+    const partial = error instanceof StreamFailure ? error.partial : null;
+    if (partial?.content) {
+      session.messages.push(assistantMessage(partial.content, []));
+    }
+    save(partial?.usage ?? NO_USAGE);
     host.onEvent({type: 'error', message: (error as Error).message});
     host.onEvent({type: 'turn_end', usage: total});
   }
