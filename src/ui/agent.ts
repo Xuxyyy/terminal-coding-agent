@@ -30,7 +30,6 @@ export type Agent = {
 function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   return {
     workspace: workspaceRoot,
-    sandbox: false,
     model: {id: choice.model, label: choice.label},
     permission: {id: 'default', label: PERMISSION_LABEL},
   };

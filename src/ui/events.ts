@@ -14,7 +14,6 @@ export type PermissionInfo = {id: string; label: string};
 
 export type ReadyInfo = {
   workspace: string;
-  sandbox: boolean;
   model: {id: string; label: string};
   permission: PermissionInfo;
 };

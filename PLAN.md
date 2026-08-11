@@ -34,6 +34,10 @@ Deferred to v2: permission **modes** and a `--mode` flag, `/permissions` picker,
 (`FilePermissionConfirm`), command classifier, sandbox, context compaction, `/model` picker,
 todo panel, task verification, transcripts, skills, memory, web tools, evals.
 
+v1 shipped without a sandbox, so the welcome screen shows no sandbox status line and `ReadyInfo`
+carries no `sandbox` field. Whoever builds the sandbox adds both back, in the shape the sandbox
+actually needs — it will probably pair with permission modes, so an on/off boolean may be wrong.
+
 ## Architecture
 
 One seam holds the whole design together. The loop must never import React, but a tool deep
