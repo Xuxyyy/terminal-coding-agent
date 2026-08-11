@@ -7,7 +7,7 @@
     "build": "tsc",
     "dev": "tsc && node dist/cli.js",
     "start": "node dist/cli.js",
-    "test": "tsc && node --test dist"
+    "test": "tsc && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "ink": "^5.1.0",
