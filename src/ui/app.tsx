@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useApp, useInput, useStdout} from 'ink';
 import type {ModelChoice} from '../core/client.js';
+import type {StoredSession} from '../core/store.js';
 import {useAgent} from './agent.js';
 import {statusFor} from './events.js';
 import {streamRowBudget, tailLines} from './stream-view.js';
@@ -16,10 +17,12 @@ export function App({
   workspaceRoot,
   choice,
   onCleanExit,
+  restored = null,
 }: {
   workspaceRoot: string;
   choice: ModelChoice;
   onCleanExit: () => void;
+  restored?: StoredSession | null;
 }) {
   const {exit} = useApp();
   const {stdout} = useStdout();
@@ -34,7 +37,7 @@ export function App({
     clear,
     context,
     shutdown,
-  } = useAgent(workspaceRoot, choice);
+  } = useAgent(workspaceRoot, choice, restored);
   const [input, setInput] = useState('');
   const [commandHistory, setCommandHistory] = useState(loadCommandHistory);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);

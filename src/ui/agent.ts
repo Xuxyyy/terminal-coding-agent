@@ -10,7 +10,13 @@ import {
   createSession,
   type Session,
 } from '../core/session.js';
+import {
+  startSession,
+  type SessionStore,
+  type StoredSession,
+} from '../core/store.js';
 import type {Item, Phase, ReadyInfo} from './events.js';
+import {restoreView} from './restore.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
 
@@ -35,27 +41,48 @@ function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   };
 }
 
-export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
+export function useAgent(
+  workspaceRoot: string,
+  choice: ModelChoice,
+  restored: StoredSession | null = null,
+): Agent {
   const header = (): Item => ({
     kind: 'header',
     workspaceRoot,
     ready: readyInfo(workspaceRoot, choice),
   });
-  const [committed, setCommitted] = useState<Item[]>(() => [header()]);
+  const [committed, setCommitted] = useState<Item[]>(() =>
+    restored ? [header(), ...restoreView(restored)] : [header()],
+  );
   const [streamText, setStreamText] = useState('');
   const [phase, setPhase] = useState<Phase>({kind: 'idle'});
   const [generation, setGeneration] = useState(0);
   const sessionRef = useRef<Session | null>(null);
+  const storeRef = useRef<SessionStore | null | undefined>(undefined);
   const liveTextRef = useRef('');
   const controllerRef = useRef<AbortController | null>(null);
   const resolveConfirmRef = useRef<((d: ConfirmDecision) => void) | null>(null);
 
   if (sessionRef.current === null) {
-    sessionRef.current = createSession(
+    const started = createSession(
       workspaceRoot,
       systemPrompt(workspaceRoot),
       choice.contextWindow,
     );
+    if (restored) {
+      for (const message of restored.messages) {
+        if (message.role !== 'system') started.messages.push(message);
+      }
+      started.usage = {...restored.meta.usage};
+    }
+    sessionRef.current = started;
+  }
+  if (storeRef.current === undefined) {
+    try {
+      storeRef.current = startSession(workspaceRoot);
+    } catch {
+      storeRef.current = null;
+    }
   }
   const session = sessionRef.current;
 
@@ -101,7 +128,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       },
     };
 
-    void runAgent(session, choice, host).finally(() => {
+    const store = storeRef.current ?? undefined;
+    void runAgent(session, choice, host, undefined, store).finally(() => {
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {
@@ -124,6 +152,12 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   const clear = () => {
     if (phase.kind !== 'idle') return;
     clearSession(session);
+    try {
+      storeRef.current?.close();
+      storeRef.current = startSession(workspaceRoot);
+    } catch {
+      storeRef.current = null;
+    }
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);
@@ -138,6 +172,11 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
 
   const shutdown = () => {
     controllerRef.current?.abort();
+    try {
+      storeRef.current?.close();
+    } catch {
+      storeRef.current = null;
+    }
     setPhase({kind: 'closed'});
   };
 
