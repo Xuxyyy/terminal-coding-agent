@@ -5,10 +5,7 @@ import {theme} from '../theme.js';
 
 const COMMANDS = [
   {value: '/context', description: 'show token usage'},
-  {value: '/compact', description: 'summarize old messages'},
   {value: '/clear', description: 'clear the conversation'},
-  {value: '/model', description: 'switch model'},
-  {value: '/permissions', description: 'change permission mode'},
 ];
 
 export function commandMatches(input: string) {
