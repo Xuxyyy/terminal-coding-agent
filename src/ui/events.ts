@@ -155,7 +155,7 @@ export function resultCount(name: string, result: string): string | null {
     : '';
   const range = result.match(/\[file has (\d+) lines; showing (\d+)-(\d+)\./);
   if (range) {
-    return `lines ${Number(range[2]).toLocaleString('en-US')}–${Number(range[3]).toLocaleString('en-US')} of ${Number(range[1]).toLocaleString('en-US')}`;
+    return `lines ${Number(range[2]).toLocaleString('en-US')}-${Number(range[3]).toLocaleString('en-US')}`;
   }
   const note = result.match(/\[file has (\d+) lines/);
   if (note) return count(Number(note[1]), 'line', 'lines');

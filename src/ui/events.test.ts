@@ -130,14 +130,14 @@ test('resultCount admits when the tool output was cut off', () => {
   assert.equal(resultCount('read_file', result), '3 lines (truncated)');
 });
 
-test('resultCount shows the returned range and total file size', () => {
+test('resultCount shows the returned range', () => {
   assert.equal(
     resultCount('read_file', 'x = 1\n[file has 214 lines; showing 1-40.]'),
-    'lines 1–40 of 214',
+    'lines 1-40',
   );
   assert.equal(
     resultCount('read_file', 'x = 1\n[file has 1234 lines; showing 401-800.]'),
-    'lines 401–800 of 1,234',
+    'lines 401-800',
   );
 });
 
