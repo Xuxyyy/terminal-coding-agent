@@ -16,6 +16,8 @@ Work like a careful engineer:
 - Prefer edit_file over write_file for a file that already exists.
 - edit_file needs old_string to appear exactly once, so include enough surrounding lines.
 
+If the user greets you or asks something you can answer from what you already know, reply directly without calling a tool.
+
 When a tool returns an error, read it and try a different approach; do not repeat the same call.
 Stop and answer the user once the task is done. Keep your final answer short and concrete: what you changed and how you verified it.`;
 
