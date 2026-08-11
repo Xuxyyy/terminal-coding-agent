@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {DIFF_MAX_LINES, diffPayload} from './diff.js';
+import {DIFF_MAX_LINES, diffPayload} from '../../../core/tools/diff.js';
 
 test('diffPayload counts the change and keeps surrounding context', () => {
   const before = 'a\nb\nc\nd\ne\n';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {historyRows, splitRows} from './components/history/HistoryList.js';
-import type {Item} from './events.js';
+import {historyRows, splitRows} from '../../ui/components/history/HistoryList.js';
+import type {Item} from '../../ui/events.js';
 
 test('historyRows pairs a tool result with its call', () => {
   const items: Item[] = [

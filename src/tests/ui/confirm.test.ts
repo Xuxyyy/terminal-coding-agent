@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {confirmChoices, confirmDecisionForKey} from './confirm.js';
+import {confirmChoices, confirmDecisionForKey} from '../../ui/confirm.js';
 
 const line = (suppressible: boolean) =>
   confirmChoices(suppressible)

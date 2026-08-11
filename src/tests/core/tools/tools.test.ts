@@ -4,12 +4,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {z} from 'zod';
-import type {ConfirmDecision, ConfirmRequest, Host} from '../host.js';
-import {bash} from './bash.js';
-import {editFile} from './edit.js';
-import {readFile} from './read.js';
-import {runTool, toolDefinitions, type Tool, type ToolContext} from './registry.js';
-import {writeFile} from './write.js';
+import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js';
+import {bash} from '../../../core/tools/bash.js';
+import {editFile} from '../../../core/tools/edit.js';
+import {readFile} from '../../../core/tools/read.js';
+import {runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
+import {writeFile} from '../../../core/tools/write.js';
 
 function workspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-'));

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import {loadEnvFiles} from './env.js';
 import type {Host, Usage} from './host.js';
+import type {RetryOptions} from './retry.js';
 import type {ToolDefinition} from './tools/registry.js';
 
 type Provider = {baseUrl: string; keyEnv: string};
@@ -101,11 +102,22 @@ export type AssistantTurn = {
   usage: Usage;
 };
 
+export class StreamFailure extends Error {
+  readonly partial: AssistantTurn;
+
+  constructor(message: string, partial: AssistantTurn, cause?: unknown) {
+    super(message, {cause});
+    this.name = 'StreamFailure';
+    this.partial = partial;
+  }
+}
+
 export async function streamTurn(
   choice: ModelChoice,
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
+  retry: Partial<RetryOptions> = {},
 ): Promise<AssistantTurn> {
   const stream = await choice.client.chat.completions.create(
     {

@@ -12,7 +12,7 @@ import {
   toolDescription,
   writeSummary,
   type Item,
-} from './events.js';
+} from '../../ui/events.js';
 
 test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(

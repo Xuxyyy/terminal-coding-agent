@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {chooseModel, DEFAULT_MODEL} from './client.js';
-import {loadEnvFiles, parseEnv} from './env.js';
+import {chooseModel, DEFAULT_MODEL} from '../../core/client.js';
+import {loadEnvFiles, parseEnv} from '../../core/env.js';
 
 test('parseEnv reads plain, quoted, and exported lines', () => {
   const values = parseEnv(

@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {classifyCommand, classifyWrite, type Level} from './classify.js';
-import {isProtectedPath, realPath} from './protected.js';
+import {classifyCommand, classifyWrite, type Level} from '../../../core/permission/classify.js';
+import {isProtectedPath, realPath} from '../../../core/permission/protected.js';
 
 const project = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-classify-'));
 const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-outside-'));

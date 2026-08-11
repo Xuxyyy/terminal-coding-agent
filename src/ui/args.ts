@@ -4,6 +4,9 @@ import * as path from 'node:path';
 
 export type CliOptions = {
   workspaceRoot: string;
+  resume: boolean;
+  resumeId: string | null;
+  sessions: boolean;
 };
 
 function refuse(root: string): void {
@@ -39,5 +42,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot};
+  return {workspaceRoot, resume: false, resumeId: null, sessions: false};
 }

@@ -7,7 +7,7 @@ import {
   appendCommandHistory,
   loadCommandHistory,
   parseCommandHistory,
-} from './command-history.js';
+} from '../../ui/command-history.js';
 
 test('parseCommandHistory reads prompt_toolkit history files', () => {
   const content = [

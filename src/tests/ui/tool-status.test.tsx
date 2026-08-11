@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {render} from 'ink';
-import {HistoryList} from './components/history/HistoryList.js';
-import type {Item} from './events.js';
+import {HistoryList} from '../../ui/components/history/HistoryList.js';
+import type {Item} from '../../ui/events.js';
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');

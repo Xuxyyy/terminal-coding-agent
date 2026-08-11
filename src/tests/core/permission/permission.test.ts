@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {approvalKey, decide, type Outcome} from './decide.js';
+import {approvalKey, decide, type Outcome} from '../../../core/permission/decide.js';
 
 const project = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-permission-')),

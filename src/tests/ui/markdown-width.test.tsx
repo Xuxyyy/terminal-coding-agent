@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {Box, render} from 'ink';
 import stringWidth from 'string-width';
-import {Markdown} from './components/Markdown.js';
+import {Markdown} from '../../ui/components/Markdown.js';
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');

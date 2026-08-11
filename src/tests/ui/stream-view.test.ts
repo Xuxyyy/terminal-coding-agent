@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {planPanelRows, streamRowBudget, tailLines} from './stream-view.js';
+import {planPanelRows, streamRowBudget, tailLines} from '../../ui/stream-view.js';
 
 test('streamRowBudget leaves room for the status lines below the stream', () => {
   assert.equal(streamRowBudget(40), 32);

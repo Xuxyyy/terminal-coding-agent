@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {commandMatches, completeCommand} from './components/CommandInput.js';
+import {commandMatches, completeCommand} from '../../ui/components/CommandInput.js';
 
 test('the menu offers only the commands this version has', () => {
   assert.deepEqual(

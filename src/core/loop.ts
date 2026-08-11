@@ -2,6 +2,7 @@ import type OpenAI from 'openai';
 import {streamTurn, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
 import {recordUsage, type Session} from './session.js';
+import type {SessionStore} from './store.js';
 import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
 import type {Tool} from './tools/registry.js';
 
@@ -38,6 +39,7 @@ export async function runAgent(
   choice: ModelChoice,
   host: Host,
   registry: Tool[] = defaultTools,
+  store?: SessionStore,
 ): Promise<void> {
   const definitions = toolDefinitions(registry);
   const total: Usage = {prompt: 0, completion: 0, total: 0};

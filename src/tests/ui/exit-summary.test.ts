@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {dimText, formatExitSummary} from './exit-summary.js';
+import {dimText, formatExitSummary} from '../../ui/exit-summary.js';
 
 test('formatExitSummary describes the closed session', () => {
   assert.equal(formatExitSummary(), 'Session ended');

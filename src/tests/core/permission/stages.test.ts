@@ -7,7 +7,7 @@ import {
   splitStages,
   stripWrappers,
   tokenize,
-} from './stages.js';
+} from '../../../core/permission/stages.js';
 
 function texts(command: string): string[] {
   const stages = splitStages(command);
