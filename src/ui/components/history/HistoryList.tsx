@@ -21,40 +21,32 @@ type ToolRow = {
 
 export type HistoryRow = StandardRow | ToolRow;
 
-function eventParts(item: Item): unknown[] | null {
-  if (item.kind !== 'event' || !Array.isArray(item.event.detail)) return null;
-  return item.event.detail;
-}
-
 export function historyRows(items: Item[]): HistoryRow[] {
   const rows: HistoryRow[] = [];
-  let pendingTool: ToolRow | null = null;
+  const pending = new Map<string, ToolRow>();
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    const parts = eventParts(item);
-    if (item.kind === 'event' && item.event.type === 'tool' && parts !== null) {
-      pendingTool = {
+    if (item.kind === 'event' && item.event.type === 'tool_start') {
+      const row: ToolRow = {
         kind: 'tool',
         id: `tool:${index}`,
-        name: String(parts[0]),
-        args: parts[1],
+        name: item.event.name,
+        args: item.event.args,
         result: null,
         diff: null,
       };
-      rows.push(pendingTool);
+      pending.set(item.event.id, row);
+      rows.push(row);
       continue;
     }
-    if (
-      item.kind === 'event' &&
-      item.event.type === 'result' &&
-      parts !== null &&
-      pendingTool !== null &&
-      parts[0] === pendingTool.name
-    ) {
-      pendingTool.result = String(parts[1]);
-      pendingTool.diff = parts[2] as DiffPayload | null;
-      pendingTool = null;
-      continue;
+    if (item.kind === 'event' && item.event.type === 'tool_end') {
+      const row = pending.get(item.event.id);
+      if (row) {
+        row.result = item.event.result;
+        row.diff = item.event.diff;
+        pending.delete(item.event.id);
+        continue;
+      }
     }
     rows.push({kind: 'standard', id: `item:${index}`, item});
   }
