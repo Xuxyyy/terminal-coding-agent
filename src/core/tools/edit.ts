@@ -30,6 +30,9 @@ export const editFile: Tool = {
   description:
     'Replace one exact, unique piece of text in a file. Read the file first so old_string matches byte for byte.',
   schema,
+  request(args) {
+    return {kind: 'write', path: schema.parse(args).path};
+  },
   async run(args, ctx) {
     const parsed = schema.parse(args);
     const target = resolveInWorkspace(ctx.root, parsed.path);

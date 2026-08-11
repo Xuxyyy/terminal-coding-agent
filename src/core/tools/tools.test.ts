@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {z} from 'zod';
 import type {ConfirmDecision, ConfirmRequest, Host} from '../host.js';
-import {approvalKey, decide} from '../policy.js';
 import {bash} from './bash.js';
 import {editFile} from './edit.js';
 import {readFile} from './read.js';
@@ -33,35 +32,33 @@ function context(root: string, host: Host): ToolContext {
   return {root, host, allowed: new Set<string>()};
 }
 
+const ran: string[] = [];
+
 const fakeBash: Tool = {
   name: 'bash',
   description: 'fake',
   schema: z.object({command: z.string()}),
-  confirm(args) {
-    return {
-      command: (args as {command: string}).command,
-      reason: 'test',
-      suppressible: true,
-    };
+  request(args) {
+    return {kind: 'command', command: (args as {command: string}).command, reason: 'test'};
   },
-  async run() {
+  async run(args) {
+    ran.push((args as {command: string}).command);
     return {text: '[exit 0]\nran'};
   },
 };
 
 const registry = [readFile, editFile, writeFile, fakeBash];
 
-test('decide asks only for bash', () => {
-  assert.equal(decide('bash'), 'ask');
-  assert.equal(decide('read_file'), 'allow');
-  assert.equal(decide('write_file'), 'allow');
-  assert.equal(decide('edit_file'), 'allow');
-});
+function session(answers: ConfirmDecision[]) {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers(...answers);
+  ran.length = 0;
+  return {ctx: context(root, host), asked, root};
+}
 
-test('approvalKey uses the first word of the command', () => {
-  assert.equal(approvalKey('  npm test --silent '), 'npm');
-  assert.equal(approvalKey('git push origin main'), 'git');
-});
+function bashCall(ctx: ToolContext, command: string) {
+  return runTool(registry, 'bash', JSON.stringify({command}), ctx);
+}
 
 test('broken JSON arguments come back as a tool error, not a throw', async () => {
   const root = workspace();
@@ -216,49 +213,125 @@ test('an edit never asks the user', async () => {
   assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), 'a = 2\n');
 });
 
-test('bash asks before running and reports a denial as a tool error', async () => {
-  const root = workspace();
-  const {host, asked} = hostThatAnswers('deny');
-  const output = await runTool(
-    registry,
-    'bash',
-    JSON.stringify({command: 'rm -rf /'}),
-    context(root, host),
-  );
+test('declining a command does not execute it', async () => {
+  const {ctx, asked} = session(['deny']);
+
+  const output = await bashCall(ctx, 'rm -rf /');
 
   assert.equal(asked.length, 1);
   assert.equal(asked[0]?.command, 'rm -rf /');
+  assert.equal(asked[0]?.suppressible, false);
+  assert.equal(ran.length, 0);
   assert.equal(
     output.text,
     'Error: user denied this command; try another approach',
   );
 });
 
-test('approving for the session covers the same command word only', async () => {
-  const root = workspace();
-  const {host, asked} = hostThatAnswers('session');
-  const ctx = context(root, host);
+test('a change inside the project is reviewed once', async () => {
+  const {ctx, asked} = session(['session']);
 
-  await runTool(registry, 'bash', JSON.stringify({command: 'npm test'}), ctx);
+  await bashCall(ctx, 'rm build.log');
+  await bashCall(ctx, 'rm  build.log');
+
+  assert.equal(asked.length, 1);
+  assert.equal(ran.length, 2);
+});
+
+test('approving one command does not approve another', async () => {
+  const {ctx, asked} = session(['session']);
+
+  await bashCall(ctx, 'rm build.log');
   assert.equal(asked.length, 1);
 
-  await runTool(registry, 'bash', JSON.stringify({command: 'npm run build'}), ctx);
-  assert.equal(asked.length, 1);
-
-  await runTool(registry, 'bash', JSON.stringify({command: 'git push'}), ctx);
+  await bashCall(ctx, 'rm other.log');
   assert.equal(asked.length, 2);
-  assert.equal(asked[1]?.command, 'git push');
+  assert.equal(asked[1]?.command, 'rm other.log');
+});
+
+test('a guardrail is never remembered even when asked to', async () => {
+  const {ctx, asked} = session(['session']);
+
+  await bashCall(ctx, 'git push origin main');
+  await bashCall(ctx, 'git push origin main');
+
+  assert.equal(asked.length, 2);
+  assert.equal(asked[0]?.suppressible, false);
 });
 
 test('approving once does not cover the next call', async () => {
-  const root = workspace();
-  const {host, asked} = hostThatAnswers('once');
-  const ctx = context(root, host);
+  const {ctx, asked} = session(['once']);
 
-  await runTool(registry, 'bash', JSON.stringify({command: 'npm test'}), ctx);
-  await runTool(registry, 'bash', JSON.stringify({command: 'npm test'}), ctx);
+  await bashCall(ctx, 'rm build.log');
+  await bashCall(ctx, 'rm build.log');
 
   assert.equal(asked.length, 2);
+});
+
+test('a declined command is not remembered', async () => {
+  const {ctx, asked} = session(['deny']);
+
+  await bashCall(ctx, 'rm build.log');
+  await bashCall(ctx, 'rm build.log');
+
+  assert.equal(asked.length, 2);
+  assert.equal(ran.length, 0);
+});
+
+test('known reads run without review', async () => {
+  const {ctx, asked} = session(['deny']);
+
+  await bashCall(ctx, 'ls -la');
+  await bashCall(ctx, 'git status');
+  await bashCall(ctx, 'npm test');
+
+  assert.equal(asked.length, 0);
+  assert.equal(ran.length, 3);
+});
+
+test('the hardened command is what runs', async () => {
+  const {ctx, asked} = session(['deny']);
+
+  await bashCall(ctx, 'git diff');
+
+  assert.equal(asked.length, 0);
+  assert.deepEqual(ran, ['git diff --no-ext-diff']);
+});
+
+test('a write tool asks before touching a protected path', async () => {
+  const {ctx, asked, root} = session(['deny']);
+  fs.mkdirSync(path.join(root, '.git'), {recursive: true});
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: '.git/config', content: 'x'}),
+    ctx,
+  );
+
+  assert.equal(asked.length, 1);
+  assert.match(asked[0]?.reason ?? '', /protected path/);
+  assert.match(output.text, /^Error: /);
+  assert.equal(fs.existsSync(path.join(root, '.git', 'config')), false);
+});
+
+test('an edit tool asks before changing a protected path', async () => {
+  const {ctx, asked, root} = session(['deny']);
+  fs.mkdirSync(path.join(root, '.git'), {recursive: true});
+  const config = path.join(root, '.git', 'config');
+  fs.writeFileSync(config, '[core]\n');
+
+  const output = await runTool(
+    registry,
+    'edit_file',
+    JSON.stringify({path: '.git/config', old_string: '[core]', new_string: '[remote]'}),
+    ctx,
+  );
+
+  assert.equal(asked.length, 1);
+  assert.match(asked[0]?.reason ?? '', /protected path/);
+  assert.match(output.text, /^Error: /);
+  assert.equal(fs.readFileSync(config, 'utf8'), '[core]\n');
 });
 
 test('bash runs a real command and reports its exit code', async () => {

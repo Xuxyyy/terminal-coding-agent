@@ -29,13 +29,9 @@ export const bash: Tool = {
   description:
     'Run a shell command in the workspace root. Use it to search (grep -rn), run tests, use git, and delete files.',
   schema,
-  confirm(args) {
+  request(args) {
     const parsed = schema.parse(args);
-    return {
-      command: parsed.command,
-      reason: parsed.description ?? 'run a shell command',
-      suppressible: true,
-    };
+    return {kind: 'command', command: parsed.command, reason: parsed.description};
   },
   run(args, ctx) {
     const parsed = schema.parse(args);

@@ -17,6 +17,9 @@ export const writeFile: Tool = {
   description:
     'Create a file or replace its whole contents. Prefer edit_file when changing part of an existing file.',
   schema,
+  request(args) {
+    return {kind: 'write', path: schema.parse(args).path};
+  },
   async run(args, ctx) {
     const parsed = schema.parse(args);
     const target = resolveInWorkspace(ctx.root, parsed.path);

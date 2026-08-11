@@ -1,7 +1,7 @@
 import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
-import type {ConfirmRequest, DiffPayload, Host} from '../host.js';
-import {approvalKey, decide} from '../policy.js';
+import type {DiffPayload, Host} from '../host.js';
+import {approvalKey, decide, type Request} from '../permission/decide.js';
 
 export type ToolContext = {
   root: string;
@@ -15,7 +15,7 @@ export type Tool = {
   name: string;
   description: string;
   schema: z.ZodTypeAny;
-  confirm?: (args: unknown) => ConfirmRequest;
+  request?: (args: unknown) => Request;
   run: (args: unknown, ctx: ToolContext) => Promise<ToolOutput>;
 };
 
@@ -52,21 +52,38 @@ function issues(error: z.ZodError): string {
     .join('; ');
 }
 
+type Permission = {denied?: string; args: unknown};
+
+function approved(request: Request, args: unknown, command?: string): Permission {
+  return {args: request.kind === 'command' && command ? {...(args as object), command} : args};
+}
+
 async function permitted(
   tool: Tool,
   args: unknown,
   ctx: ToolContext,
-): Promise<string | null> {
-  if (decide(tool.name) === 'allow' || !tool.confirm) return null;
-  const request = tool.confirm(args);
-  const key = approvalKey(request.command);
-  if (ctx.allowed.has(key)) return null;
-  const decision = await ctx.host.confirm(request);
+): Promise<Permission> {
+  if (!tool.request) return {args};
+  const request = tool.request(args);
+  const outcome = decide(request, ctx.root);
+  if (outcome.decision === 'allow') return approved(request, args, outcome.command);
+  if (outcome.decision === 'deny') return {denied: outcome.reason, args};
+  const key = approvalKey(request);
+  if (ctx.allowed.has(key)) return approved(request, args, outcome.command);
+  const decision = await ctx.host.confirm({
+    command: outcome.command ?? `${tool.name} ${describe(request)}`,
+    reason: outcome.reason,
+    suppressible: outcome.suppressible,
+  });
   if (decision === 'deny') {
-    return 'user denied this command; try another approach';
+    return {denied: 'user denied this command; try another approach', args};
   }
-  if (decision === 'session') ctx.allowed.add(key);
-  return null;
+  if (decision === 'session' && outcome.suppressible) ctx.allowed.add(key);
+  return approved(request, args, outcome.command);
+}
+
+function describe(request: Request): string {
+  return request.kind === 'write' ? request.path : request.command;
 }
 
 export async function runTool(
@@ -94,9 +111,9 @@ export async function runTool(
     return {text: `Error: invalid arguments: ${issues(parsed.error)}`};
   }
   try {
-    const denied = await permitted(tool, parsed.data, ctx);
-    if (denied) return {text: `Error: ${denied}`};
-    return await tool.run(parsed.data, ctx);
+    const permission = await permitted(tool, parsed.data, ctx);
+    if (permission.denied) return {text: `Error: ${permission.denied}`};
+    return await tool.run(permission.args, ctx);
   } catch (error) {
     return {text: `Error: ${(error as Error).message}`};
   }
