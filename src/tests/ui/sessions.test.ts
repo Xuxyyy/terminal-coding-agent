@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import test from 'node:test';
 import type {SessionMeta} from '../../core/store.js';
 import {startSession} from '../../core/store.js';
-import {sessionRow, sessionRows} from '../../ui/sessions.js';
+import {ageLabel, rowLine, sessionRow, sessionRows} from '../../ui/sessions.js';
 
 function meta(extra: Partial<SessionMeta> = {}): SessionMeta {
   return {
@@ -20,18 +20,49 @@ function meta(extra: Partial<SessionMeta> = {}): SessionMeta {
   };
 }
 
+const NOW = new Date('2026-08-11T11:21:00.000Z');
+
 test('a row is titled by the first task', () => {
-  const row = sessionRow(meta({firstTask: 'fix the cart total rounding bug'}));
+  const row = sessionRow(meta({firstTask: 'fix the cart total rounding bug'}), NOW);
 
   assert.equal(row.title, 'fix the cart total rounding bug');
-  assert.equal(row.detail, '2026-08-11 10:04 · 12,450 tokens');
+  assert.equal(row.age, '1m');
   assert.equal(row.id, '20260811-100400-a1b2c3d4');
 });
 
 test('a session with no first task falls back to its id', () => {
-  const row = sessionRow(meta());
+  const row = sessionRow(meta(), NOW);
 
   assert.equal(row.title, '20260811-100400-a1b2c3d4');
+});
+
+test('the age counts from the last use, in one short unit', () => {
+  const from = '2026-08-11T11:20:00.000Z';
+  const at = (iso: string) => ageLabel(from, new Date(iso));
+
+  assert.equal(at('2026-08-11T11:20:30.000Z'), 'now');
+  assert.equal(at('2026-08-11T11:21:00.000Z'), '1m');
+  assert.equal(at('2026-08-11T12:19:00.000Z'), '59m');
+  assert.equal(at('2026-08-11T13:20:00.000Z'), '2h');
+  assert.equal(at('2026-08-12T11:20:00.000Z'), '1d');
+  assert.equal(at('2026-09-20T11:20:00.000Z'), '1mo');
+  assert.equal(at('2027-09-20T11:20:00.000Z'), '1y');
+});
+
+test('a row pushes the age to the right edge', () => {
+  const row = {id: 'x', title: 'fix the cart', age: '2h'};
+
+  assert.equal(rowLine(row, true, 20), '❯ fix the cart    2h');
+  assert.equal(rowLine(row, false, 20), '  fix the cart    2h');
+});
+
+test('a long title is cut so the age still fits', () => {
+  const row = {id: 'x', title: 'a'.repeat(40), age: '12d'};
+
+  const line = rowLine(row, true, 20);
+
+  assert.equal(line.length, 20);
+  assert.ok(line.endsWith('… 12d'));
 });
 
 test('a session that never ran a turn is not offered', () => {

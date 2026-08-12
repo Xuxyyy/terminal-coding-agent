@@ -1,9 +1,10 @@
 import {useState} from 'react';
-import {Box, Text, useInput} from 'ink';
-import type {SessionRow} from '../sessions.js';
+import {Box, Text, useInput, useStdout} from 'ink';
+import {rowLine, type SessionRow} from '../sessions.js';
 import {theme} from '../theme.js';
 
 const VISIBLE = 5;
+const MAX_WIDTH = 80;
 
 export function windowStart(selected: number, count: number): number {
   return Math.max(0, Math.min(selected - VISIBLE + 1, count - VISIBLE));
@@ -19,6 +20,8 @@ export function SessionPicker({
   onCancel: () => void;
 }) {
   const [selected, setSelected] = useState(0);
+  const {stdout} = useStdout();
+  const width = Math.max(24, Math.min((stdout.columns ?? 80) - 6, MAX_WIDTH));
 
   useInput((_input, key) => {
     if (key.escape || rows.length === 0) {
@@ -52,22 +55,14 @@ export function SessionPicker({
       {shown.map((row, index) => {
         const active = start + index === selected;
         return (
-          <Box key={row.id} flexDirection="column" marginTop={index === 0 ? 0 : 1}>
-            <Text
-              color={theme.muted}
-              backgroundColor={active ? theme.surface : undefined}
-            >
-              {active ? '❯ ' : '  '}
-              <Text bold={active}>{row.title}</Text>
-              {' '}
-            </Text>
-            <Text
-              color={theme.muted}
-              backgroundColor={active ? theme.surface : undefined}
-            >
-              {`  ${row.detail} `}
-            </Text>
-          </Box>
+          <Text
+            key={row.id}
+            bold={active}
+            color={active ? theme.foreground : theme.muted}
+            backgroundColor={active ? theme.surface : undefined}
+          >
+            {rowLine(row, active, width)}
+          </Text>
         );
       })}
       <Text color={theme.muted}>
