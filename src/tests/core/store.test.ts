@@ -8,11 +8,14 @@ import type {Usage} from '../../core/host.js';
 import {
   evictSessions,
   listSessions,
-  loadSession,
-  openSession,
   projectDir,
   SESSION_KEEP,
+} from '../../core/projects.js';
+import {
+  loadSession,
+  openSession,
   startSession,
+  type SessionMeta,
 } from '../../core/store.js';
 
 function tempDir(prefix: string): string {
@@ -48,12 +51,39 @@ function mode(target: string): number {
   return fs.statSync(target).mode & 0o777;
 }
 
-test('a session lands under its project, one file per turn', () => {
+function records(dir: string): Array<Record<string, unknown>> {
+  return fs
+    .readFileSync(path.join(dir, 'session.jsonl'), 'utf8')
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line));
+}
+
+function legacySession(work: string, root: string, id: string): string {
+  const dir = path.join(projectDir(work, root), 'sessions', id);
+  fs.mkdirSync(dir, {recursive: true});
+  const meta: SessionMeta = {
+    version: 1,
+    id,
+    workspace: work,
+    startedAt: '2026-08-10T09:00:00.000Z',
+    updatedAt: '2026-08-10T09:30:00.000Z',
+    status: 'closed',
+    usage: {prompt: 10, completion: 5, total: 15},
+    firstTask: 'an old conversation',
+  };
+  fs.writeFileSync(path.join(dir, 'session.json'), JSON.stringify(meta));
+  fs.writeFileSync(path.join(dir, '0001.json'), JSON.stringify([user('old')]));
+  return dir;
+}
+
+test('a session is one file of records', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
 
   store.appendTurn([user('one')], usage(10));
+  store.appendView([{kind: 'task', text: 'one'}]);
   store.appendTurn([assistant('two')], usage(20));
   store.close();
 
@@ -64,11 +94,61 @@ test('a session lands under its project, one file per turn', () => {
     JSON.parse(fs.readFileSync(path.join(project, 'project.json'), 'utf8')),
     {path: work},
   );
-  const turns = fs
-    .readdirSync(store.dir)
-    .filter((name) => /^\d{4}\.json$/.test(name))
-    .sort();
-  assert.deepEqual(turns, ['0001.json', '0002.json']);
+  assert.deepEqual(fs.readdirSync(store.dir).sort(), [
+    'session.json',
+    'session.jsonl',
+  ]);
+  assert.deepEqual(
+    records(store.dir).map((record) => record['kind']),
+    ['messages', 'view', 'messages'],
+  );
+});
+
+test('reading a session returns both the messages and the view', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendView([{kind: 'task', text: 'fix the cart'}]);
+  store.appendTurn([user('fix the cart'), assistant('on it')], usage(15));
+  store.appendView([{kind: 'text', text: 'on it'}]);
+  store.close();
+
+  const restored = loadSession(work, null, root);
+
+  assert.deepEqual(restored.messages, [user('fix the cart'), assistant('on it')]);
+  assert.deepEqual(restored.view, [
+    {kind: 'task', text: 'fix the cart'},
+    {kind: 'text', text: 'on it'},
+  ]);
+});
+
+test('a version 1 session is not loaded', () => {
+  const root = home();
+  const work = workspace();
+  const old = legacySession(work, root, '20260810-090000-aaaabbbb');
+
+  assert.throws(() => loadSession(work, null, root), /no session/);
+  assert.throws(() => loadSession(work, '20260810-090000-aaaabbbb', root), /no session/);
+  assert.deepEqual(listSessions(work, root), []);
+  assert.equal(fs.existsSync(old), true);
+});
+
+test('a record of an unknown kind is ignored, not an error', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  store.appendTurn([user('fix the cart')], usage(15));
+  store.close();
+  fs.appendFileSync(
+    path.join(store.dir, 'session.jsonl'),
+    `${JSON.stringify({kind: 'code', at: '9f3a1c07', files: {}})}\n`,
+  );
+
+  const restored = loadSession(work, null, root);
+
+  assert.deepEqual(restored.messages, [user('fix the cart')]);
+  assert.deepEqual(restored.view, []);
 });
 
 test('resume restores the messages and the token count', () => {
@@ -132,7 +212,7 @@ test('a session is not readable by anyone else', () => {
   assert.equal(mode(projectDir(work, root)), 0o700);
   assert.equal(mode(store.dir), 0o700);
   assert.equal(mode(path.join(store.dir, 'session.json')), 0o600);
-  assert.equal(mode(path.join(store.dir, '0001.json')), 0o600);
+  assert.equal(mode(path.join(store.dir, 'session.jsonl')), 0o600);
 });
 
 test('an old session is evicted, a recent one is kept', () => {
@@ -196,7 +276,7 @@ test('the newest fifty survive whatever their age', () => {
   assert.deepEqual(left, ids.slice(-SESSION_KEEP).reverse());
 });
 
-test('reopening a session keeps the folder and continues the numbering', () => {
+test('reopening a session keeps the folder and appends to the same file', () => {
   const root = home();
   const work = workspace();
   const first = startSession(work, root);
@@ -211,11 +291,13 @@ test('reopening a session keeps the folder and continues the numbering', () => {
 
   assert.equal(store.dir, first.dir);
   assert.deepEqual(fs.readdirSync(store.dir).sort(), [
-    '0001.json',
-    '0003.json',
     'session.json',
-    'v0002.json',
+    'session.jsonl',
   ]);
+  assert.deepEqual(
+    records(store.dir).map((record) => record['kind']),
+    ['messages', 'view', 'messages'],
+  );
   const again = loadSession(work, null, root);
   assert.deepEqual(again.messages, [user('fix the cart'), assistant('done')]);
   assert.equal(again.meta.usage.total, 25);
@@ -252,16 +334,6 @@ test('seeded messages are never written twice', () => {
     assistant('two'),
   ]);
 });
-
-test('a session is one file of records', {todo: 'v4 step 2'});
-
-test('reading a session returns both the messages and the view', {todo: 'v4 step 2'});
-
-test('a version 1 session is not loaded', {todo: 'v4 step 2'});
-
-test('the picker skips a version 1 session', {todo: 'v4 step 2'});
-
-test('a record of an unknown kind is ignored, not an error', {todo: 'v4 step 2'});
 
 test('every user message record carries an id', {todo: 'v4 step 3'});
 

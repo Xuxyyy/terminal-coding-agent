@@ -23,8 +23,9 @@ because that is where the handoff tooling writes.
 
 ## Sessions
 
-Every run writes to `~/.acc/projects/<name>-<hash>/sessions/<id>/`: `NNNN.json`
-holds the messages the model sees, `vNNNN.json` holds the view the terminal drew.
+Every run writes to `~/.acc/projects/<name>-<hash>/sessions/<id>/`: `session.jsonl`
+holds one `{kind, …}` record per line — the messages the model sees and the view the
+terminal drew, interleaved. Ignore a record kind you do not know, never error on it.
 `/resume` opens a picker and reopens a session **in place** — `openSession` plus
 `store.seed(session.messages)`, which is what stops the history being copied into
 a new folder. Seed the live array, not the stored one; the fresh system message is

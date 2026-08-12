@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {render} from 'ink';
 import {createClient} from './core/client.js';
-import {evictSessions} from './core/store.js';
+import {evictSessions} from './core/projects.js';
 import {App} from './ui/app.js';
 import {parseArgs} from './ui/args.js';
 import {dimText, formatExitSummary} from './ui/exit-summary.js';

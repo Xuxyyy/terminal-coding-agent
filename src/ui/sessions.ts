@@ -1,5 +1,6 @@
 import stringWidth from 'string-width';
-import {listSessions, type SessionMeta} from '../core/store.js';
+import {listSessions} from '../core/projects.js';
+import type {SessionMeta} from '../core/store.js';
 
 export type SessionRow = {id: string; title: string; age: string};
 

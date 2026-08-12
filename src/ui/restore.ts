@@ -72,5 +72,5 @@ export function restoreView(session: StoredSession): Item[] {
     kind: 'notice',
     text: restoreSummary(meta, messages.length),
   };
-  return [notice, ...(view.length > 0 ? view : restoreItems(messages))];
+  return [notice, ...(view.length > 0 ? (view as Item[]) : restoreItems(messages))];
 }
