@@ -13,8 +13,8 @@ import {
   type Session,
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
-import type {Item, Phase, ReadyInfo} from './events.js';
-import {restoreItems, restoreView} from './restore.js';
+import {truncate, type Item, type Phase, type ReadyInfo} from './events.js';
+import {restoreItems, restoreView, textOf} from './restore.js';
 import {rewindRows, type RewindRow} from './rewind.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
@@ -209,11 +209,18 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         return;
       }
     }
+    const title = truncate(
+      textOf(session.messages[index]?.content).replace(/\s+/g, ' ').trim(),
+      60,
+    );
     rewindTo(session, index);
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);
-    setCommitted([header(), ...(kept ?? restoreItems(session.messages))]);
+    setCommitted([
+      {kind: 'notice', text: `↩ rewound to before "${title}"`},
+      ...(kept ?? restoreItems(session.messages)),
+    ]);
   };
 
   const resume = (id: string) => {

@@ -215,8 +215,9 @@ test('a rewind cuts the screen, the messages and the file together', async () =>
   const items = agent.current!.committed;
   assert.deepEqual(
     items.map((item) => (item.kind === 'task' ? item.text : item.kind)),
-    ['header', 'fix the cart', 'text'],
+    ['notice', 'fix the cart', 'text'],
   );
+  assert.match((items[0] as NoticeItem).text, /rewound to before "and the readme"/);
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.content),
