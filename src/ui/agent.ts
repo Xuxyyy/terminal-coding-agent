@@ -11,6 +11,7 @@ import {
   type Session,
 } from '../core/session.js';
 import {
+  openSession,
   startSession,
   type SessionStore,
   type StoredSession,
@@ -29,6 +30,9 @@ export type Agent = {
   respond: (decision: ConfirmDecision) => void;
   interrupt: () => void;
   clear: () => void;
+  pick: () => void;
+  cancelPick: () => void;
+  resume: (id: string) => void;
   context: () => void;
   shutdown: () => void;
 };
@@ -171,6 +175,42 @@ export function useAgent(
     setCommitted([header(), {kind: 'notice', text: 'context cleared'}]);
   };
 
+  const pick = () => {
+    if (phase.kind !== 'idle') return;
+    setPhase({kind: 'picking'});
+  };
+
+  const cancelPick = () => {
+    if (phase.kind !== 'picking') return;
+    setPhase({kind: 'idle'});
+  };
+
+  const resume = (id: string) => {
+    if (phase.kind !== 'picking') return;
+    setPhase({kind: 'idle'});
+    let opened: ReturnType<typeof openSession>;
+    try {
+      opened = openSession(workspaceRoot, id);
+    } catch (error) {
+      commit([{kind: 'notice', text: `could not reopen: ${String(error)}`}]);
+      return;
+    }
+    try {
+      storeRef.current?.close();
+    } catch {}
+    storeRef.current = opened.store;
+    clearSession(session);
+    for (const message of opened.stored.messages) {
+      if (message.role !== 'system') session.messages.push(message);
+    }
+    opened.store.seed(session.messages);
+    session.usage = {...opened.stored.meta.usage};
+    liveTextRef.current = '';
+    setStreamText('');
+    setGeneration((current) => current + 1);
+    setCommitted([header(), ...restoreView(opened.stored)]);
+  };
+
   const context = () => {
     if (phase.kind !== 'idle') return;
     const status = contextStatus(session);
@@ -196,6 +236,9 @@ export function useAgent(
     respond,
     interrupt,
     clear,
+    pick,
+    cancelPick,
+    resume,
     context,
     shutdown,
   };

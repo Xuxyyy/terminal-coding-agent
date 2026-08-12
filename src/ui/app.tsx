@@ -10,6 +10,8 @@ import {Activity} from './components/Activity.js';
 import {CommandInput, commandMatches} from './components/CommandInput.js';
 import {Confirm} from './components/Confirm.js';
 import {Markdown} from './components/Markdown.js';
+import {SessionPicker} from './components/SessionPicker.js';
+import {sessionRows} from './sessions.js';
 import {HistoryList} from './components/history/HistoryList.js';
 import {theme} from './theme.js';
 
@@ -35,6 +37,9 @@ export function App({
     respond,
     interrupt,
     clear,
+    pick,
+    cancelPick,
+    resume,
     context,
     shutdown,
   } = useAgent(workspaceRoot, choice, restored);
@@ -48,6 +53,10 @@ export function App({
   const visibleStream = useMemo(
     () => tailLines(streamText, streamRowBudget(stdout.rows), stdout.columns),
     [streamText, stdout.columns, stdout.rows],
+  );
+  const rows = useMemo(
+    () => (phase.kind === 'picking' ? sessionRows(workspaceRoot) : []),
+    [phase.kind, workspaceRoot],
   );
 
   const submit = (value: string) => {
@@ -64,6 +73,11 @@ export function App({
     }
     if (command === '/clear') {
       clear();
+      setInput('');
+      return;
+    }
+    if (command === '/resume') {
+      pick();
       setInput('');
       return;
     }
@@ -128,6 +142,8 @@ export function App({
         {visibleStream ? <Markdown text={visibleStream} /> : null}
         {phase.kind === 'confirming' ? (
           <Confirm request={phase.request} onRespond={respond} />
+        ) : phase.kind === 'picking' ? (
+          <SessionPicker rows={rows} onPick={resume} onCancel={cancelPick} />
         ) : phase.kind === 'busy' ? (
           <Box flexDirection="column">
             <Activity status={statusFor(streamText, committed)} />

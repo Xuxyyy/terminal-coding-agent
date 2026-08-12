@@ -6,6 +6,7 @@ import {theme} from '../theme.js';
 const COMMANDS = [
   {value: '/context', description: 'show token usage'},
   {value: '/clear', description: 'clear the conversation'},
+  {value: '/resume', description: 'reopen a past conversation'},
 ];
 
 export function commandMatches(input: string) {
