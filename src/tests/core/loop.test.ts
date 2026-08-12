@@ -99,6 +99,7 @@ test('a session is written after every turn', async () => {
     id: 'fake',
     dir: '/fake',
     seed() {},
+    appendMessage: () => 'deadbeef',
     appendTurn(messages) {
       seen.push(messages.length);
     },
@@ -121,6 +122,9 @@ test('a failed write does not kill the run', async () => {
     id: 'fake',
     dir: '/fake',
     seed() {},
+    appendMessage() {
+      throw new Error('disk full');
+    },
     appendTurn() {
       throw new Error('disk full');
     },

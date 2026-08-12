@@ -94,8 +94,11 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return false;
     const controller = new AbortController();
     controllerRef.current = controller;
-    openStore();
-    addTask(session, task);
+    const store = openStore();
+    const message = addTask(session, task);
+    try {
+      store?.appendMessage(message);
+    } catch {}
     commit([{kind: 'task', text: task}]);
     setPhase({kind: 'busy'});
 
@@ -126,8 +129,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       },
     };
 
-    const store = storeRef.current ?? undefined;
-    void runAgent(session, choice, host, undefined, store).finally(() => {
+    void runAgent(session, choice, host, undefined, store ?? undefined).finally(() => {
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {

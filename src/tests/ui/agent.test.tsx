@@ -78,7 +78,7 @@ test('the repl writes every turn to a session on disk', async () => {
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['system', 'user', 'assistant'],
+    ['user', 'assistant'],
   );
 });
 
@@ -132,7 +132,7 @@ test('resuming replays the old screen and writes back to the same session', asyn
   const items = two.agent.current!.committed;
   assert.equal(items[0]!.kind, 'header');
   assert.equal(items[1]!.kind, 'notice');
-  assert.match((items[1] as NoticeItem).text, /^restored 3 messages/);
+  assert.match((items[1] as NoticeItem).text, /^restored 2 messages/);
   assert.equal((items[2] as TaskItem).text, 'fix the cart');
   assert.equal((items[3] as TextItem).text, 'done');
 
@@ -143,7 +143,7 @@ test('resuming replays the old screen and writes back to the same session', asyn
   const again = loadSession(root, older!.id, home);
   assert.deepEqual(
     again.messages.map((message) => message.role),
-    ['system', 'user', 'assistant', 'user', 'assistant'],
+    ['user', 'assistant', 'user', 'assistant'],
   );
   assert.equal(again.meta.id, older!.id);
 });
@@ -183,7 +183,7 @@ test('clearing the repl starts a session that forgets the old one', async () => 
   const newest = loadSession(root, null, home);
   assert.deepEqual(
     newest.messages.map((message) => message.role),
-    ['system', 'user', 'assistant'],
+    ['user', 'assistant'],
   );
   assert.equal(JSON.stringify(newest.messages).includes('fix the cart'), false);
 });

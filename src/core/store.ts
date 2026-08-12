@@ -38,6 +38,7 @@ export type SessionStore = {
   id: string;
   dir: string;
   seed(messages: Message[]): void;
+  appendMessage(message: Message): string;
   appendTurn(messages: Message[], usage: Usage): void;
   appendView(items: unknown[]): void;
   close(): void;
@@ -99,8 +100,18 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
     seed(messages) {
       for (const message of messages) written.add(message);
     },
+    appendMessage(message) {
+      const id = crypto.randomBytes(4).toString('hex');
+      written.add(message);
+      if (meta.firstTask === undefined) meta.firstTask = firstTaskIn([message]);
+      appendRecord(dir, {kind: 'message', id, message});
+      writeMeta();
+      return id;
+    },
     appendTurn(messages, usage) {
-      const fresh = messages.filter((message) => !written.has(message));
+      const fresh = messages.filter(
+        (message) => message.role !== 'system' && !written.has(message),
+      );
       if (fresh.length === 0) return;
       for (const message of fresh) written.add(message);
       if (meta.firstTask === undefined) meta.firstTask = firstTaskIn(fresh);

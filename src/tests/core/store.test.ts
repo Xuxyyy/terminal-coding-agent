@@ -335,7 +335,37 @@ test('seeded messages are never written twice', () => {
   ]);
 });
 
-test('every user message record carries an id', {todo: 'v4 step 3'});
+test('every user message record carries an id', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const asked = user('fix the cart');
+
+  store.appendMessage(asked);
+  store.appendTurn([asked, assistant('on it')], usage(15));
+  store.close();
+
+  const [first, second] = records(store.dir);
+  assert.equal(first!['kind'], 'message');
+  assert.match(String(first!['id']), /^[0-9a-f]{8}$/);
+  assert.deepEqual(second!['messages'], [assistant('on it')]);
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    user('fix the cart'),
+    assistant('on it'),
+  ]);
+});
+
+test('a task is on disk before the turn that answers it', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendMessage(user('fix the cart'));
+
+  const restored = loadSession(work, null, root);
+  assert.deepEqual(restored.messages, [user('fix the cart')]);
+  assert.equal(listSessions(work, root)[0]!.firstTask, 'fix the cart');
+});
 
 test('a rewind drops the records above the cut', {todo: 'v4 step 4'});
 

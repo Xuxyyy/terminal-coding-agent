@@ -28,8 +28,13 @@ export function createSession(
   };
 }
 
-export function addTask(session: Session, task: string): void {
-  session.messages.push({role: 'user', content: task});
+export function addTask(
+  session: Session,
+  task: string,
+): OpenAI.ChatCompletionMessageParam {
+  const message: OpenAI.ChatCompletionMessageParam = {role: 'user', content: task};
+  session.messages.push(message);
+  return message;
 }
 
 export function recordUsage(session: Session, usage: Usage): void {
