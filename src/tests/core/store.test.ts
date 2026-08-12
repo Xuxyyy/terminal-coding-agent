@@ -155,6 +155,24 @@ test('an old session is evicted, a recent one is kept', () => {
   );
 });
 
+test('a session resumed today survives however old it is', () => {
+  const root = home();
+  const work = workspace();
+  const old = startSession(work, root, at('2026-06-01T10:00:00Z'));
+  old.appendTurn([user('old')], usage(5));
+  old.close();
+  const filler = startSession(work, root, at('2026-08-09T10:00:00Z'));
+  filler.appendTurn([user('filler')], usage(5));
+  filler.close();
+
+  const {store} = openSession(work, old.id, root, at('2026-08-11T09:00:00Z'));
+  store.close();
+  const removed = evictSessions(root, new Date('2026-08-11T10:00:00Z'), 1);
+
+  assert.equal(removed, 0);
+  assert.equal(fs.existsSync(old.dir), true);
+});
+
 test('the newest fifty survive whatever their age', () => {
   const root = home();
   const work = workspace();

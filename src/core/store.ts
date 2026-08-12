@@ -264,7 +264,7 @@ export function evictSessions(
   const cutoff = now.getTime() - SESSION_MAX_AGE_DAYS * 86_400_000;
   const doomed = allEntries(home)
     .slice(keep)
-    .filter((entry) => Date.parse(entry.meta.startedAt) < cutoff);
+    .filter((entry) => Date.parse(entry.meta.updatedAt) < cutoff);
 
   for (const entry of doomed) {
     fs.rmSync(entry.dir, {recursive: true, force: true});
