@@ -8,7 +8,6 @@ import {listSessions, loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import type {NoticeItem, TaskItem, TextItem} from '../../ui/events.js';
 import {fakeModel, finishChunk, streamOf, textChunk, usageChunk} from '../fakes.js';
-import type {StoredSession} from '../../core/store.js';
 
 type Ref = {current: Agent | null};
 
@@ -29,11 +28,10 @@ function answer(text: string): AsyncIterable<unknown> {
 function mount(
   root: string,
   choice: ReturnType<typeof fakeModel>['choice'],
-  restored: StoredSession | null = null,
 ): {agent: Ref; unmount: () => void} {
   const agent: Ref = {current: null};
   function Probe() {
-    agent.current = useAgent(root, choice, restored);
+    agent.current = useAgent(root, choice);
     return null;
   }
   const instance = render(<Probe />, {

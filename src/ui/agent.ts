@@ -10,12 +10,7 @@ import {
   createSession,
   type Session,
 } from '../core/session.js';
-import {
-  openSession,
-  startSession,
-  type SessionStore,
-  type StoredSession,
-} from '../core/store.js';
+import {openSession, startSession, type SessionStore} from '../core/store.js';
 import type {Item, Phase, ReadyInfo} from './events.js';
 import {restoreView} from './restore.js';
 
@@ -45,19 +40,13 @@ function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   };
 }
 
-export function useAgent(
-  workspaceRoot: string,
-  choice: ModelChoice,
-  restored: StoredSession | null = null,
-): Agent {
+export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   const header = (): Item => ({
     kind: 'header',
     workspaceRoot,
     ready: readyInfo(workspaceRoot, choice),
   });
-  const [committed, setCommitted] = useState<Item[]>(() =>
-    restored ? [header(), ...restoreView(restored)] : [header()],
-  );
+  const [committed, setCommitted] = useState<Item[]>(() => [header()]);
   const [streamText, setStreamText] = useState('');
   const [phase, setPhase] = useState<Phase>({kind: 'idle'});
   const [generation, setGeneration] = useState(0);
@@ -68,18 +57,11 @@ export function useAgent(
   const resolveConfirmRef = useRef<((d: ConfirmDecision) => void) | null>(null);
 
   if (sessionRef.current === null) {
-    const started = createSession(
+    sessionRef.current = createSession(
       workspaceRoot,
       systemPrompt(workspaceRoot),
       choice.contextWindow,
     );
-    if (restored) {
-      for (const message of restored.messages) {
-        if (message.role !== 'system') started.messages.push(message);
-      }
-      started.usage = {...restored.meta.usage};
-    }
-    sessionRef.current = started;
   }
   if (storeRef.current === undefined) {
     try {

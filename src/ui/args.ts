@@ -4,9 +4,6 @@ import * as path from 'node:path';
 
 export type CliOptions = {
   workspaceRoot: string;
-  resume: boolean;
-  resumeId: string | null;
-  sessions: boolean;
 };
 
 function refuse(root: string): void {
@@ -23,29 +20,11 @@ export function parseArgs(
   args: string[],
   cwd: string = process.cwd(),
 ): CliOptions {
-  let resume = false;
-  let resumeId: string | null = null;
-  let sessions = false;
-
-  for (let n = 0; n < args.length; n += 1) {
-    const arg = args[n]!;
+  for (const arg of args) {
     if (arg === '--workspace') {
       throw new Error(
         '--workspace was removed; cd into the folder you want to work on',
       );
-    }
-    if (arg === '--sessions') {
-      sessions = true;
-      continue;
-    }
-    if (arg === '--resume') {
-      resume = true;
-      const next = args[n + 1];
-      if (next && !next.startsWith('-')) {
-        resumeId = next;
-        n += 1;
-      }
-      continue;
     }
     if (arg.startsWith('-')) throw new Error(`unknown option: ${arg}`);
     throw new Error(`unexpected argument: ${arg}`);
@@ -60,5 +39,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot, resume, resumeId, sessions};
+  return {workspaceRoot};
 }
