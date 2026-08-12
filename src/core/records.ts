@@ -37,6 +37,16 @@ export function readRecords(dir: string): SessionRecord[] {
   return records;
 }
 
+export function truncateRecords(dir: string, keep: number): void {
+  const records = readRecords(dir);
+  if (keep >= records.length) return;
+  const text = records
+    .slice(0, Math.max(0, keep))
+    .map((record) => `${JSON.stringify(record)}\n`)
+    .join('');
+  fs.writeFileSync(recordsFile(dir), text, {mode: 0o600});
+}
+
 export function messagesOf(records: SessionRecord[]): Message[] {
   return records.flatMap((record) =>
     record.kind === 'message'

@@ -367,9 +367,58 @@ test('a task is on disk before the turn that answers it', () => {
   assert.equal(listSessions(work, root)[0]!.firstTask, 'fix the cart');
 });
 
-test('a rewind drops the records above the cut', {todo: 'v4 step 4'});
+function twoTasks(store: ReturnType<typeof startSession>): void {
+  const one = user('fix the cart');
+  store.appendMessage(one);
+  store.appendView([{kind: 'task', text: 'fix the cart'}]);
+  store.appendTurn([one, assistant('fixed')], usage(10));
+  const two = user('and the readme');
+  store.appendMessage(two);
+  store.appendView([{kind: 'task', text: 'and the readme'}]);
+  store.appendTurn([two, assistant('updated')], usage(20));
+}
 
-test('the next append after a rewind continues from the cut', {todo: 'v4 step 4'});
+test('a rewind drops the records above the cut', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  twoTasks(store);
+
+  store.rewind(3);
+  store.close();
+
+  const restored = loadSession(work, null, root);
+  assert.deepEqual(restored.messages, [user('fix the cart'), assistant('fixed')]);
+  assert.deepEqual(restored.view, [{kind: 'task', text: 'fix the cart'}]);
+  assert.equal(records(store.dir).length, 3);
+  assert.equal(restored.meta.usage.total, 30);
+});
+
+test('the next append after a rewind continues from the cut', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  twoTasks(store);
+
+  store.rewind(3);
+  const again = user('try once more');
+  store.appendMessage(again);
+  store.appendTurn([again, assistant('done')], usage(5));
+  store.close();
+
+  const restored = loadSession(work, null, root);
+  assert.deepEqual(restored.messages, [
+    user('fix the cart'),
+    assistant('fixed'),
+    user('try once more'),
+    assistant('done'),
+  ]);
+  assert.deepEqual(fs.readdirSync(store.dir).sort(), [
+    'session.json',
+    'session.jsonl',
+  ]);
+  assert.equal(records(store.dir).length, 5);
+});
 
 test('a folder with no sessions lists nothing', () => {
   assert.deepEqual(listSessions(workspace(), home()), []);

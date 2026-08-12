@@ -44,6 +44,11 @@ export function recordUsage(session: Session, usage: Usage): void {
   if (usage.total) session.lastContextTokens = usage.total;
 }
 
+export function rewindTo(session: Session, index: number): void {
+  session.messages = session.messages.slice(0, Math.max(1, index));
+  session.lastContextTokens = 0;
+}
+
 export function clearSession(session: Session): void {
   session.messages = [{role: 'system', content: session.systemPrompt}];
   session.allowed.clear();

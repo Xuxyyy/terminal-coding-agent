@@ -104,6 +104,7 @@ test('a session is written after every turn', async () => {
       seen.push(messages.length);
     },
     appendView() {},
+    rewind() {},
     close() {},
   };
   const active = session();
@@ -129,6 +130,9 @@ test('a failed write does not kill the run', async () => {
       throw new Error('disk full');
     },
     appendView() {
+      throw new Error('disk full');
+    },
+    rewind() {
       throw new Error('disk full');
     },
     close() {

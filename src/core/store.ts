@@ -2,7 +2,13 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
-import {appendRecord, messagesOf, readRecords, viewOf} from './records.js';
+import {
+  appendRecord,
+  messagesOf,
+  readRecords,
+  truncateRecords,
+  viewOf,
+} from './records.js';
 import {
   accHome,
   allEntries,
@@ -41,6 +47,7 @@ export type SessionStore = {
   appendMessage(message: Message): string;
   appendTurn(messages: Message[], usage: Usage): void;
   appendView(items: unknown[]): void;
+  rewind(to: number): void;
   close(): void;
 };
 
@@ -124,6 +131,10 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
     appendView(items) {
       if (items.length === 0) return;
       appendRecord(dir, {kind: 'view', items});
+      writeMeta();
+    },
+    rewind(to) {
+      truncateRecords(dir, to);
       writeMeta();
     },
     close() {
