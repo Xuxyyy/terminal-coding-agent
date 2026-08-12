@@ -81,6 +81,35 @@ test('the repl writes every turn to a session on disk', async () => {
   );
 });
 
+test('starting the repl and quitting leaves no session behind', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  await tick();
+  agent.current!.shutdown();
+  await tick();
+  unmount();
+
+  assert.deepEqual(listSessions(root, home), []);
+});
+
+test('clearing leaves no empty session behind either', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.clear();
+  await tick();
+  unmount();
+
+  assert.equal(listSessions(root, home).length, 1);
+});
+
 test('resuming replays the old screen and writes back to the same session', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;

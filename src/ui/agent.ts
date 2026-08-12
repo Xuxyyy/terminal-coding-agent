@@ -63,14 +63,18 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       choice.contextWindow,
     );
   }
-  if (storeRef.current === undefined) {
-    try {
-      storeRef.current = startSession(workspaceRoot);
-    } catch {
-      storeRef.current = null;
-    }
-  }
   const session = sessionRef.current;
+
+  const openStore = (): SessionStore | null => {
+    if (storeRef.current === undefined) {
+      try {
+        storeRef.current = startSession(workspaceRoot);
+      } catch {
+        storeRef.current = null;
+      }
+    }
+    return storeRef.current;
+  };
 
   const commit = (items: Item[]) => {
     setCommitted((prev) => [...prev, ...items]);
@@ -90,6 +94,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return false;
     const controller = new AbortController();
     controllerRef.current = controller;
+    openStore();
     addTask(session, task);
     commit([{kind: 'task', text: task}]);
     setPhase({kind: 'busy'});
@@ -147,10 +152,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     clearSession(session);
     try {
       storeRef.current?.close();
-      storeRef.current = startSession(workspaceRoot);
-    } catch {
-      storeRef.current = null;
-    }
+    } catch {}
+    storeRef.current = undefined;
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);
