@@ -47,17 +47,26 @@ export function SessionPicker({
   const shown = rows.slice(start, start + VISIBLE);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={1}>
-      <Text bold color={theme.accent}>Reopen a conversation</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.muted} paddingX={1}>
+      <Text bold color={theme.foreground}>Reopen a conversation</Text>
       {shown.map((row, index) => {
         const active = start + index === selected;
         return (
           <Box key={row.id} flexDirection="column" marginTop={index === 0 ? 0 : 1}>
-            <Text color={active ? theme.foreground : theme.muted}>
+            <Text
+              color={theme.muted}
+              backgroundColor={active ? theme.surface : undefined}
+            >
               {active ? '❯ ' : '  '}
               <Text bold={active}>{row.title}</Text>
+              {' '}
             </Text>
-            <Text color={theme.muted}>{`  ${row.detail}`}</Text>
+            <Text
+              color={theme.muted}
+              backgroundColor={active ? theme.surface : undefined}
+            >
+              {`  ${row.detail} `}
+            </Text>
           </Box>
         );
       })}
