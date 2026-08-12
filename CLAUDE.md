@@ -4,21 +4,22 @@
 
 ## Design docs
 
-These are **not tracked by git**, so they will not be in a fresh clone or a
-`git worktree`. Ask for them if they are missing.
+One doc per subsystem, in `docs/`. Each opens with what it covers and when to
+read it. They record *why*; the code is the truth about *what*.
 
-- `docs/PLAN.md` — v1: the agent loop, the tools, the original nine-line
-  permission layer. Parts of it are now stale; the code wins.
-- `docs/PLAN-v2.md` — v2: the permission classifier. Read this before touching
-  anything under `src/core/permission/`. It explains the rule the code follows
-  ("git can undo it, or it cannot"), the five levels, and why the port drops
-  Python's dead `UNDOABLE` level.
-- `docs/PLAN-v3.md` — v3: reliability. Built: the turn-limit checkpoint, narrow
-  stream retry, and session resume. Three decisions were reversed in v3.1 and
-  carry an amendment note in the file — a session now stores the *view* beside
-  the messages, resume replays all of it, and `--resume` / `--sessions` are gone.
-- `notes/` — session handoffs. Scratch, safe to ignore. This stays at the root
-  because that is where the handoff tooling writes.
+- `docs/agent-loop.md` — read before changing the turn loop or adding a tool.
+- `docs/permissions.md` — read before touching `src/core/permission/`.
+- `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
+
+Amend a doc in place when a decision is reversed; leave the original next to the
+note, so the reasoning survives. Plans live outside the repo and are disposable
+once shipped — fold what lasts into a doc or into this file.
+
+`notes/` is session handoffs. Scratch, safe to ignore. It stays at the root
+because that is where the handoff tooling writes.
+
+**`docs/` and `notes/` are untracked.** They are absent from a fresh clone or a
+`git worktree`; ask for them if they are missing.
 
 ## Sessions
 
