@@ -12,14 +12,19 @@ export function textChunk(text: string): unknown {
   return {choices: [{index: 0, delta: {content: text}, finish_reason: null}]};
 }
 
-export function toolCallChunk(id: string, name: string, args: string): unknown {
+export function toolCallChunk(
+  id: string,
+  name: string,
+  args: string,
+  index = 0,
+): unknown {
   return {
     choices: [
       {
         index: 0,
         delta: {
           tool_calls: [
-            {index: 0, id, type: 'function', function: {name, arguments: args}},
+            {index, id, type: 'function', function: {name, arguments: args}},
           ],
         },
         finish_reason: null,

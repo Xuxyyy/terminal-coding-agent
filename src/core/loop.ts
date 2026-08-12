@@ -8,6 +8,8 @@ import type {Tool} from './tools/registry.js';
 
 export const MAX_TURNS = 20;
 
+export const INTERRUPTED = '[interrupted by the user]';
+
 function aborted(error: unknown, host: Host): boolean {
   return (
     host.signal.aborted ||
@@ -102,7 +104,14 @@ export async function runAgent(
       }
 
       for (const call of result.toolCalls) {
-        if (host.signal.aborted) return;
+        if (host.signal.aborted) {
+          session.messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: INTERRUPTED,
+          });
+          continue;
+        }
         let args: unknown = call.args;
         try {
           args = JSON.parse(call.args || '{}');
@@ -136,12 +145,12 @@ export async function runAgent(
       save(result.usage);
     }
   } catch (error) {
-    if (aborted(error, host)) return;
     const partial = error instanceof StreamFailure ? error.partial : null;
     if (partial?.content) {
       session.messages.push(assistantMessage(partial.content, []));
     }
     save(partial?.usage ?? NO_USAGE);
+    if (aborted(error, host)) return;
     host.onEvent({type: 'error', message: (error as Error).message});
     host.onEvent({type: 'turn_end', usage: total});
   }

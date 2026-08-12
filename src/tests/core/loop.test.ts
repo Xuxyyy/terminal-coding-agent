@@ -3,6 +3,7 @@ import test from 'node:test';
 import type OpenAI from 'openai';
 import {z} from 'zod';
 import {
+  abortError,
   connectionError,
   fakeHost,
   fakeModel,
@@ -14,7 +15,7 @@ import {
   usageChunk,
 } from '../fakes.js';
 import type {AgentEvent} from '../../core/host.js';
-import {MAX_TURNS, runAgent} from '../../core/loop.js';
+import {INTERRUPTED, MAX_TURNS, runAgent} from '../../core/loop.js';
 import {createSession, type Session} from '../../core/session.js';
 import type {Tool} from '../../core/tools/registry.js';
 
@@ -130,6 +131,76 @@ test('a failed write does not kill the run', async () => {
   assert.equal(reported.length, 1);
   assert.match(reported[0]!, /save/);
   assert.ok(events.some((event) => event.type === 'turn_end'));
+});
+
+test('an interrupted round is saved complete', async () => {
+  const {host, controller} = fakeHost();
+  const {choice} = fakeModel(() =>
+    streamOf(
+      toolCallChunk('call-a', 'stopper', '{}', 0),
+      toolCallChunk('call-b', 'stopper', '{}', 1),
+      finishChunk('tool_calls'),
+      usageChunk(10, 2),
+    ),
+  );
+  const stopper: Tool = {
+    name: 'stopper',
+    description: 'stops the run',
+    schema: z.object({}),
+    async run() {
+      controller.abort();
+      return {text: 'ran before the stop'};
+    },
+  };
+  const saved: OpenAI.ChatCompletionMessageParam[][] = [];
+  const store = fakeStore({
+    appendTurn(messages) {
+      saved.push([...messages]);
+    },
+  });
+
+  await runAgent(session(), choice, host, [stopper], store);
+
+  assert.equal(saved.length, 1);
+  const messages = saved[0]!;
+  const assistant = messages.find(
+    (message): message is OpenAI.ChatCompletionAssistantMessageParam =>
+      message.role === 'assistant' && Boolean(message.tool_calls),
+  )!;
+  const replies = messages.filter(
+    (message): message is OpenAI.ChatCompletionToolMessageParam =>
+      message.role === 'tool',
+  );
+  assert.deepEqual(
+    replies.map((reply) => reply.tool_call_id),
+    assistant.tool_calls!.map((call) => call.id),
+  );
+  assert.equal(replies[0]!.content, 'ran before the stop');
+  assert.equal(replies[1]!.content, INTERRUPTED);
+});
+
+test('an interrupted stream keeps what arrived', async () => {
+  const {host, events, controller} = fakeHost();
+  const {choice} = fakeModel(() => {
+    controller.abort();
+    return streamOf(textChunk('half an answer'), abortError());
+  });
+  const saved: OpenAI.ChatCompletionMessageParam[][] = [];
+  const store = fakeStore({
+    appendTurn(messages) {
+      saved.push([...messages]);
+    },
+  });
+
+  await runAgent(session(), choice, host, [noop], store);
+
+  assert.equal(saved.length, 1);
+  const messages = saved[0]!;
+  assert.deepEqual(messages[messages.length - 1], {
+    role: 'assistant',
+    content: 'half an answer',
+  });
+  assert.equal(errors(events).length, 0);
 });
 
 test('a dropped connection after output keeps the partial answer', async () => {
