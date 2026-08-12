@@ -5,7 +5,7 @@ import {commandMatches, completeCommand} from '../../ui/components/CommandInput.
 test('the menu offers only the commands this version has', () => {
   assert.deepEqual(
     commandMatches('/').map((command) => command.value),
-    ['/context', '/clear', '/resume'],
+    ['/context', '/clear', '/resume', '/rewind'],
   );
 });
 

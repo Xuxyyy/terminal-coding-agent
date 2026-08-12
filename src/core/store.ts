@@ -8,6 +8,7 @@ import {
   readRecords,
   truncateRecords,
   viewOf,
+  type SessionRecord,
 } from './records.js';
 import {
   accHome,
@@ -47,6 +48,7 @@ export type SessionStore = {
   appendMessage(message: Message): string;
   appendTurn(messages: Message[], usage: Usage): void;
   appendView(items: unknown[]): void;
+  records(): SessionRecord[];
   rewind(to: number): void;
   close(): void;
 };
@@ -132,6 +134,9 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       if (items.length === 0) return;
       appendRecord(dir, {kind: 'view', items});
       writeMeta();
+    },
+    records() {
+      return readRecords(dir);
     },
     rewind(to) {
       truncateRecords(dir, to);

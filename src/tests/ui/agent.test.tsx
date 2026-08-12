@@ -166,6 +166,65 @@ test('cancelling the picker leaves the conversation alone', async () => {
   unmount();
 });
 
+test('cancelling the picker changes nothing', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  const before = agent.current!.committed;
+  agent.current!.pickRewind();
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'rewinding');
+  agent.current!.cancelPick();
+  await tick();
+  unmount();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.deepEqual(agent.current!.committed, before);
+  assert.deepEqual(
+    loadSession(root, null, home).messages.map((message) => message.content),
+    ['fix the cart', 'done'],
+  );
+});
+
+test('a rewind cuts the screen, the messages and the file together', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.send('and the readme');
+  await settle(agent);
+
+  const rows = agent.current!.checkpoints();
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    ['fix the cart', 'and the readme'],
+  );
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  unmount();
+
+  const items = agent.current!.committed;
+  assert.deepEqual(
+    items.map((item) => (item.kind === 'task' ? item.text : item.kind)),
+    ['header', 'fix the cart', 'text'],
+  );
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.content),
+    ['fix the cart', 'done'],
+  );
+  assert.equal(JSON.stringify(stored.view).includes('and the readme'), false);
+});
+
 test('clearing the repl starts a session that forgets the old one', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;

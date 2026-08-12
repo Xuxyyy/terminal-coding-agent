@@ -6,6 +6,7 @@ import {
   connectionError,
   fakeHost,
   fakeModel,
+  fakeStore,
   finishChunk,
   streamOf,
   textChunk,
@@ -15,7 +16,6 @@ import {
 import type {AgentEvent} from '../../core/host.js';
 import {MAX_TURNS, runAgent} from '../../core/loop.js';
 import {createSession, type Session} from '../../core/session.js';
-import type {SessionStore} from '../../core/store.js';
 import type {Tool} from '../../core/tools/registry.js';
 
 const noop: Tool = {
@@ -95,18 +95,11 @@ test('a session is written after every turn', async () => {
   const {choice} = finishesAt(3);
   const {host} = fakeHost();
   const seen: number[] = [];
-  const store: SessionStore = {
-    id: 'fake',
-    dir: '/fake',
-    seed() {},
-    appendMessage: () => 'deadbeef',
+  const store = fakeStore({
     appendTurn(messages) {
       seen.push(messages.length);
     },
-    appendView() {},
-    rewind() {},
-    close() {},
-  };
+  });
   const active = session();
 
   await runAgent(active, choice, host, [noop], store);
@@ -119,26 +112,16 @@ test('a session is written after every turn', async () => {
 test('a failed write does not kill the run', async () => {
   const {choice, calls} = finishesAt(3);
   const {host, events} = fakeHost();
-  const store: SessionStore = {
-    id: 'fake',
-    dir: '/fake',
-    seed() {},
-    appendMessage() {
-      throw new Error('disk full');
-    },
-    appendTurn() {
-      throw new Error('disk full');
-    },
-    appendView() {
-      throw new Error('disk full');
-    },
-    rewind() {
-      throw new Error('disk full');
-    },
-    close() {
-      throw new Error('disk full');
-    },
+  const fails = (): never => {
+    throw new Error('disk full');
   };
+  const store = fakeStore({
+    appendMessage: fails,
+    appendTurn: fails,
+    appendView: fails,
+    rewind: fails,
+    close: fails,
+  });
 
   await runAgent(session(), choice, host, [noop], store);
 

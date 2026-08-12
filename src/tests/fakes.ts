@@ -6,6 +6,7 @@ import type {
   ConfirmRequest,
   Host,
 } from '../core/host.js';
+import type {SessionStore} from '../core/store.js';
 
 export function textChunk(text: string): unknown {
   return {choices: [{index: 0, delta: {content: text}, finish_reason: null}]};
@@ -114,4 +115,19 @@ export function fakeHost(
     },
   };
   return {host, events, asked, controller};
+}
+
+export function fakeStore(overrides: Partial<SessionStore> = {}): SessionStore {
+  return {
+    id: 'fake',
+    dir: '/fake',
+    seed() {},
+    appendMessage: () => 'deadbeef',
+    appendTurn() {},
+    appendView() {},
+    records: () => [],
+    rewind() {},
+    close() {},
+    ...overrides,
+  };
 }

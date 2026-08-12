@@ -46,6 +46,7 @@ export type Phase =
   | {kind: 'busy'}
   | {kind: 'confirming'; request: ConfirmRequest}
   | {kind: 'picking'}
+  | {kind: 'rewinding'}
   | {kind: 'closed'};
 
 export function truncate(text: string, max: number): string {

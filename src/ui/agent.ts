@@ -3,16 +3,19 @@ import type {ModelChoice} from '../core/client.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
+import {checkpointsOf, viewOf} from '../core/records.js';
 import {
   addTask,
   clearSession,
   contextStatus,
   createSession,
+  rewindTo,
   type Session,
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import type {Item, Phase, ReadyInfo} from './events.js';
-import {restoreView} from './restore.js';
+import {restoreItems, restoreView} from './restore.js';
+import {rewindRows, type RewindRow} from './rewind.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
 
@@ -28,6 +31,9 @@ export type Agent = {
   pick: () => void;
   cancelPick: () => void;
   resume: (id: string) => void;
+  pickRewind: () => void;
+  checkpoints: () => RewindRow[];
+  rewind: (id: string) => void;
   context: () => void;
   shutdown: () => void;
 };
@@ -168,8 +174,46 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   };
 
   const cancelPick = () => {
-    if (phase.kind !== 'picking') return;
+    if (phase.kind !== 'picking' && phase.kind !== 'rewinding') return;
     setPhase({kind: 'idle'});
+  };
+
+  const pickRewind = () => {
+    if (phase.kind !== 'idle') return;
+    setPhase({kind: 'rewinding'});
+  };
+
+  const checkpoints = (): RewindRow[] => rewindRows(session.messages);
+
+  const rewind = (id: string) => {
+    if (phase.kind !== 'rewinding') return;
+    setPhase({kind: 'idle'});
+    const index = Number.parseInt(id, 10);
+    if (!Number.isInteger(index) || index < 1) return;
+    const before = session.messages
+      .slice(0, index)
+      .filter((message) => message.role === 'user').length;
+
+    let kept: Item[] | null = null;
+    const store = storeRef.current;
+    if (store) {
+      try {
+        const records = store.records();
+        const cut = checkpointsOf(records)[before];
+        if (cut) {
+          store.rewind(cut.at);
+          kept = viewOf(records.slice(0, cut.at)) as Item[];
+        }
+      } catch {
+        commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
+        return;
+      }
+    }
+    rewindTo(session, index);
+    liveTextRef.current = '';
+    setStreamText('');
+    setGeneration((current) => current + 1);
+    setCommitted([header(), ...(kept ?? restoreItems(session.messages))]);
   };
 
   const resume = (id: string) => {
@@ -226,6 +270,9 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     pick,
     cancelPick,
     resume,
+    pickRewind,
+    checkpoints,
+    rewind,
     context,
     shutdown,
   };

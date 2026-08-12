@@ -57,6 +57,14 @@ export function messagesOf(records: SessionRecord[]): Message[] {
   );
 }
 
+export type Checkpoint = {id: string; at: number};
+
+export function checkpointsOf(records: SessionRecord[]): Checkpoint[] {
+  return records.flatMap((record, at) =>
+    record.kind === 'message' ? [{id: record.id, at}] : [],
+  );
+}
+
 export function viewOf(records: SessionRecord[]): unknown[] {
   return records.flatMap((record) => (record.kind === 'view' ? record.items : []));
 }

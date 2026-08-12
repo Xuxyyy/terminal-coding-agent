@@ -9,7 +9,9 @@ import {Activity} from './components/Activity.js';
 import {CommandInput, commandMatches} from './components/CommandInput.js';
 import {Confirm} from './components/Confirm.js';
 import {Markdown} from './components/Markdown.js';
+import {Picker} from './components/Picker.js';
 import {SessionPicker} from './components/SessionPicker.js';
+import {rewindLine} from './rewind.js';
 import {sessionRows} from './sessions.js';
 import {HistoryList} from './components/history/HistoryList.js';
 import {theme} from './theme.js';
@@ -37,6 +39,9 @@ export function App({
     pick,
     cancelPick,
     resume,
+    pickRewind,
+    checkpoints,
+    rewind,
     context,
     shutdown,
   } = useAgent(workspaceRoot, choice);
@@ -55,6 +60,7 @@ export function App({
     () => (phase.kind === 'picking' ? sessionRows(workspaceRoot) : []),
     [phase.kind, workspaceRoot],
   );
+  const rewindable = phase.kind === 'rewinding' ? checkpoints() : [];
 
   const submit = (value: string) => {
     const command = value.trim();
@@ -75,6 +81,11 @@ export function App({
     }
     if (command === '/resume') {
       pick();
+      setInput('');
+      return;
+    }
+    if (command === '/rewind') {
+      pickRewind();
       setInput('');
       return;
     }
@@ -141,6 +152,17 @@ export function App({
           <Confirm request={phase.request} onRespond={respond} />
         ) : phase.kind === 'picking' ? (
           <SessionPicker rows={rows} onPick={resume} onCancel={cancelPick} />
+        ) : phase.kind === 'rewinding' ? (
+          <Picker
+            title="Rewind to before a message"
+            rows={rewindable}
+            hint="↑↓ to move · enter to rewind · esc to cancel"
+            empty="Nothing to rewind yet."
+            renderRow={rewindLine}
+            onPick={rewind}
+            onCancel={cancelPick}
+            initial={rewindable.length - 1}
+          />
         ) : phase.kind === 'busy' ? (
           <Box flexDirection="column">
             <Activity status={statusFor(streamText, committed)} />

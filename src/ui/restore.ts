@@ -4,7 +4,7 @@ import type {Item} from './events.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
-function textOf(content: unknown): string {
+export function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content
