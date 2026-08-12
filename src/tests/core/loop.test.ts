@@ -98,9 +98,11 @@ test('a session is written after every turn', async () => {
   const store: SessionStore = {
     id: 'fake',
     dir: '/fake',
+    seed() {},
     appendTurn(messages) {
       seen.push(messages.length);
     },
+    appendView() {},
     close() {},
   };
   const active = session();
@@ -118,7 +120,11 @@ test('a failed write does not kill the run', async () => {
   const store: SessionStore = {
     id: 'fake',
     dir: '/fake',
+    seed() {},
     appendTurn() {
+      throw new Error('disk full');
+    },
+    appendView() {
       throw new Error('disk full');
     },
     close() {

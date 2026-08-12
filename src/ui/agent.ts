@@ -86,11 +86,18 @@ export function useAgent(
   }
   const session = sessionRef.current;
 
+  const commit = (items: Item[]) => {
+    setCommitted((prev) => [...prev, ...items]);
+    try {
+      storeRef.current?.appendView(items);
+    } catch {}
+  };
+
   const flushText = () => {
     const text = liveTextRef.current;
     liveTextRef.current = '';
     setStreamText('');
-    if (text) setCommitted((prev) => [...prev, {kind: 'text', text}]);
+    if (text) commit([{kind: 'text', text}]);
   };
 
   const send = (task: string): boolean => {
@@ -98,7 +105,7 @@ export function useAgent(
     const controller = new AbortController();
     controllerRef.current = controller;
     addTask(session, task);
-    setCommitted((prev) => [...prev, {kind: 'task', text: task}]);
+    commit([{kind: 'task', text: task}]);
     setPhase({kind: 'busy'});
 
     const host: Host = {
@@ -114,7 +121,7 @@ export function useAgent(
           return;
         }
         flushText();
-        setCommitted((prev) => [...prev, {kind: 'event', event}]);
+        commit([{kind: 'event', event}]);
       },
       confirm(request) {
         setPhase({kind: 'confirming', request});
@@ -133,7 +140,7 @@ export function useAgent(
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {
-        setCommitted((prev) => [...prev, {kind: 'notice', text: '⏹ stopped'}]);
+        commit([{kind: 'notice', text: '⏹ stopped'}]);
       }
       controllerRef.current = null;
       setPhase({kind: 'idle'});
@@ -167,7 +174,7 @@ export function useAgent(
   const context = () => {
     if (phase.kind !== 'idle') return;
     const status = contextStatus(session);
-    setCommitted((prev) => [...prev, {kind: 'context', ...status}]);
+    commit([{kind: 'context', ...status}]);
   };
 
   const shutdown = () => {

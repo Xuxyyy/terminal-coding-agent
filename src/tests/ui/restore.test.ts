@@ -72,7 +72,7 @@ test('a resumed session shows a summary, not every turn', () => {
     messages.push({role: 'assistant', content: `answer ${n}`});
   }
 
-  const items = restoreView({meta, messages});
+  const items = restoreView({meta, messages, view: []});
   const rendered = JSON.stringify(items);
 
   assert.equal(items[0]!.kind, 'notice');

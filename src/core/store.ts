@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
+import type {Item} from '../ui/events.js';
 import type {Usage} from './host.js';
 
 export type SessionMeta = {
@@ -13,16 +14,23 @@ export type SessionMeta = {
   updatedAt: string;
   status: 'open' | 'closed';
   usage: Usage;
+  firstTask?: string;
 };
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
-export type StoredSession = {meta: SessionMeta; messages: Message[]};
+export type StoredSession = {
+  meta: SessionMeta;
+  messages: Message[];
+  view: Item[];
+};
 
 export type SessionStore = {
   id: string;
   dir: string;
+  seed(messages: Message[]): void;
   appendTurn(messages: Message[], usage: Usage): void;
+  appendView(items: Item[]): void;
   close(): void;
 };
 
@@ -31,6 +39,8 @@ export const SESSION_KEEP = 50;
 
 const DIR_MODE = 0o700;
 const TURN_FILE = /^\d{4}\.json$/;
+const VIEW_FILE = /^v\d{4}\.json$/;
+const FIRST_TASK_MAX = 120;
 type Entry = {dir: string; meta: SessionMeta};
 
 export function accHome(): string {
@@ -60,6 +70,15 @@ function readJson<T>(file: string): T | null {
   } catch {
     return null;
   }
+}
+
+function firstTaskIn(messages: Message[]): string | undefined {
+  for (const message of messages) {
+    if (message.role !== 'user' || typeof message.content !== 'string') continue;
+    const text = message.content.replace(/\s+/g, ' ').trim();
+    if (text) return text.slice(0, FIRST_TASK_MAX);
+  }
+  return undefined;
 }
 
 function stamp(when: Date): string {
@@ -120,8 +139,16 @@ export function startSession(
     status: 'open',
     usage: {prompt: 0, completion: 0, total: 0},
   };
+  return makeStore(dir, meta, 0, now);
+}
+
+function makeStore(
+  dir: string,
+  meta: SessionMeta,
+  turns: number,
+  now: () => Date,
+): SessionStore {
   const written = new Set<Message>();
-  let turns = 0;
 
   const writeMeta = (): void => {
     meta.updatedAt = now().toISOString();
@@ -129,18 +156,31 @@ export function startSession(
   };
   writeMeta();
 
+  const nextFile = (prefix: string): string => {
+    turns += 1;
+    return path.join(dir, `${prefix}${String(turns).padStart(4, '0')}.json`);
+  };
+
   return {
-    id,
+    id: meta.id,
     dir,
+    seed(messages) {
+      for (const message of messages) written.add(message);
+    },
     appendTurn(messages, usage) {
       const fresh = messages.filter((message) => !written.has(message));
       if (fresh.length === 0) return;
       for (const message of fresh) written.add(message);
-      turns += 1;
-      writeJson(path.join(dir, `${String(turns).padStart(4, '0')}.json`), fresh);
+      if (meta.firstTask === undefined) meta.firstTask = firstTaskIn(fresh);
+      writeJson(nextFile(''), fresh);
       meta.usage.prompt += usage.prompt;
       meta.usage.completion += usage.completion;
       meta.usage.total += usage.total;
+      writeMeta();
+    },
+    appendView(items) {
+      if (items.length === 0) return;
+      writeJson(nextFile('v'), items);
       writeMeta();
     },
     close() {
@@ -164,6 +204,13 @@ function messagesIn(dir: string): Message[] {
     .flatMap((name) => readJson<Message[]>(path.join(dir, name)) ?? []);
 }
 
+function viewIn(dir: string): Item[] {
+  return readDir(dir)
+    .filter((name) => VIEW_FILE.test(name))
+    .sort()
+    .flatMap((name) => readJson<Item[]>(path.join(dir, name)) ?? []);
+}
+
 export function loadSession(
   workspace: string,
   id: string | null = null,
@@ -180,7 +227,33 @@ export function loadSession(
   if (owner !== workspace) {
     throw new Error(`that session belongs to another folder: ${owner}`);
   }
-  return {meta: entry.meta, messages: messagesIn(entry.dir)};
+  return {
+    meta: entry.meta,
+    messages: messagesIn(entry.dir),
+    view: viewIn(entry.dir),
+  };
+}
+
+function turnsIn(dir: string): number {
+  let highest = 0;
+  for (const name of readDir(dir)) {
+    if (!TURN_FILE.test(name) && !VIEW_FILE.test(name)) continue;
+    const turn = Number.parseInt(name.replace(/^v/, ''), 10);
+    if (turn > highest) highest = turn;
+  }
+  return highest;
+}
+
+export function openSession(
+  workspace: string,
+  id: string | null = null,
+  home: string = accHome(),
+  now: () => Date = () => new Date(),
+): {stored: StoredSession; store: SessionStore} {
+  const stored = loadSession(workspace, id, home);
+  const dir = path.join(sessionsDir(workspace, home), stored.meta.id);
+  stored.meta.status = 'open';
+  return {stored, store: makeStore(dir, stored.meta, turnsIn(dir), now)};
 }
 
 export function evictSessions(

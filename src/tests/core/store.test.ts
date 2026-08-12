@@ -9,6 +9,7 @@ import {
   evictSessions,
   listSessions,
   loadSession,
+  openSession,
   projectDir,
   SESSION_KEEP,
   startSession,
@@ -175,6 +176,63 @@ test('the newest fifty survive whatever their age', () => {
   const left = listSessions(work, root).map((meta) => meta.id);
   assert.equal(left.length, SESSION_KEEP);
   assert.deepEqual(left, ids.slice(-SESSION_KEEP).reverse());
+});
+
+test('reopening a session keeps the folder and continues the numbering', () => {
+  const root = home();
+  const work = workspace();
+  const first = startSession(work, root);
+  first.appendTurn([user('fix the cart')], usage(15));
+  first.appendView([{kind: 'task', text: 'fix the cart'}]);
+  first.close();
+
+  const {stored, store} = openSession(work, null, root);
+  store.seed(stored.messages);
+  store.appendTurn([...stored.messages, assistant('done')], usage(10));
+  store.close();
+
+  assert.equal(store.dir, first.dir);
+  assert.deepEqual(fs.readdirSync(store.dir).sort(), [
+    '0001.json',
+    '0003.json',
+    'session.json',
+    'v0002.json',
+  ]);
+  const again = loadSession(work, null, root);
+  assert.deepEqual(again.messages, [user('fix the cart'), assistant('done')]);
+  assert.equal(again.meta.usage.total, 25);
+  assert.equal(again.meta.id, first.id);
+});
+
+test('a reopened session is open again while it runs', () => {
+  const root = home();
+  const work = workspace();
+  const first = startSession(work, root);
+  first.appendTurn([user('hello')], usage(5));
+  first.close();
+
+  const {store} = openSession(work, null, root);
+  assert.equal(loadSession(work, null, root).meta.status, 'open');
+  store.close();
+  assert.equal(loadSession(work, null, root).meta.status, 'closed');
+});
+
+test('seeded messages are never written twice', () => {
+  const root = home();
+  const work = workspace();
+  const first = startSession(work, root);
+  first.appendTurn([user('one'), assistant('two')], usage(5));
+  first.close();
+
+  const {stored, store} = openSession(work, null, root);
+  store.seed(stored.messages);
+  store.appendTurn(stored.messages, usage(0));
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    user('one'),
+    assistant('two'),
+  ]);
 });
 
 test('a folder with no sessions lists nothing', () => {
