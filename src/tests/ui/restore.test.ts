@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type OpenAI from 'openai';
 import type {SessionMeta} from '../../core/store.js';
-import type {EventItem, NoticeItem, TaskItem, TextItem} from '../../ui/events.js';
+import type {
+  DiffPayload,
+  EventItem,
+  Item,
+  NoticeItem,
+  TaskItem,
+  TextItem,
+} from '../../ui/events.js';
 import {restoreItems, restoreSummary, restoreView} from '../../ui/restore.js';
 
 const meta: SessionMeta = {
@@ -63,7 +70,45 @@ test('restoreSummary names the count and when it started', () => {
   assert.match(summary, /2026-08-11/);
 });
 
-test('a resumed session shows a summary, not every turn', () => {
+test('a stored view replays every turn, diff and all', () => {
+  const diff: DiffPayload = {
+    path: 'src/cart.js',
+    rows: [
+      {kind: 'remove', line: 7, text: 'total.toFixed(0)'},
+      {kind: 'add', line: 7, text: 'total.toFixed(2)'},
+    ],
+    hidden: 0,
+    added: 1,
+    removed: 1,
+  };
+  const view: Item[] = [
+    {kind: 'task', text: 'fix the cart'},
+    {kind: 'text', text: 'reading it'},
+    {
+      kind: 'event',
+      event: {
+        type: 'tool_end',
+        id: 'c1',
+        name: 'edit_file',
+        result: 'edited src/cart.js',
+        diff,
+      },
+    },
+    {kind: 'context', used: 900, budget: 1_000_000},
+    {kind: 'task', text: 'and the total'},
+    {kind: 'text', text: 'done'},
+  ];
+
+  const items = restoreView({meta, messages: [{role: 'user', content: 'x'}], view});
+
+  assert.equal(items[0]!.kind, 'notice');
+  assert.deepEqual(items.slice(1), view);
+  const end = (items[3] as EventItem).event;
+  if (end.type !== 'tool_end') assert.fail('expected a tool_end');
+  assert.deepEqual(end.diff, diff);
+});
+
+test('a session with no view falls back to its messages', () => {
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     {role: 'system', content: 'rules'},
   ];
@@ -77,9 +122,7 @@ test('a resumed session shows a summary, not every turn', () => {
 
   assert.equal(items[0]!.kind, 'notice');
   assert.match((items[0] as NoticeItem).text, /restored 61 messages/);
-  assert.ok(items.length <= 4, `expected a short view, got ${items.length}`);
-  assert.ok(rendered.includes('task 30'));
+  assert.equal(items.length, 61);
+  assert.ok(rendered.includes('task 1'));
   assert.ok(rendered.includes('answer 30'));
-  assert.ok(!rendered.includes('task 29'));
-  assert.ok(!rendered.includes('answer 29'));
 });

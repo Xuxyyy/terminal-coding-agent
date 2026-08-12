@@ -67,14 +67,10 @@ export function restoreSummary(meta: SessionMeta, messages: number): string {
 }
 
 export function restoreView(session: StoredSession): Item[] {
-  const {meta, messages} = session;
+  const {meta, messages, view} = session;
   const notice: Item = {
     kind: 'notice',
     text: restoreSummary(meta, messages.length),
   };
-  let last = -1;
-  for (let n = messages.length - 1; n >= 0 && last < 0; n -= 1) {
-    if (messages[n]!.role === 'user') last = n;
-  }
-  return last < 0 ? [notice] : [notice, ...restoreItems(messages.slice(last))];
+  return [notice, ...(view.length > 0 ? view : restoreItems(messages))];
 }
