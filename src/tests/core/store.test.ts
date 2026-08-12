@@ -253,6 +253,22 @@ test('seeded messages are never written twice', () => {
   ]);
 });
 
+test('a session is one file of records', {todo: 'v4 step 2'});
+
+test('reading a session returns both the messages and the view', {todo: 'v4 step 2'});
+
+test('a version 1 session is not loaded', {todo: 'v4 step 2'});
+
+test('the picker skips a version 1 session', {todo: 'v4 step 2'});
+
+test('a record of an unknown kind is ignored, not an error', {todo: 'v4 step 2'});
+
+test('every user message record carries an id', {todo: 'v4 step 3'});
+
+test('a rewind drops the records above the cut', {todo: 'v4 step 4'});
+
+test('the next append after a rewind continues from the cut', {todo: 'v4 step 4'});
+
 test('a folder with no sessions lists nothing', () => {
   assert.deepEqual(listSessions(workspace(), home()), []);
 });
