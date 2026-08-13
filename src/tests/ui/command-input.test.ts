@@ -5,7 +5,7 @@ import {commandMatches, completeCommand} from '../../ui/components/CommandInput.
 test('the menu offers only the commands this version has', () => {
   assert.deepEqual(
     commandMatches('/').map((command) => command.value),
-    ['/context', '/clear', '/resume', '/rewind'],
+    ['/context', '/compact', '/clear', '/resume', '/rewind'],
   );
 });
 
@@ -18,10 +18,11 @@ test('a dropped command is not suggested', () => {
 test('completeCommand picks the highlighted match, not always the first', () => {
   assert.deepEqual(
     commandMatches('/c').map((command) => command.value),
-    ['/context', '/clear'],
+    ['/context', '/compact', '/clear'],
   );
   assert.equal(completeCommand('/c', 0), '/context');
-  assert.equal(completeCommand('/c', 1), '/clear');
+  assert.equal(completeCommand('/c', 1), '/compact');
+  assert.equal(completeCommand('/c', 2), '/clear');
 });
 
 test('completeCommand leaves the input alone when the index misses', () => {

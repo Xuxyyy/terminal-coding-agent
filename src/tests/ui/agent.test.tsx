@@ -14,7 +14,14 @@ import type {
   TaskItem,
   TextItem,
 } from '../../ui/events.js';
-import {fakeModel, finishChunk, streamOf, textChunk, usageChunk} from '../fakes.js';
+import {
+  fakeModel,
+  finishChunk,
+  statusError,
+  streamOf,
+  textChunk,
+  usageChunk,
+} from '../fakes.js';
 
 type Ref = {current: Agent | null};
 
@@ -326,4 +333,206 @@ test('clearing the repl starts a session that forgets the old one', async () => 
     ['user', 'assistant'],
   );
   assert.equal(JSON.stringify(newest.messages).includes('fix the cart'), false);
+});
+
+const SUMMARY = 'the cart was fixed in cart.ts';
+
+function summaryOf(text: string): AsyncIterable<unknown> {
+  return streamOf(textChunk(text), finishChunk('stop'), usageChunk(400, 20));
+}
+
+function summarizingModel(): ReturnType<typeof fakeModel> {
+  return fakeModel((turn) => (turn === 2 ? summaryOf(SUMMARY) : answer('done')));
+}
+
+function occurrences(messages: unknown, needle: string): number {
+  return JSON.stringify(messages).split(needle).length - 1;
+}
+
+test('/compact on an idle session replaces the conversation and commits a notice then a context item', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = summarizingModel();
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+  unmount();
+
+  const items = agent.current!.committed;
+  const notice = items[items.length - 2]!;
+  assert.equal(notice.kind, 'notice');
+  assert.match(
+    (notice as NoticeItem).text,
+    /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/,
+  );
+  assert.equal(lastContext(items).kind, 'context');
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['assistant'],
+  );
+  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
+  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
+});
+
+test('/compact while the agent is busy does nothing', async () => {
+  const root = workspace();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const {choice, calls} = fakeModel(() => ({
+    async *[Symbol.asyncIterator]() {
+      await held;
+      yield textChunk('done');
+      yield finishChunk('stop');
+      yield usageChunk(10, 5);
+    },
+  }));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'busy');
+  const before = agent.current!.committed;
+  agent.current!.compact();
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'busy');
+  assert.deepEqual(agent.current!.committed, before);
+  assert.equal(calls(), 1);
+  release();
+  await settle(agent);
+  unmount();
+});
+
+test('a failed compaction commits a notice and leaves the messages alone', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel((turn) =>
+    turn === 1 ? answer('done') : statusError(400),
+  );
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+  unmount();
+
+  const items = agent.current!.committed;
+  const last = items[items.length - 1]!;
+  assert.equal(last.kind, 'notice');
+  assert.match((last as NoticeItem).text, /^↯ nothing compacted/);
+  assert.equal(
+    items.some((item) => item.kind === 'context'),
+    false,
+  );
+  assert.deepEqual(
+    loadSession(root, null, home).messages.map((message) => message.role),
+    ['user', 'assistant'],
+  );
+});
+
+test('resuming a compacted session shows the summary, not the original conversation', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const first = summarizingModel();
+  const one = mount(root, first.choice);
+  one.agent.current!.send('fix the cart');
+  await settle(one.agent);
+  one.agent.current!.compact();
+  await settle(one.agent);
+  one.unmount();
+  const [older] = listSessions(root, home);
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(older!.id);
+  await tick();
+  two.unmount();
+
+  const stored = loadSession(root, older!.id, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['assistant'],
+  );
+  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
+  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
+});
+
+test('resuming after a compaction and one more turn holds the summary once', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const first = summarizingModel();
+  const one = mount(root, first.choice);
+  one.agent.current!.send('fix the cart');
+  await settle(one.agent);
+  one.agent.current!.compact();
+  await settle(one.agent);
+  one.agent.current!.send('and the total');
+  await settle(one.agent);
+  one.unmount();
+  const [older] = listSessions(root, home);
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(older!.id);
+  await tick();
+  two.agent.current!.context();
+  await tick();
+  two.unmount();
+
+  const stored = loadSession(root, older!.id, home);
+  assert.equal(occurrences(stored.messages, SUMMARY), 1);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['assistant', 'user', 'assistant'],
+  );
+  assert.equal(stored.messages[1]!.content, 'and the total');
+  assert.equal(stored.messages[2]!.content, 'done');
+  assert.equal(stored.lastUsage!.total, 15);
+  const status = lastContext(two.agent.current!.committed);
+  assert.equal(status.measured, true);
+  assert.equal(status.used, 15);
+});
+
+test('a rewind after a compaction cuts at the right place', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = summarizingModel();
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+  agent.current!.send('and the total');
+  await settle(agent);
+
+  const rows = agent.current!.checkpoints();
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    ['and the total'],
+  );
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  unmount();
+
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['assistant'],
+  );
+  assert.equal(occurrences(stored.messages, SUMMARY), 1);
+  assert.equal(JSON.stringify(stored.messages).includes('and the total'), false);
 });

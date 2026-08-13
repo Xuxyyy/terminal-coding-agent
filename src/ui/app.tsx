@@ -43,6 +43,7 @@ export function App({
     checkpoints,
     rewind,
     context,
+    compact,
     shutdown,
   } = useAgent(workspaceRoot, choice);
   const [input, setInput] = useState('');
@@ -91,6 +92,11 @@ export function App({
     }
     if (command === '/context') {
       context();
+      setInput('');
+      return;
+    }
+    if (command === '/compact') {
+      compact();
       setInput('');
       return;
     }

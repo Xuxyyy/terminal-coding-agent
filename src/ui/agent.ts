@@ -1,5 +1,6 @@
 import {useRef, useState} from 'react';
 import type {ModelChoice} from '../core/client.js';
+import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
@@ -35,6 +36,7 @@ export type Agent = {
   checkpoints: () => RewindRow[];
   rewind: (id: string) => void;
   context: () => void;
+  compact: () => void;
   shutdown: () => void;
 };
 
@@ -256,6 +258,48 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     commit([{kind: 'context', ...status}]);
   };
 
+  const compact = () => {
+    if (phase.kind !== 'idle') return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setPhase({kind: 'busy'});
+
+    const host: Host = {
+      signal: controller.signal,
+      onEvent(event) {
+        if (event.type !== 'text_delta') return;
+        liveTextRef.current += event.text;
+        setStreamText(liveTextRef.current);
+      },
+      async confirm() {
+        return 'deny';
+      },
+    };
+
+    void compactSession(session, choice, host, storeRef.current ?? undefined)
+      .then((result) => {
+        if (!result) {
+          liveTextRef.current = '';
+          setStreamText('');
+          commit([{kind: 'notice', text: '↯ nothing compacted: the summary failed'}]);
+          return;
+        }
+        flushText();
+        const freed = Math.max(0, result.before - result.after);
+        commit([
+          {
+            kind: 'notice',
+            text: `↯ compacted ${result.replaced} message${result.replaced === 1 ? '' : 's'}, ~${freed.toLocaleString('en-US')} tokens freed`,
+          },
+          {kind: 'context', ...contextStatus(session)},
+        ]);
+      })
+      .finally(() => {
+        controllerRef.current = null;
+        setPhase({kind: 'idle'});
+      });
+  };
+
   const shutdown = () => {
     controllerRef.current?.abort();
     try {
@@ -282,6 +326,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     checkpoints,
     rewind,
     context,
+    compact,
     shutdown,
   };
 }

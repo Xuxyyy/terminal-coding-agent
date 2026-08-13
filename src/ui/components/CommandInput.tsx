@@ -5,6 +5,7 @@ import {theme} from '../theme.js';
 
 const COMMANDS = [
   {value: '/context', description: 'show token usage'},
+  {value: '/compact', description: 'summarize and shrink the conversation'},
   {value: '/clear', description: 'clear the conversation'},
   {value: '/resume', description: 'reopen a past conversation'},
   {value: '/rewind', description: 'go back to before an earlier message'},
