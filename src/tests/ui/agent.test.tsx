@@ -532,11 +532,12 @@ test('a turn that fills the window compacts itself and says so', async () => {
   unmount();
 
   assert.equal(calls(), 3);
-  const notice = agent.current!.committed.find(
-    (item) => item.kind === 'notice',
-  ) as NoticeItem | undefined;
-  assert.ok(notice, 'expected an automatic compaction notice');
-  assert.match(notice.text, /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/);
+  const notices = agent.current!.committed.flatMap((item) =>
+    item.kind === 'notice' ? [(item as NoticeItem).text] : [],
+  );
+  assert.equal(notices.length, 2);
+  assert.equal(notices[0], '↯ context is 90% full — compacting…');
+  assert.match(notices[1]!, /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/);
   assert.deepEqual(agent.current!.checkpoints(), [
     {id: '2', index: 2, title: 'fix the cart'},
   ]);
@@ -622,6 +623,30 @@ test('a failed automatic compaction is reported and the task still finishes', as
   assert.equal(last.kind, 'text');
   assert.equal((last as TextItem).text, 'done');
   assert.equal(agent.current!.phase.kind, 'idle');
+});
+
+test('a failed compaction does not leave the spinner saying compacting', async () => {
+  const root = workspace();
+  const rest = gate();
+  const {choice} = fakeModel((turn) => {
+    if (turn === 1) return crossingTurn();
+    if (turn === 2) return statusError(400);
+    return heldAnswer(rest.wait, 'done', 10);
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await until(
+    () => eventTypes(agent.current!.committed).includes('error'),
+    'the compaction never failed',
+  );
+
+  const phase = agent.current!.phase;
+  assert.equal(phase.kind, 'busy');
+  assert.equal(phase.kind === 'busy' ? phase.label : 'still set', undefined);
+  rest.open();
+  await settle(agent);
+  unmount();
 });
 
 test('resuming a compacted session shows the summary, not the original conversation', async () => {

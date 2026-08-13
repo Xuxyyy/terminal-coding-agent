@@ -16,6 +16,8 @@ import {
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
+  COMPACTING_LABEL,
+  thresholdNotice,
   truncate,
   type Item,
   type Phase,
@@ -67,6 +69,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   const sessionRef = useRef<Session | null>(null);
   const storeRef = useRef<SessionStore | null | undefined>(undefined);
   const liveTextRef = useRef('');
+  const compactingRef = useRef(false);
   const controllerRef = useRef<AbortController | null>(null);
   const resolveConfirmRef = useRef<((d: ConfirmDecision) => void) | null>(null);
 
@@ -108,6 +111,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return false;
     const controller = new AbortController();
     controllerRef.current = controller;
+    compactingRef.current = false;
     const store = openStore();
     const message = addTask(session, task);
     try {
@@ -119,6 +123,20 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
+        if (event.type === 'compact_start') {
+          flushText();
+          compactingRef.current = true;
+          const status = contextStatus(session);
+          commit([
+            {kind: 'notice', text: thresholdNotice(status.used, status.budget)},
+          ]);
+          setPhase({kind: 'busy', label: COMPACTING_LABEL});
+          return;
+        }
+        if (compactingRef.current) {
+          compactingRef.current = false;
+          setPhase({kind: 'busy'});
+        }
         if (event.type === 'text_delta') {
           liveTextRef.current += event.text;
           setStreamText(liveTextRef.current);
@@ -128,13 +146,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           flushText();
           return;
         }
-        if (event.type === 'compact_start') {
-          flushText();
-          setPhase({kind: 'busy', label: 'Compacting…'});
-          return;
-        }
         if (event.type === 'compact_end') {
-          setPhase({kind: 'busy'});
           commit([
             {
               kind: 'notice',
@@ -283,7 +295,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return;
     const controller = new AbortController();
     controllerRef.current = controller;
-    setPhase({kind: 'busy', label: 'Compacting…'});
+    setPhase({kind: 'busy', label: COMPACTING_LABEL});
 
     const host: Host = {
       signal: controller.signal,
