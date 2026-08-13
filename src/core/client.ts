@@ -24,7 +24,7 @@ const PROVIDERS: Record<string, Provider> = {
 type ModelInfo = {provider: string; label: string; contextWindow: number};
 
 export const MODELS: Record<string, ModelInfo> = {
-  'kimi-k3': {provider: 'kimi', label: 'Kimi K3', contextWindow: 1_000_000},
+  'kimi-k3': {provider: 'kimi', label: 'Kimi K3', contextWindow: 262_144},
   'kimi-k2.7-code': {
     provider: 'kimi',
     label: 'Kimi K2.7 Code',
@@ -33,14 +33,14 @@ export const MODELS: Record<string, ModelInfo> = {
   'deepseek-v4-pro': {
     provider: 'deepseek',
     label: 'DeepSeek v4 Pro',
-    contextWindow: 1_000_000,
+    contextWindow: 262_144,
   },
   'deepseek-v4-flash': {
     provider: 'deepseek',
     label: 'DeepSeek v4 Flash',
-    contextWindow: 1_000_000,
+    contextWindow: 262_144,
   },
-  'glm-5.2': {provider: 'glm', label: 'GLM 5.2', contextWindow: 1_000_000},
+  'glm-5.2': {provider: 'glm', label: 'GLM 5.2', contextWindow: 262_144},
   'glm-4.7-flash': {
     provider: 'glm',
     label: 'GLM 4.7 Flash',
