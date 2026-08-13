@@ -34,11 +34,13 @@ export function Entry({item}: {item: Item}) {
   if (item.kind === 'context') {
     const {line, bar, parts} = contextReadout(item);
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" marginTop={1} marginLeft={3}>
         <Text color={theme.foreground}>{line}</Text>
         <Text color={theme.muted}>{`[${bar}]`}</Text>
         {parts.map((part) => (
-          <Text key={part} color={theme.muted}>{`  ${part}`}</Text>
+          <Text key={part} color={theme.muted}>
+            {part}
+          </Text>
         ))}
       </Box>
     );

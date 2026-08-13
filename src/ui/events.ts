@@ -187,10 +187,13 @@ export function diffSummary(diff: DiffPayload): string {
   return parts.join(' ');
 }
 
+const BAR_WIDTH = 20;
+const ROW_WIDTH = BAR_WIDTH + 2;
+
 const PART_LABELS: [keyof ContextStatus, string][] = [
   ['system', 'system prompt'],
-  ['tools', 'tool definitions'],
-  ['conversation', 'conversation'],
+  ['tools', 'system tools'],
+  ['conversation', 'messages'],
   ['free', 'free'],
 ];
 
@@ -206,8 +209,8 @@ export function contextReadout(status: ContextItem): {
   const {used, budget} = status;
   const measured = status.measured ?? true;
   const pct = budget > 0 ? used / budget : 0;
-  const filled = Math.max(0, Math.min(20, Math.floor(pct * 20)));
-  const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
+  const filled = Math.max(0, Math.min(BAR_WIDTH, Math.floor(pct * BAR_WIDTH)));
+  const bar = '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
   const rounded = Math.round(pct * 100);
   const share = used > 0 && rounded === 0 ? '<1' : String(rounded);
   const line = `context: ${tokenText(used, !measured)} / ${budget.toLocaleString('en-US')} tokens (${share}%)`;
@@ -219,9 +222,11 @@ export function contextReadout(status: ContextItem): {
     label,
     text: tokenText(status[key] as number, key === 'free' ? !measured : true),
   }));
-  const width = Math.max(...shown.map((part) => part.text.length));
+  const numbers = Math.max(...shown.map((part) => part.text.length));
+  const labels = Math.max(...shown.map((part) => part.label.length));
+  const width = Math.max(ROW_WIDTH, labels + 2 + numbers);
   const parts = shown.map(
-    (part) => `${part.text.padStart(width)}  ${part.label}`,
+    (part) => part.label.padEnd(width - numbers) + part.text.padStart(numbers),
   );
   return {line, bar, parts};
 }
