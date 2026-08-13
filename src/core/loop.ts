@@ -1,7 +1,8 @@
 import type OpenAI from 'openai';
 import {StreamFailure, streamTurn, type ModelChoice} from './client.js';
+import {compactMidRun, compactThreshold, shouldCompact} from './compact.js';
 import type {Host, Usage} from './host.js';
-import {recordUsage, type Session} from './session.js';
+import {contextStatus, recordUsage, type Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
 import type {Tool} from './tools/registry.js';
@@ -49,6 +50,7 @@ export async function runAgent(
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
   let checkpoints = true;
+  let compacting = true;
 
   const save = (usage: Usage): void => {
     if (!store) return;
@@ -82,6 +84,22 @@ export async function runAgent(
           return;
         }
         if (answer === 'session') checkpoints = false;
+      }
+
+      if (compacting && shouldCompact(session)) {
+        const compaction = await compactMidRun(session, choice, host, store);
+        if (!compaction) {
+          compacting = false;
+          host.onEvent({
+            type: 'error',
+            message: 'could not compact; the run continues',
+          });
+        } else if (
+          contextStatus(session, registry).used >=
+          session.contextWindow * compactThreshold()
+        ) {
+          compacting = false;
+        }
       }
 
       const result = await streamTurn(choice, session.messages, definitions, host);
