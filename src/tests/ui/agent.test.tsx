@@ -349,7 +349,7 @@ function occurrences(messages: unknown, needle: string): number {
   return JSON.stringify(messages).split(needle).length - 1;
 }
 
-test('/compact on an idle session replaces the conversation and commits a notice then a context item', async () => {
+test('/compact on an idle session replaces the conversation and commits only a notice', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
   const {choice} = summarizingModel();
@@ -362,13 +362,16 @@ test('/compact on an idle session replaces the conversation and commits a notice
   unmount();
 
   const items = agent.current!.committed;
-  const notice = items[items.length - 2]!;
+  const notice = items[items.length - 1]!;
   assert.equal(notice.kind, 'notice');
   assert.match(
     (notice as NoticeItem).text,
     /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/,
   );
-  assert.equal(lastContext(items).kind, 'context');
+  assert.equal(
+    items.some((item) => item.kind === 'context'),
+    false,
+  );
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
@@ -404,6 +407,39 @@ test('/compact while the agent is busy does nothing', async () => {
   assert.equal(agent.current!.phase.kind, 'busy');
   assert.deepEqual(agent.current!.committed, before);
   assert.equal(calls(), 1);
+  release();
+  await settle(agent);
+  unmount();
+});
+
+test('the spinner says compacting while the summary is in flight', async () => {
+  const root = workspace();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const {choice} = fakeModel((turn) =>
+    turn === 1
+      ? answer('done')
+      : {
+          async *[Symbol.asyncIterator]() {
+            await held;
+            yield textChunk(SUMMARY);
+            yield finishChunk('stop');
+            yield usageChunk(400, 20);
+          },
+        },
+  );
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.compact();
+  await tick();
+
+  const phase = agent.current!.phase;
+  assert.equal(phase.kind, 'busy');
+  assert.equal(phase.kind === 'busy' ? phase.label : null, 'Compacting…');
   release();
   await settle(agent);
   unmount();

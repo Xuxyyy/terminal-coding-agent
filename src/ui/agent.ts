@@ -262,7 +262,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return;
     const controller = new AbortController();
     controllerRef.current = controller;
-    setPhase({kind: 'busy'});
+    setPhase({kind: 'busy', label: 'Compacting…'});
 
     const host: Host = {
       signal: controller.signal,
@@ -291,7 +291,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
             kind: 'notice',
             text: `↯ compacted ${result.replaced} message${result.replaced === 1 ? '' : 's'}, ~${freed.toLocaleString('en-US')} tokens freed`,
           },
-          {kind: 'context', ...contextStatus(session)},
         ]);
       })
       .finally(() => {

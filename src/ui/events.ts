@@ -45,7 +45,7 @@ import type {ConfirmRequest} from '../core/host.js';
 
 export type Phase =
   | {kind: 'idle'}
-  | {kind: 'busy'}
+  | {kind: 'busy'; label?: string}
   | {kind: 'confirming'; request: ConfirmRequest}
   | {kind: 'picking'}
   | {kind: 'rewinding'}

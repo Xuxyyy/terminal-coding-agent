@@ -171,7 +171,7 @@ export function App({
           />
         ) : phase.kind === 'busy' ? (
           <Box flexDirection="column">
-            <Activity status={statusFor(streamText, committed)} />
+            <Activity status={phase.label ?? statusFor(streamText, committed)} />
             <Text color={theme.muted}>esc to stop</Text>
           </Box>
         ) : inputShown ? (
