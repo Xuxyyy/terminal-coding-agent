@@ -7,7 +7,13 @@ import {render} from 'ink';
 import {listSessions} from '../../core/projects.js';
 import {loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
-import type {NoticeItem, TaskItem, TextItem} from '../../ui/events.js';
+import type {
+  ContextItem,
+  Item,
+  NoticeItem,
+  TaskItem,
+  TextItem,
+} from '../../ui/events.js';
 import {fakeModel, finishChunk, streamOf, textChunk, usageChunk} from '../fakes.js';
 
 type Ref = {current: Agent | null};
@@ -146,6 +152,74 @@ test('resuming replays the old screen and writes back to the same session', asyn
     ['user', 'assistant', 'user', 'assistant'],
   );
   assert.equal(again.meta.id, older!.id);
+});
+
+function lastContext(items: Item[]): ContextItem {
+  const last = items[items.length - 1];
+  assert.equal(last!.kind, 'context');
+  return last as ContextItem;
+}
+
+test('resuming restores the context reading of the last turn', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const first = fakeModel(() => answer('done'));
+  const one = mount(root, first.choice);
+  one.agent.current!.send('fix the cart');
+  await settle(one.agent);
+  one.agent.current!.send('and the readme');
+  await settle(one.agent);
+  one.unmount();
+  const [older] = listSessions(root, home);
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(older!.id);
+  await tick();
+  two.agent.current!.context();
+  await tick();
+  two.unmount();
+
+  const stored = loadSession(root, older!.id, home);
+  assert.equal(stored.meta.usage.total, 30);
+  assert.equal(stored.lastUsage!.total, 15);
+  assert.equal(lastContext(two.agent.current!.committed).used, 15);
+});
+
+test('a rewind after a resume empties the context reading', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const first = fakeModel(() => answer('done'));
+  const one = mount(root, first.choice);
+  one.agent.current!.send('fix the cart');
+  await settle(one.agent);
+  one.agent.current!.send('and the readme');
+  await settle(one.agent);
+  one.unmount();
+  const [older] = listSessions(root, home);
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(older!.id);
+  await tick();
+  const rows = two.agent.current!.checkpoints();
+  two.agent.current!.pickRewind();
+  await tick();
+  two.agent.current!.rewind(rows[1]!.id);
+  await tick();
+  two.agent.current!.context();
+  await tick();
+  two.unmount();
+
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    ['fix the cart', 'and the readme'],
+  );
+  assert.equal(lastContext(two.agent.current!.committed).used, 0);
 });
 
 test('cancelling the picker leaves the conversation alone', async () => {

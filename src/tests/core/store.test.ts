@@ -11,6 +11,7 @@ import {
   projectDir,
   SESSION_KEEP,
 } from '../../core/projects.js';
+import {lastUsageOf} from '../../core/records.js';
 import {
   loadSession,
   openSession,
@@ -172,6 +173,36 @@ test('resume restores the messages and the token count', () => {
   assert.equal(restored.meta.status, 'closed');
   assert.equal(restored.meta.workspace, work);
   assert.equal(restored.meta.id, store.id);
+});
+
+test('the last usage is the newest turn, not the first', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  const first = user('fix the cart');
+  store.appendMessage(first);
+  store.appendTurn([first, assistant('fixed')], usage(15));
+  store.appendView([{kind: 'task', text: 'fix the cart'}]);
+  const second = user('and the readme');
+  store.appendMessage(second);
+  store.appendTurn([second, assistant('updated')], usage(28));
+  store.appendView([{kind: 'task', text: 'and the readme'}]);
+  store.close();
+
+  assert.deepEqual(lastUsageOf(store.records()), usage(28));
+});
+
+test('a session with no completed turn has no last usage', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendMessage(user('fix the cart'));
+  store.appendView([{kind: 'task', text: 'fix the cart'}]);
+  store.close();
+
+  assert.equal(lastUsageOf(store.records()), null);
 });
 
 test('resume refuses a session from another folder', () => {

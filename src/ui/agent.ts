@@ -243,6 +243,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     }
     opened.store.seed(session.messages);
     session.usage = {...opened.stored.meta.usage};
+    session.lastContextTokens = opened.stored.lastUsage?.total ?? 0;
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);

@@ -99,7 +99,12 @@ test('a stored view replays every turn, diff and all', () => {
     {kind: 'text', text: 'done'},
   ];
 
-  const items = restoreView({meta, messages: [{role: 'user', content: 'x'}], view});
+  const items = restoreView({
+    meta,
+    messages: [{role: 'user', content: 'x'}],
+    view,
+    lastUsage: null,
+  });
 
   assert.equal(items[0]!.kind, 'notice');
   assert.deepEqual(items.slice(1), view);
@@ -117,7 +122,7 @@ test('a session with no view falls back to its messages', () => {
     messages.push({role: 'assistant', content: `answer ${n}`});
   }
 
-  const items = restoreView({meta, messages, view: []});
+  const items = restoreView({meta, messages, view: [], lastUsage: null});
   const rendered = JSON.stringify(items);
 
   assert.equal(items[0]!.kind, 'notice');

@@ -57,6 +57,14 @@ export function messagesOf(records: SessionRecord[]): Message[] {
   );
 }
 
+export function lastUsageOf(records: SessionRecord[]): Usage | null {
+  for (let at = records.length - 1; at >= 0; at--) {
+    const record = records[at];
+    if (record && record.kind === 'messages') return record.usage;
+  }
+  return null;
+}
+
 export type Checkpoint = {id: string; at: number};
 
 export function checkpointsOf(records: SessionRecord[]): Checkpoint[] {

@@ -4,6 +4,7 @@ import type OpenAI from 'openai';
 import type {Usage} from './host.js';
 import {
   appendRecord,
+  lastUsageOf,
   messagesOf,
   readRecords,
   truncateRecords,
@@ -39,6 +40,7 @@ export type StoredSession = {
   meta: SessionMeta;
   messages: Message[];
   view: unknown[];
+  lastUsage: Usage | null;
 };
 
 export type SessionStore = {
@@ -171,6 +173,7 @@ export function loadSession(
     meta: entry.meta,
     messages: messagesOf(records),
     view: viewOf(records),
+    lastUsage: lastUsageOf(records),
   };
 }
 
