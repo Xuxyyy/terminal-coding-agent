@@ -20,6 +20,7 @@ import {
   statusError,
   streamOf,
   textChunk,
+  toolCallChunk,
   usageChunk,
 } from '../fakes.js';
 
@@ -471,6 +472,156 @@ test('a failed compaction commits a notice and leaves the messages alone', async
     loadSession(root, null, home).messages.map((message) => message.role),
     ['user', 'assistant'],
   );
+});
+
+function crossingTurn(): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk('call-1', 'nope', '{}'),
+    finishChunk('tool_calls'),
+    usageChunk(880, 20),
+  );
+}
+
+function gate(): {wait: Promise<void>; open: () => void} {
+  let open = () => {};
+  const wait = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return {wait, open};
+}
+
+function heldAnswer(
+  wait: Promise<void>,
+  text: string,
+  tokens: number,
+): AsyncIterable<unknown> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      await wait;
+      yield textChunk(text);
+      yield finishChunk('stop');
+      yield usageChunk(tokens, 5);
+    },
+  };
+}
+
+async function until(check: () => boolean, what: string): Promise<void> {
+  for (let n = 0; n < 2_000; n += 1) {
+    if (check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail(what);
+}
+
+function eventTypes(items: Item[]): string[] {
+  return items.flatMap((item) => (item.kind === 'event' ? [item.event.type] : []));
+}
+
+test('a turn that fills the window compacts itself and says so', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice, calls} = fakeModel((turn) => {
+    if (turn === 1) return crossingTurn();
+    if (turn === 2) return summaryOf(SUMMARY);
+    return answer('done');
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  unmount();
+
+  assert.equal(calls(), 3);
+  const notice = agent.current!.committed.find(
+    (item) => item.kind === 'notice',
+  ) as NoticeItem | undefined;
+  assert.ok(notice, 'expected an automatic compaction notice');
+  assert.match(notice.text, /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/);
+  assert.deepEqual(agent.current!.checkpoints(), [
+    {id: '2', index: 2, title: 'fix the cart'},
+  ]);
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['assistant', 'user', 'assistant'],
+  );
+  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
+  assert.equal(stored.messages[1]!.content, 'fix the cart');
+});
+
+test('the spinner says compacting mid-run and goes back afterwards', async () => {
+  const root = workspace();
+  const summary = gate();
+  const rest = gate();
+  const {choice} = fakeModel((turn) => {
+    if (turn === 1) return crossingTurn();
+    if (turn === 2) return heldAnswer(summary.wait, SUMMARY, 400);
+    return heldAnswer(rest.wait, 'done', 10);
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await until(() => {
+    const phase = agent.current!.phase;
+    return phase.kind === 'busy' && phase.label === 'Compacting…';
+  }, 'the spinner never said Compacting…');
+  summary.open();
+  await until(() => {
+    const phase = agent.current!.phase;
+    return phase.kind === 'busy' && phase.label === undefined;
+  }, 'the spinner never went back to the normal status');
+  rest.open();
+  await settle(agent);
+  unmount();
+});
+
+test('the two compaction events never land in the scrollback as events', async () => {
+  const root = workspace();
+  const {choice} = fakeModel((turn) => {
+    if (turn === 1) return crossingTurn();
+    if (turn === 2) return summaryOf(SUMMARY);
+    return answer('done');
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  unmount();
+
+  const types = eventTypes(agent.current!.committed);
+  assert.equal(types.includes('compact_start'), false);
+  assert.equal(types.includes('compact_end'), false);
+});
+
+test('a failed automatic compaction is reported and the task still finishes', async () => {
+  const root = workspace();
+  const {choice, calls} = fakeModel((turn) => {
+    if (turn === 1) return crossingTurn();
+    if (turn === 2) return statusError(400);
+    return answer('done');
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  unmount();
+
+  assert.equal(calls(), 3);
+  const items = agent.current!.committed;
+  const failure = items.find(
+    (item) => item.kind === 'event' && item.event.type === 'error',
+  );
+  assert.ok(failure, 'expected an error event in the scrollback');
+  assert.equal(
+    failure.kind === 'event' && failure.event.type === 'error'
+      ? failure.event.message
+      : null,
+    'could not compact; the run continues',
+  );
+  const last = items[items.length - 1]!;
+  assert.equal(last.kind, 'text');
+  assert.equal((last as TextItem).text, 'done');
+  assert.equal(agent.current!.phase.kind, 'idle');
 });
 
 test('resuming a compacted session shows the summary, not the original conversation', async () => {

@@ -14,7 +14,13 @@ import {
   type Session,
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
-import {truncate, type Item, type Phase, type ReadyInfo} from './events.js';
+import {
+  compactionNotice,
+  truncate,
+  type Item,
+  type Phase,
+  type ReadyInfo,
+} from './events.js';
 import {restoreItems, restoreView, textOf} from './restore.js';
 import {rewindRows, type RewindRow} from './rewind.js';
 
@@ -120,6 +126,21 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         }
         if (event.type === 'turn_end') {
           flushText();
+          return;
+        }
+        if (event.type === 'compact_start') {
+          flushText();
+          setPhase({kind: 'busy', label: 'Compacting…'});
+          return;
+        }
+        if (event.type === 'compact_end') {
+          setPhase({kind: 'busy'});
+          commit([
+            {
+              kind: 'notice',
+              text: compactionNotice(event.replaced, event.before - event.after),
+            },
+          ]);
           return;
         }
         flushText();
@@ -285,11 +306,10 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           return;
         }
         flushText();
-        const freed = Math.max(0, result.before - result.after);
         commit([
           {
             kind: 'notice',
-            text: `↯ compacted ${result.replaced} message${result.replaced === 1 ? '' : 's'}, ~${freed.toLocaleString('en-US')} tokens freed`,
+            text: compactionNotice(result.replaced, result.before - result.after),
           },
         ]);
       })

@@ -231,6 +231,12 @@ export function contextReadout(status: ContextItem): {
   return {line, bar, parts};
 }
 
+export function compactionNotice(replaced: number, freed: number): string {
+  const messages = `${replaced.toLocaleString('en-US')} message${replaced === 1 ? '' : 's'}`;
+  const tokens = Math.max(0, freed).toLocaleString('en-US');
+  return `↯ compacted ${messages}, ~${tokens} tokens freed`;
+}
+
 export function statusFor(streamText: string, committed: Item[]): string {
   if (streamText) return 'Responding…';
   const last = committed[committed.length - 1];
