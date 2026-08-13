@@ -367,7 +367,7 @@ test('/compact on an idle session replaces the conversation and commits only a n
   assert.equal(notice.kind, 'notice');
   assert.match(
     (notice as NoticeItem).text,
-    /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/,
+    /^compacted \d+ messages?, ~[\d,]+ tokens freed$/,
   );
   assert.equal(
     items.some((item) => item.kind === 'context'),
@@ -535,9 +535,7 @@ test('a turn that fills the window compacts itself and says so', async () => {
   const notices = agent.current!.committed.flatMap((item) =>
     item.kind === 'notice' ? [(item as NoticeItem).text] : [],
   );
-  assert.equal(notices.length, 2);
-  assert.equal(notices[0], '↯ context is 90% full — compacting…');
-  assert.match(notices[1]!, /^↯ compacted \d+ messages?, ~[\d,]+ tokens freed$/);
+  assert.deepEqual(notices, ['compaction threshold reached']);
   assert.deepEqual(agent.current!.checkpoints(), [
     {id: '2', index: 2, title: 'fix the cart'},
   ]);

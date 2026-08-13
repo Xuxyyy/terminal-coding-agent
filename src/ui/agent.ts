@@ -17,7 +17,7 @@ import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
   COMPACTING_LABEL,
-  thresholdNotice,
+  COMPACTION_NOTICE,
   truncate,
   type Item,
   type Phase,
@@ -126,10 +126,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         if (event.type === 'compact_start') {
           flushText();
           compactingRef.current = true;
-          const status = contextStatus(session);
-          commit([
-            {kind: 'notice', text: thresholdNotice(status.used, status.budget)},
-          ]);
+          commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
           setPhase({kind: 'busy', label: COMPACTING_LABEL});
           return;
         }
@@ -146,15 +143,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           flushText();
           return;
         }
-        if (event.type === 'compact_end') {
-          commit([
-            {
-              kind: 'notice',
-              text: compactionNotice(event.replaced, event.before - event.after),
-            },
-          ]);
-          return;
-        }
+        if (event.type === 'compact_end') return;
         flushText();
         commit([{kind: 'event', event}]);
       },

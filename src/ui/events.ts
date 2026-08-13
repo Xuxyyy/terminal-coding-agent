@@ -233,15 +233,12 @@ export function contextReadout(status: ContextItem): {
 
 export const COMPACTING_LABEL = 'Compacting…';
 
-export function thresholdNotice(used: number, budget: number): string {
-  const share = budget > 0 ? Math.round((used / budget) * 100) : 0;
-  return `↯ context is ${share}% full — compacting…`;
-}
+export const COMPACTION_NOTICE = 'compaction threshold reached';
 
 export function compactionNotice(replaced: number, freed: number): string {
   const messages = `${replaced.toLocaleString('en-US')} message${replaced === 1 ? '' : 's'}`;
   const tokens = Math.max(0, freed).toLocaleString('en-US');
-  return `↯ compacted ${messages}, ~${tokens} tokens freed`;
+  return `compacted ${messages}, ~${tokens} tokens freed`;
 }
 
 export function statusFor(streamText: string, committed: Item[]): string {
