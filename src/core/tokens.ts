@@ -6,9 +6,14 @@ type Message = OpenAI.ChatCompletionMessageParam;
 const CHARS_PER_TOKEN = 4;
 const MESSAGE_OVERHEAD = 4;
 const TOOL_CALL_OVERHEAD = 8;
+const CJK_TOKENS_PER_CHAR = 1;
+const CJK =
+  /[　-ヿ㐀-䶿一-鿿가-힯豈-﫿＀-￯]/g;
 
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  const cjk = text.match(CJK)?.length ?? 0;
+  const rest = text.length - cjk;
+  return Math.ceil(cjk * CJK_TOKENS_PER_CHAR + rest / CHARS_PER_TOKEN);
 }
 
 function shapeTokens(value: unknown): number {

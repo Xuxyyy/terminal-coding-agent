@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type OpenAI from 'openai';
-import {estimateMessage, estimateMessages, estimateTools} from '../../core/tokens.js';
+import {
+  estimateMessage,
+  estimateMessages,
+  estimateTokens,
+  estimateTools,
+} from '../../core/tokens.js';
 import {tools} from '../../core/tools/index.js';
 import {toolDefinitions} from '../../core/tools/registry.js';
 
@@ -43,6 +48,23 @@ test('the parts of a breakdown add up to the whole', () => {
     estimateMessages([a, b, c]),
     estimateMessage(a) + estimateMessage(b) + estimateMessage(c),
   );
+});
+
+test('four english characters cost one token', () => {
+  assert.equal(estimateTokens(''), 0);
+  assert.equal(estimateTokens('abcd'), 1);
+  assert.equal(estimateTokens('a small coding agent'), 5);
+});
+
+test('a chinese character costs a whole token, not a quarter', () => {
+  assert.equal(estimateTokens('上下文用量'), 5);
+  assert.equal(estimateTokens('こんにちは'), 5);
+  assert.equal(estimateTokens('안녕하세요'), 5);
+});
+
+test('mixed text charges each script its own rate', () => {
+  assert.equal(estimateTokens('hello 世界'), 4);
+  assert.ok(estimateTokens('上下文用量') > estimateTokens('context'));
 });
 
 test('the four tool definitions cost several hundred tokens on every request', () => {
