@@ -49,6 +49,7 @@ export type SessionStore = {
   seed(messages: Message[]): void;
   appendMessage(message: Message): string;
   appendTurn(messages: Message[], usage: Usage): void;
+  appendCompact(summary: Message, replaced: number): void;
   appendView(items: unknown[]): void;
   records(): SessionRecord[];
   rewind(to: number): void;
@@ -130,6 +131,15 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       meta.usage.prompt += usage.prompt;
       meta.usage.completion += usage.completion;
       meta.usage.total += usage.total;
+      writeMeta();
+    },
+    appendCompact(summary, replaced) {
+      written.add(summary);
+      appendRecord(dir, {
+        kind: 'compact',
+        summary: typeof summary.content === 'string' ? summary.content : '',
+        replaced,
+      });
       writeMeta();
     },
     appendView(items) {

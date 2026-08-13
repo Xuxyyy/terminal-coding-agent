@@ -8,7 +8,8 @@ type Message = OpenAI.ChatCompletionMessageParam;
 export type SessionRecord =
   | {kind: 'view'; items: unknown[]}
   | {kind: 'message'; id: string; message: Message}
-  | {kind: 'messages'; messages: Message[]; usage: Usage};
+  | {kind: 'messages'; messages: Message[]; usage: Usage}
+  | {kind: 'compact'; summary: string; replaced: number};
 
 const RECORDS = 'session.jsonl';
 
@@ -48,18 +49,23 @@ export function truncateRecords(dir: string, keep: number): void {
 }
 
 export function messagesOf(records: SessionRecord[]): Message[] {
-  return records.flatMap((record) =>
-    record.kind === 'message'
-      ? [record.message]
-      : record.kind === 'messages'
-        ? record.messages
-        : [],
-  );
+  let messages: Message[] = [];
+  for (const record of records) {
+    if (record.kind === 'compact') {
+      messages = [{role: 'assistant', content: record.summary}];
+    } else if (record.kind === 'message') {
+      messages.push(record.message);
+    } else if (record.kind === 'messages') {
+      messages.push(...record.messages);
+    }
+  }
+  return messages;
 }
 
 export function lastUsageOf(records: SessionRecord[]): Usage | null {
   for (let at = records.length - 1; at >= 0; at--) {
     const record = records[at];
+    if (record && record.kind === 'compact') return null;
     if (record && record.kind === 'messages') return record.usage;
   }
   return null;
@@ -68,9 +74,12 @@ export function lastUsageOf(records: SessionRecord[]): Usage | null {
 export type Checkpoint = {id: string; at: number};
 
 export function checkpointsOf(records: SessionRecord[]): Checkpoint[] {
-  return records.flatMap((record, at) =>
-    record.kind === 'message' ? [{id: record.id, at}] : [],
-  );
+  let checkpoints: Checkpoint[] = [];
+  records.forEach((record, at) => {
+    if (record.kind === 'compact') checkpoints = [];
+    else if (record.kind === 'message') checkpoints.push({id: record.id, at});
+  });
+  return checkpoints;
 }
 
 export function viewOf(records: SessionRecord[]): unknown[] {

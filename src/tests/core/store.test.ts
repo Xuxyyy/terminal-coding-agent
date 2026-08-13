@@ -11,7 +11,7 @@ import {
   projectDir,
   SESSION_KEEP,
 } from '../../core/projects.js';
-import {lastUsageOf} from '../../core/records.js';
+import {checkpointsOf, lastUsageOf} from '../../core/records.js';
 import {
   loadSession,
   openSession,
@@ -449,6 +449,135 @@ test('the next append after a rewind continues from the cut', () => {
     'session.jsonl',
   ]);
   assert.equal(records(store.dir).length, 5);
+});
+
+function askedAt(
+  store: ReturnType<typeof startSession>,
+  at: number,
+): OpenAI.ChatCompletionMessageParam | null {
+  const record = store.records()[at];
+  return record && record.kind === 'message' ? record.message : null;
+}
+
+test('a compaction drops everything before it and leaves the summary', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendTurn([user('and the readme'), assistant('updated')], usage(20));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    assistant('SUMMARY: we fixed the cart'),
+  ]);
+});
+
+test('what is said after a compaction follows the summary', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const next = user('and the readme');
+  store.appendMessage(next);
+  store.appendTurn([next, assistant('updated')], usage(20));
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    assistant('SUMMARY: we fixed the cart'),
+    user('and the readme'),
+    assistant('updated'),
+  ]);
+});
+
+test('a compaction forgets the checkpoints made before it', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendMessage(user('fix the cart'));
+  store.appendMessage(user('and the total'));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  store.appendMessage(user('and the readme'));
+  store.appendMessage(user('and the changelog'));
+  store.close();
+
+  const checkpoints = checkpointsOf(store.records());
+
+  assert.equal(checkpoints.length, 2);
+  assert.deepEqual(
+    checkpoints.map((checkpoint) => askedAt(store, checkpoint.at)),
+    [user('and the readme'), user('and the changelog')],
+  );
+});
+
+test('the last usage is not read across a compaction', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(15));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+
+  assert.equal(lastUsageOf(store.records()), null);
+
+  store.appendTurn([user('and the readme'), assistant('updated')], usage(28));
+  store.close();
+
+  assert.deepEqual(lastUsageOf(store.records()), usage(28));
+});
+
+test('a summary handed back to the next turn is not written twice', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const summary = assistant('SUMMARY: we fixed the cart');
+
+  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendCompact(summary, 2);
+  store.appendTurn([summary, user('next'), assistant('done')], usage(10));
+  store.close();
+
+  const written = records(store.dir);
+  const restored = loadSession(work, null, root);
+
+  assert.equal(
+    restored.messages.filter(
+      (message) => message.content === 'SUMMARY: we fixed the cart',
+    ).length,
+    1,
+  );
+  assert.equal(written.filter((record) => record['kind'] === 'compact').length, 1);
+  assert.deepEqual(
+    written
+      .filter((record) => record['kind'] === 'messages')
+      .flatMap((record) => record['messages'] as unknown[]),
+    [user('fix the cart'), assistant('fixed'), user('next'), assistant('done')],
+  );
+});
+
+test('an unknown record next to a compaction is still ignored', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  fs.appendFileSync(
+    path.join(store.dir, 'session.jsonl'),
+    `${JSON.stringify({kind: 'something-new', at: '9f3a1c07', note: 'later'})}\n`,
+  );
+  store.appendTurn([user('and the readme'), assistant('updated')], usage(20));
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    assistant('SUMMARY: we fixed the cart'),
+    user('and the readme'),
+    assistant('updated'),
+  ]);
 });
 
 test('a folder with no sessions lists nothing', () => {

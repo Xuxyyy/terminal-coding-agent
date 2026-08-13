@@ -129,6 +129,7 @@ export function fakeStore(overrides: Partial<SessionStore> = {}): SessionStore {
     seed() {},
     appendMessage: () => 'deadbeef',
     appendTurn() {},
+    appendCompact() {},
     appendView() {},
     records: () => [],
     rewind() {},
