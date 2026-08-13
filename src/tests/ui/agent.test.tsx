@@ -188,7 +188,7 @@ test('resuming restores the context reading of the last turn', async () => {
   assert.equal(lastContext(two.agent.current!.committed).used, 15);
 });
 
-test('a rewind after a resume empties the context reading', async () => {
+test('a rewind after a resume forgets the measured reading', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
   const first = fakeModel(() => answer('done'));
@@ -219,7 +219,13 @@ test('a rewind after a resume empties the context reading', async () => {
     rows.map((row) => row.title),
     ['fix the cart', 'and the readme'],
   );
-  assert.equal(lastContext(two.agent.current!.committed).used, 0);
+  const status = lastContext(two.agent.current!.committed);
+  assert.equal(status.measured, false);
+  assert.equal(
+    status.system! + status.tools! + status.conversation!,
+    status.used,
+  );
+  assert.ok(status.used > 0, `expected the prompt to still cost, got ${status.used}`);
 });
 
 test('cancelling the picker leaves the conversation alone', async () => {

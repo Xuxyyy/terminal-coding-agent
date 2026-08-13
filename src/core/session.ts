@@ -1,6 +1,17 @@
 import type OpenAI from 'openai';
-import type {ContextStatus} from '../ui/events.js';
 import type {Usage} from './host.js';
+import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
+import {toolDefinitions, tools as defaultTools, type Tool} from './tools/index.js';
+
+export type ContextStatus = {
+  used: number;
+  budget: number;
+  measured: boolean;
+  system: number;
+  tools: number;
+  conversation: number;
+  free: number;
+};
 
 export type Session = {
   root: string;
@@ -55,6 +66,26 @@ export function clearSession(session: Session): void {
   session.lastContextTokens = 0;
 }
 
-export function contextStatus(session: Session): ContextStatus {
-  return {used: session.lastContextTokens, budget: session.contextWindow};
+export function contextStatus(
+  session: Session,
+  registry: Tool[] = defaultTools,
+): ContextStatus {
+  const systemCost = estimateTokens(session.systemPrompt);
+  const toolCost = estimateTools(toolDefinitions(registry));
+  const talk = estimateMessages(
+    session.messages.filter((message) => message.role !== 'system'),
+  );
+  const measured = session.lastContextTokens > 0;
+  const used = measured ? session.lastContextTokens : systemCost + toolCost + talk;
+  const system = Math.min(systemCost, used);
+  const tools = Math.min(toolCost, used - system);
+  return {
+    used,
+    budget: session.contextWindow,
+    measured,
+    system,
+    tools,
+    conversation: used - system - tools,
+    free: Math.max(0, session.contextWindow - used),
+  };
 }

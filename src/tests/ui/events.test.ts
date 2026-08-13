@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  addTask,
+  contextStatus,
+  createSession,
+  recordUsage,
+} from '../../core/session.js';
+import {
+  contextReadout,
   diffSummary,
   failureOutput,
   formatArgs,
@@ -185,6 +192,37 @@ test('diffSummary counts the full change, not the visible rows', () => {
   assert.equal(
     diffSummary({path: 'a.py', rows: [], hidden: 0, added: 4, removed: 0}),
     '+4',
+  );
+});
+
+test('an estimated context total is marked with a tilde', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+
+  const {line} = contextReadout({kind: 'context', ...contextStatus(session)});
+
+  assert.match(line, /^context: ~[\d,]+ \/ 200,000 tokens \(\d+%\)$/);
+});
+
+test('a measured context total prints without a tilde', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+  recordUsage(session, {prompt: 12_000, completion: 450, total: 12_450});
+
+  const {line} = contextReadout({kind: 'context', ...contextStatus(session)});
+
+  assert.equal(line, 'context: 12,450 / 200,000 tokens (6%)');
+});
+
+test('a stored context item with no breakdown still renders one line', () => {
+  const {line, parts} = contextReadout({
+    kind: 'context',
+    used: 900,
+    budget: 200_000,
+  });
+
+  assert.deepEqual(
+    {line, parts},
+    {line: 'context: 900 / 200,000 tokens (0%)', parts: []},
   );
 });
 

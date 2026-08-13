@@ -1,5 +1,8 @@
 import path from 'node:path';
 import type {AgentEvent, DiffPayload} from '../core/host.js';
+import type {ContextStatus} from '../core/session.js';
+
+export type {ContextStatus};
 
 export type {
   AgentEvent,
@@ -18,8 +21,6 @@ export type ReadyInfo = {
   permission: PermissionInfo;
 };
 
-export type ContextStatus = {used: number; budget: number};
-
 export type HeaderItem = {
   kind: 'header';
   workspaceRoot: string;
@@ -28,7 +29,8 @@ export type HeaderItem = {
 export type TextItem = {kind: 'text'; text: string};
 export type TaskItem = {kind: 'task'; text: string};
 export type NoticeItem = {kind: 'notice'; text: string};
-export type ContextItem = {kind: 'context'} & ContextStatus;
+export type ContextItem = {kind: 'context'} & Partial<ContextStatus> &
+  Pick<ContextStatus, 'used' | 'budget'>;
 export type EventItem = {kind: 'event'; event: AgentEvent};
 
 export type Item =
@@ -185,15 +187,41 @@ export function diffSummary(diff: DiffPayload): string {
   return parts.join(' ');
 }
 
-export function contextReadout(
-  used: number,
-  budget: number,
-): {line: string; bar: string} {
+const PART_LABELS: [keyof ContextStatus, string][] = [
+  ['system', 'system prompt'],
+  ['tools', 'tool definitions'],
+  ['conversation', 'conversation'],
+  ['free', 'free'],
+];
+
+function tokenText(n: number, estimated: boolean): string {
+  return `${estimated ? '~' : ''}${n.toLocaleString('en-US')}`;
+}
+
+export function contextReadout(status: ContextItem): {
+  line: string;
+  bar: string;
+  parts: string[];
+} {
+  const {used, budget} = status;
+  const measured = status.measured ?? true;
   const pct = budget > 0 ? used / budget : 0;
   const filled = Math.max(0, Math.min(20, Math.floor(pct * 20)));
   const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
-  const line = `context: ${used.toLocaleString('en-US')} / ${budget.toLocaleString('en-US')} tokens (${Math.round(pct * 100)}%)`;
-  return {line, bar};
+  const line = `context: ${tokenText(used, !measured)} / ${budget.toLocaleString('en-US')} tokens (${Math.round(pct * 100)}%)`;
+
+  const present = PART_LABELS.filter(([key]) => typeof status[key] === 'number');
+  if (present.length === 0) return {line, bar, parts: []};
+
+  const shown = present.map(([key, label]) => ({
+    label,
+    text: tokenText(status[key] as number, key === 'free' ? !measured : true),
+  }));
+  const width = Math.max(...shown.map((part) => part.text.length));
+  const parts = shown.map(
+    (part) => `${part.text.padStart(width)}  ${part.label}`,
+  );
+  return {line, bar, parts};
 }
 
 export function statusFor(streamText: string, committed: Item[]): string {

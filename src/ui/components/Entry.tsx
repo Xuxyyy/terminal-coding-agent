@@ -32,11 +32,14 @@ export function Entry({item}: {item: Item}) {
     return <Text color={theme.muted}>{item.text}</Text>;
   }
   if (item.kind === 'context') {
-    const {line, bar} = contextReadout(item.used, item.budget);
+    const {line, bar, parts} = contextReadout(item);
     return (
       <Box flexDirection="column">
         <Text color={theme.foreground}>{line}</Text>
         <Text color={theme.muted}>{`[${bar}]`}</Text>
+        {parts.map((part) => (
+          <Text key={part} color={theme.muted}>{`  ${part}`}</Text>
+        ))}
       </Box>
     );
   }
