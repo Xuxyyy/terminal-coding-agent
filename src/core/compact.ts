@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import {streamTurn, type ModelChoice} from './client.js';
-import type {Host} from './host.js';
+import type {Host, Usage} from './host.js';
 import type {Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {estimateMessages} from './tokens.js';
@@ -25,7 +25,29 @@ export type Compaction = {
   replaced: number;
   before: number;
   after: number;
+  usage: Usage;
 };
+
+export const AUTO_COMPACT_AT = 0.8;
+
+export function compactThreshold(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env.ACC_COMPACT_AT;
+  if (!raw) return AUTO_COMPACT_AT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
+    return AUTO_COMPACT_AT;
+  }
+  return parsed;
+}
+
+export function shouldCompact(
+  session: Session,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return session.lastContextTokens >= session.contextWindow * compactThreshold(env);
+}
 
 export async function compactSession(
   session: Session,
@@ -39,9 +61,11 @@ export async function compactSession(
   ];
 
   let text: string;
+  let usage: Usage;
   try {
     const result = await streamTurn(choice, asked, [], host);
     text = result.content.trim();
+    usage = result.usage;
   } catch {
     return null;
   }
@@ -62,5 +86,60 @@ export async function compactSession(
     store?.appendCompact(summary, replaced);
   } catch {}
 
-  return {summary: text, replaced, before, after: estimateMessages(session.messages)};
+  return {
+    summary: text,
+    replaced,
+    before,
+    after: estimateMessages(session.messages),
+    usage,
+  };
+}
+
+function withoutText(host: Host): Host {
+  return {
+    signal: host.signal,
+    confirm: (request) => host.confirm(request),
+    onEvent: (event) => {
+      if (event.type !== 'text_delta') host.onEvent(event);
+    },
+  };
+}
+
+export async function compactMidRun(
+  session: Session,
+  choice: ModelChoice,
+  host: Host,
+  store?: SessionStore,
+): Promise<Compaction | null> {
+  const task = [...session.messages]
+    .reverse()
+    .find((message) => message.role === 'user');
+
+  host.onEvent({type: 'compact_start'});
+
+  const result = await compactSession(session, choice, withoutText(host), store);
+  if (!result) return null;
+
+  let {replaced, after} = result;
+  if (task) {
+    session.messages.push(task);
+    try {
+      store?.appendMessage(task);
+    } catch {}
+    replaced -= 1;
+    after = estimateMessages(session.messages);
+  }
+
+  session.usage.prompt += result.usage.prompt;
+  session.usage.completion += result.usage.completion;
+  session.usage.total += result.usage.total;
+
+  const compaction: Compaction = {...result, replaced, after};
+  host.onEvent({
+    type: 'compact_end',
+    replaced,
+    before: compaction.before,
+    after,
+  });
+  return compaction;
 }

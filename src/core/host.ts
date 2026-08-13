@@ -25,6 +25,8 @@ export type AgentEvent =
       diff: DiffPayload | null;
     }
   | {type: 'turn_end'; usage: Usage}
+  | {type: 'compact_start'}
+  | {type: 'compact_end'; replaced: number; before: number; after: number}
   | {type: 'error'; message: string};
 
 export type ConfirmDecision = 'once' | 'session' | 'deny';
