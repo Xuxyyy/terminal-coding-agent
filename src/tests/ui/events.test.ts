@@ -200,7 +200,7 @@ test('an estimated context total is marked with a tilde', () => {
 
   const {line} = contextReadout({kind: 'context', ...contextStatus(session)});
 
-  assert.match(line, /^context: ~[\d,]+ \/ 200,000 tokens \(\d+%\)$/);
+  assert.match(line, /^context: ~[\d,]+ \/ 200,000 tokens \((<1|\d+)%\)$/);
 });
 
 test('a measured context total prints without a tilde', () => {
@@ -222,8 +222,17 @@ test('a stored context item with no breakdown still renders one line', () => {
 
   assert.deepEqual(
     {line, parts},
-    {line: 'context: 900 / 200,000 tokens (0%)', parts: []},
+    {line: 'context: 900 / 200,000 tokens (<1%)', parts: []},
   );
+});
+
+test('a context in use never rounds down to no percent', () => {
+  const budget = 262_144;
+  const barelyUsed = contextReadout({kind: 'context', used: 1, budget});
+  const empty = contextReadout({kind: 'context', used: 0, budget});
+
+  assert.match(barelyUsed.line, /\(<1%\)$/);
+  assert.match(empty.line, /\(0%\)$/);
 });
 
 test('statusFor names the tool that is running', () => {

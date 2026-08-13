@@ -208,7 +208,9 @@ export function contextReadout(status: ContextItem): {
   const pct = budget > 0 ? used / budget : 0;
   const filled = Math.max(0, Math.min(20, Math.floor(pct * 20)));
   const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
-  const line = `context: ${tokenText(used, !measured)} / ${budget.toLocaleString('en-US')} tokens (${Math.round(pct * 100)}%)`;
+  const rounded = Math.round(pct * 100);
+  const share = used > 0 && rounded === 0 ? '<1' : String(rounded);
+  const line = `context: ${tokenText(used, !measured)} / ${budget.toLocaleString('en-US')} tokens (${share}%)`;
 
   const present = PART_LABELS.filter(([key]) => typeof status[key] === 'number');
   if (present.length === 0) return {line, bar, parts: []};
