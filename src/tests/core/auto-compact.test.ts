@@ -15,12 +15,17 @@ import {
   toolCallChunk,
   usageChunk,
 } from '../fakes.js';
-import type {ModelChoice} from '../../core/client.js';
+import {MAX_OUTPUT_TOKENS, type ModelChoice} from '../../core/client.js';
 import {SUMMARY_PREFIX} from '../../core/compact.js';
 import type {AgentEvent} from '../../core/host.js';
 import {runAgent} from '../../core/loop.js';
 import {messagesOf, readRecords} from '../../core/records.js';
-import {addTask, createSession, type Session} from '../../core/session.js';
+import {
+  addTask,
+  createSession,
+  setMeasured,
+  type Session,
+} from '../../core/session.js';
 import {startSession} from '../../core/store.js';
 import type {Tool} from '../../core/tools/registry.js';
 
@@ -221,6 +226,66 @@ test('the line moves with ACC_COMPACT_AT', async () => {
     assert.equal(short.calls(), 2);
     assert.equal(compactions(events), 0);
   });
+});
+
+const FLOOR_ERROR =
+  'the context is full and cannot be reduced further; start a new session';
+
+function measuredSession(tokens: number): Session {
+  const active = session();
+  setMeasured(active, tokens);
+  return active;
+}
+
+test('a session past the window stops instead of sending', async () => {
+  const {choice, calls} = fakeModel((turn) =>
+    turn === 1 ? statusError(400) : finalTurn(),
+  );
+  const {host, events} = fakeHost();
+
+  await runAgent(measuredSession(1_200_000), choice, host, [noop]);
+
+  assert.equal(calls(), 1);
+  assert.deepEqual(errors(events), [
+    'could not compact; the run continues',
+    FLOOR_ERROR,
+  ]);
+  assert.ok(events.some((event) => event.type === 'turn_end'));
+});
+
+test('the floor keeps the reply its own room', async () => {
+  for (const [tokens, stops] of [
+    [980_000, true],
+    [900_000, false],
+  ] as const) {
+    const {choice, calls} = fakeModel((turn) =>
+      turn === 1 ? statusError(400) : finalTurn(),
+    );
+    const {host, events} = fakeHost();
+
+    await runAgent(measuredSession(tokens), choice, host, [noop]);
+
+    assert.equal(
+      errors(events).includes(FLOOR_ERROR),
+      stops,
+      `${tokens} tokens with a ${MAX_OUTPUT_TOKENS} token reply`,
+    );
+    assert.equal(calls(), stops ? 1 : 2, `${tokens} tokens`);
+  }
+});
+
+test('the floor lets compaction have its turn first', async () => {
+  const {choice, calls} = fakeModel((turn) => {
+    if (turn === 1) return summaryTurn('a short recap');
+    return finalTurn();
+  });
+  const {host, events} = fakeHost();
+
+  await runAgent(measuredSession(850_000), choice, host, [noop]);
+
+  assert.equal(compactions(events), 1);
+  assert.equal(calls(), 2);
+  assert.equal(errors(events).length, 0);
 });
 
 test('the turn after an automatic compaction writes neither the summary nor the task again', async () => {

@@ -91,7 +91,7 @@ export function fakeModel(next: (turn: number) => unknown): {
       client: {chat: {completions: {create}}} as unknown as OpenAI,
       model: 'fake-model',
       label: 'Fake',
-      contextWindow: 100_000,
+      contextWindow: 1_000_000,
     },
     calls: () => turn,
   };

@@ -478,7 +478,7 @@ function crossingTurn(): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk('call-1', 'nope', '{}'),
     finishChunk('tool_calls'),
-    usageChunk(88_000, 20),
+    usageChunk(880_000, 20),
   );
 }
 
