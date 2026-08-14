@@ -6,6 +6,28 @@ import {resolveInWorkspace} from './paths.js';
 const DEFAULT_LIMIT = 400;
 const MAX_LINE_LENGTH = 500;
 const MAX_BYTES = 512 * 1024;
+const MAX_OUTPUT_CHARS = 32_000;
+
+export function capLines(lines: string[]): {body: string; kept: number} {
+  const kept: string[] = [];
+  let size = 0;
+  for (const line of lines) {
+    const next = size + line.length + (kept.length === 0 ? 0 : 1);
+    if (next > MAX_OUTPUT_CHARS) break;
+    kept.push(line);
+    size = next;
+  }
+  if (kept.length === lines.length) {
+    return {body: lines.join('\n'), kept: kept.length};
+  }
+  const cut = lines.join('\n').length - size;
+  return {
+    body:
+      kept.join('\n') +
+      `\n... [truncated ${cut} chars, cap is ${MAX_OUTPUT_CHARS}; re-read with offset]`,
+    kept: kept.length,
+  };
+}
 
 const schema = z.object({
   path: z.string().describe('File to read, relative to the workspace root.'),
@@ -52,19 +74,18 @@ export const readFile: Tool = {
       };
     }
     const width = String(offset + shown.length - 1).length;
-    const body = shown
-      .map((line, index) => {
-        const number = String(offset + index).padStart(width);
-        const text =
-          line.length > MAX_LINE_LENGTH
-            ? line.slice(0, MAX_LINE_LENGTH) + '... [truncated]'
-            : line;
-        return `${number}\t${text}`;
-      })
-      .join('\n');
-    const partial = offset > 1 || shown.length < lines.length;
+    const numbered = shown.map((line, index) => {
+      const number = String(offset + index).padStart(width);
+      const text =
+        line.length > MAX_LINE_LENGTH
+          ? line.slice(0, MAX_LINE_LENGTH) + '... [truncated]'
+          : line;
+      return `${number}\t${text}`;
+    });
+    const {body, kept} = capLines(numbered);
+    const partial = offset > 1 || kept < lines.length;
     const note = partial
-      ? `\n[file has ${lines.length} lines; showing ${offset}-${offset + shown.length - 1}.]`
+      ? `\n[file has ${lines.length} lines; showing ${offset}-${offset + kept - 1}.]`
       : '';
     return {text: body + note};
   },

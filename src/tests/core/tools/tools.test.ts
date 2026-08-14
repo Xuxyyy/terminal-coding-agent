@@ -198,6 +198,108 @@ test('read_file numbers the lines and notes a partial read', async () => {
   assert.match(output.text, /\[file has 10 lines; showing 2-4\.\]$/);
 });
 
+const MAX_OUTPUT_CHARS = 32_000;
+
+async function readAll(root: string, args: object = {}): Promise<string> {
+  const {host} = hostThatAnswers('once');
+  const output = await runTool(
+    registry,
+    'read_file',
+    JSON.stringify({path: 'big.ts', ...args}),
+    context(root, host),
+  );
+  return output.text;
+}
+
+function fileOf(root: string, lines: string[]): void {
+  fs.writeFileSync(path.join(root, 'big.ts'), lines.join('\n') + '\n');
+}
+
+test('a read under the cap is left alone', async () => {
+  const root = workspace();
+  fileOf(
+    root,
+    Array.from({length: 50}, (_, i) => `line ${i + 1}`),
+  );
+
+  const text = await readAll(root);
+
+  assert.doesNotMatch(text, /truncated \d+ chars/);
+  assert.match(text, /50\tline 50$/);
+});
+
+test('a read over the cap keeps the head and says how much it cut', async () => {
+  const root = workspace();
+  fileOf(
+    root,
+    Array.from({length: 2_000}, (_, i) => `${'x'.repeat(60)} ${i + 1}`),
+  );
+
+  const text = await readAll(root, {limit: 2_000});
+
+  assert.match(text, /\.\.\. \[truncated (\d+) chars, cap is 32000; re-read with offset\]/);
+  const cut = Number(/truncated (\d+) chars/.exec(text)![1]);
+  assert.ok(cut > 0, `expected a positive cut, got ${cut}`);
+  assert.ok(
+    text.length < MAX_OUTPUT_CHARS + 200,
+    `expected roughly the cap, got ${text.length}`,
+  );
+});
+
+test('an explicit limit cannot read past the cap', async () => {
+  const root = workspace();
+  fileOf(
+    root,
+    Array.from({length: 5_000}, (_, i) => `${'x'.repeat(60)} ${i + 1}`),
+  );
+
+  const text = await readAll(root, {limit: 100_000});
+
+  assert.match(text, /truncated \d+ chars/);
+  assert.ok(
+    text.length < MAX_OUTPUT_CHARS + 200,
+    `expected roughly the cap, got ${text.length}`,
+  );
+});
+
+test('a truncated read starts at line 1 and ends on a whole line', async () => {
+  const root = workspace();
+  fileOf(
+    root,
+    Array.from({length: 2_000}, (_, i) => `${'x'.repeat(60)} ${i + 1}`),
+  );
+
+  const text = await readAll(root, {limit: 2_000});
+  const body = text.slice(0, text.indexOf('\n... [truncated'));
+  const rows = body.split('\n');
+
+  assert.match(rows[0]!, /^\s*1\t/);
+  for (const [index, row] of rows.entries()) {
+    assert.match(
+      row,
+      new RegExp(`^\\s*${index + 1}\\t${'x'.repeat(60)} ${index + 1}$`),
+      `row ${index + 1} is not a whole numbered line`,
+    );
+  }
+});
+
+test('the line cap and the output cap compose', async () => {
+  const root = workspace();
+  fileOf(
+    root,
+    Array.from({length: 500}, () => 'y'.repeat(900)),
+  );
+
+  const text = await readAll(root, {limit: 500});
+
+  assert.match(text, /truncated \d+ chars/);
+  assert.ok(
+    text.length < MAX_OUTPUT_CHARS + 200,
+    `expected roughly the cap, got ${text.length}`,
+  );
+  assert.match(text, /y{500}\.\.\. \[truncated\]/);
+});
+
 test('an edit never asks the user', async () => {
   const root = workspace();
   fs.writeFileSync(path.join(root, 'a.ts'), 'a = 1\n');
