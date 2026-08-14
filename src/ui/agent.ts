@@ -133,6 +133,21 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           commit([{kind: 'notice', text: clearedNotice(event.freed)}]);
           return;
         }
+        if (event.type === 'compact_start') {
+          flushText();
+          commit([{kind: 'notice', text: COMPACTING_LABEL}]);
+          return;
+        }
+        if (event.type === 'compact_end') {
+          flushText();
+          commit([
+            {
+              kind: 'notice',
+              text: compactionNotice(event.replaced, event.before - event.after),
+            },
+          ]);
+          return;
+        }
         if (event.type === 'text_delta') {
           liveTextRef.current += event.text;
           setStreamText(liveTextRef.current);

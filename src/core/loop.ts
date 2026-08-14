@@ -7,6 +7,7 @@ import {
 } from './client.js';
 import type {Host, Usage} from './host.js';
 import {clearRecoverable} from './clear.js';
+import {compactSession, withoutText} from './compact.js';
 import {
   contextThreshold,
   projectedTokens,
@@ -49,6 +50,12 @@ function assistantMessage(
 }
 
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
+
+function addUsage(target: Usage, usage: Usage): void {
+  target.prompt += usage.prompt;
+  target.completion += usage.completion;
+  target.total += usage.total;
+}
 
 export async function runAgent(
   session: Session,
@@ -97,6 +104,46 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
+      if (
+        turn === 0 &&
+        (overThreshold(session, process.env, registry) || session.clearingExhausted)
+      ) {
+        const freed = clearRecoverable(
+          session,
+          session.contextWindow * contextThreshold(),
+          registry,
+        );
+        const stuck = session.clearingExhausted && freed === 0;
+        if (stuck || overThreshold(session, process.env, registry)) {
+          const last = session.messages[session.messages.length - 1];
+          const task = last?.role === 'user' ? last : null;
+          host.onEvent({type: 'compact_start'});
+          const result = await compactSession(
+            session,
+            choice,
+            withoutText(host),
+            store,
+          );
+          if (task) session.messages.push(task);
+          if (result) {
+            addUsage(total, result.usage);
+            addUsage(session.usage, result.usage);
+            host.onEvent({
+              type: 'compact_end',
+              replaced: result.replaced - (task ? 1 : 0),
+              before: result.before,
+              after: result.after,
+            });
+          } else {
+            host.onEvent({
+              type: 'error',
+              message: 'could not compact; the run continues',
+            });
+          }
+        }
+        session.clearingExhausted = false;
+      }
+
       if (turn > 0 && overThreshold(session, process.env, registry)) {
         const target = session.contextWindow * contextThreshold();
         const freed = clearRecoverable(session, target, registry);
@@ -125,9 +172,7 @@ export async function runAgent(
       }
 
       const result = await streamTurn(choice, session.messages, definitions, host);
-      total.prompt += result.usage.prompt;
-      total.completion += result.usage.completion;
-      total.total += result.usage.total;
+      addUsage(total, result.usage);
       session.messages.push(assistantMessage(result.content, result.toolCalls));
       recordUsage(session, result.usage);
 

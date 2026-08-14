@@ -20,6 +20,16 @@ export function compactionPrompt(): string {
   ].join(' ');
 }
 
+export function withoutText(host: Host): Host {
+  return {
+    signal: host.signal,
+    confirm: (request) => host.confirm(request),
+    onEvent: (event) => {
+      if (event.type !== 'text_delta') host.onEvent(event);
+    },
+  };
+}
+
 export type Compaction = {
   summary: string;
   replaced: number;

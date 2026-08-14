@@ -14,12 +14,7 @@ import {CLEARED_READ} from '../../core/clear.js';
 import {MAX_OUTPUT_TOKENS} from '../../core/client.js';
 import type {AgentEvent} from '../../core/host.js';
 import {runAgent} from '../../core/loop.js';
-import {
-  addTask,
-  createSession,
-  setMeasured,
-  type Session,
-} from '../../core/session.js';
+import {addTask, createSession, type Session} from '../../core/session.js';
 import type {Tool} from '../../core/tools/registry.js';
 
 const noop: Tool = {
@@ -34,12 +29,6 @@ const noop: Tool = {
 function session(): Session {
   const active = createSession(process.cwd(), 'rules', 1_000_000);
   addTask(active, 'rename the widget');
-  return active;
-}
-
-function measuredSession(tokens: number): Session {
-  const active = session();
-  setMeasured(active, tokens);
   return active;
 }
 
@@ -137,6 +126,10 @@ test('a turn that crosses the line is reported, never compacted', async () => {
     ),
     false,
   );
+  assert.equal(
+    events.some((event) => event.type === 'compact_start'),
+    false,
+  );
 });
 
 test('a turn that stays under the line says nothing', async () => {
@@ -185,13 +178,15 @@ test('the line moves with ACC_COMPACT_AT', async () => {
 const FLOOR_ERROR =
   'the context is full and cannot be reduced further; start a new session';
 
-test('a session past the window sends no request at all', async () => {
-  const {choice, calls} = fakeModel(() => finalTurn());
+test('a run past the window sends no further request', async () => {
+  const {choice, calls} = fakeModel((turn) =>
+    turn === 1 ? toolTurn(turn, 1_200_000) : finalTurn(),
+  );
   const {host, events} = fakeHost();
 
-  await runAgent(measuredSession(1_200_000), choice, host, [noop]);
+  await runAgent(session(), choice, host, [noop]);
 
-  assert.equal(calls(), 0);
+  assert.equal(calls(), 1);
   assert.deepEqual(errors(events), [FLOOR_ERROR]);
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
@@ -201,17 +196,19 @@ test('the floor keeps the reply its own room', async () => {
     [980_000, true],
     [900_000, false],
   ] as const) {
-    const {choice, calls} = fakeModel(() => finalTurn());
+    const {choice, calls} = fakeModel((turn) =>
+      turn === 1 ? toolTurn(turn, tokens) : finalTurn(),
+    );
     const {host, events} = fakeHost();
 
-    await runAgent(measuredSession(tokens), choice, host, [noop]);
+    await runAgent(session(), choice, host, [noop]);
 
     assert.equal(
       errors(events).includes(FLOOR_ERROR),
       stops,
       `${tokens} tokens with a ${MAX_OUTPUT_TOKENS} token reply`,
     );
-    assert.equal(calls(), stops ? 0 : 1, `${tokens} tokens`);
+    assert.equal(calls(), stops ? 1 : 2, `${tokens} tokens`);
   }
 });
 
@@ -245,17 +242,3 @@ test('a turn with nothing left to free is remembered as exhausted', async () => 
   assert.equal(notices(events), 1);
 });
 
-test('turn 0 over the line neither clears nor reports', async () => {
-  const {choice, calls} = fakeModel(() => finalTurn());
-  const {host, events} = fakeHost();
-  const active = readingSession();
-  setMeasured(active, 850_000);
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(calls(), 1);
-  assert.equal(freed(events).length, 0);
-  assert.equal(notices(events), 0);
-  assert.equal(errors(events).length, 0);
-  assert.equal(active.messages[3].content, BIG_READ);
-});
