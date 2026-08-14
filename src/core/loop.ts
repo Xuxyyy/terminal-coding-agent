@@ -128,18 +128,18 @@ export async function runAgent(
           if (result) {
             addUsage(total, result.usage);
             addUsage(session.usage, result.usage);
-            host.onEvent({
-              type: 'compact_end',
-              replaced: result.replaced - (task ? 1 : 0),
-              before: result.before,
-              after: result.after,
-            });
           } else {
             host.onEvent({
               type: 'error',
               message: 'could not compact; the run continues',
             });
           }
+          host.onEvent({
+            type: 'compact_end',
+            replaced: result ? result.replaced - (task ? 1 : 0) : 0,
+            before: result?.before ?? 0,
+            after: result?.after ?? 0,
+          });
         }
         session.clearingExhausted = false;
       }

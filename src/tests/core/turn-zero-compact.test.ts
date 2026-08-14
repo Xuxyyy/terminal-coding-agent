@@ -195,6 +195,7 @@ test('a failed summary is reported and the run continues', async () => {
   assert.equal(calls(), 2);
   assert.deepEqual(errors(events), ['could not compact; the run continues']);
   assert.equal(active.messages[1].content, TASK);
+  assert.ok(events.some((event) => event.type === 'compact_end'));
 });
 
 test('the summarizer is never called once a run is in flight', async () => {

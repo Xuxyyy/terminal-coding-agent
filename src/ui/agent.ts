@@ -16,7 +16,6 @@ import {
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
-  clearedNotice,
   compactionNotice,
   COMPACTING_LABEL,
   COMPACTION_NOTICE,
@@ -128,24 +127,13 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
           return;
         }
-        if (event.type === 'context_cleared') {
-          flushText();
-          commit([{kind: 'notice', text: clearedNotice(event.freed)}]);
-          return;
-        }
+        if (event.type === 'context_cleared') return;
         if (event.type === 'compact_start') {
-          flushText();
-          commit([{kind: 'notice', text: COMPACTING_LABEL}]);
+          setPhase({kind: 'busy', label: COMPACTING_LABEL});
           return;
         }
         if (event.type === 'compact_end') {
-          flushText();
-          commit([
-            {
-              kind: 'notice',
-              text: compactionNotice(event.replaced, event.before - event.after),
-            },
-          ]);
+          setPhase({kind: 'busy'});
           return;
         }
         if (event.type === 'text_delta') {

@@ -3,13 +3,7 @@ import type {ConfirmDecision, Host} from './core/host.js';
 import {runAgent} from './core/loop.js';
 import {systemPrompt} from './core/prompt.js';
 import {addTask, createSession} from './core/session.js';
-import {
-  clearedNotice,
-  compactionNotice,
-  COMPACTING_LABEL,
-  formatArgs,
-  resultStatus,
-} from './ui/events.js';
+import {formatArgs, resultStatus} from './ui/events.js';
 
 const task = process.argv.slice(2).join(' ');
 if (!task) {
@@ -48,18 +42,11 @@ const host: Host = {
       process.stdout.write('\n↯ compaction threshold reached\n');
       return;
     }
-    if (event.type === 'context_cleared') {
-      process.stdout.write(`\n↯ ${clearedNotice(event.freed)}\n`);
-      return;
-    }
-    if (event.type === 'compact_start') {
-      process.stdout.write(`\n↯ ${COMPACTING_LABEL}\n`);
-      return;
-    }
-    if (event.type === 'compact_end') {
-      process.stdout.write(
-        `\n↯ ${compactionNotice(event.replaced, event.before - event.after)}\n`,
-      );
+    if (
+      event.type === 'context_cleared' ||
+      event.type === 'compact_start' ||
+      event.type === 'compact_end'
+    ) {
       return;
     }
     process.stdout.write(

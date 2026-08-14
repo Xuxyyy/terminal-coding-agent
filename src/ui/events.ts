@@ -235,10 +235,6 @@ export const COMPACTING_LABEL = 'Compacting…';
 
 export const COMPACTION_NOTICE = 'compaction threshold reached';
 
-export function clearedNotice(freed: number): string {
-  return `freed ~${Math.max(0, freed).toLocaleString('en-US')} tokens`;
-}
-
 export function compactionNotice(replaced: number, freed: number): string {
   const messages = `${replaced.toLocaleString('en-US')} message${replaced === 1 ? '' : 's'}`;
   const tokens = Math.max(0, freed).toLocaleString('en-US');
