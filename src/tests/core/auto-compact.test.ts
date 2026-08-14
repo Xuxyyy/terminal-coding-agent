@@ -72,10 +72,6 @@ function notices(events: AgentEvent[]): number {
   return events.filter((event) => event.type === 'context_high').length;
 }
 
-function compactions(events: AgentEvent[]): number {
-  return events.filter((event) => event.type === 'compact_start').length;
-}
-
 async function withThreshold(
   value: string,
   run: () => Promise<void>,
@@ -100,7 +96,6 @@ test('a turn that crosses the line is reported, never compacted', async () => {
   await runAgent(active, choice, host, [noop]);
 
   assert.equal(calls(), 2);
-  assert.equal(compactions(events), 0);
   assert.equal(notices(events), 1);
   assert.deepEqual(active.messages.slice(0, 2), [
     {role: 'system', content: 'rules'},

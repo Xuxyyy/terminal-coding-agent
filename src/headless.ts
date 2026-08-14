@@ -38,19 +38,8 @@ const host: Host = {
       process.stdout.write(`\n✖ ${event.message}\n`);
       return;
     }
-    if (event.type === 'compact_start') {
-      process.stdout.write('\n↯ compacting…\n');
-      return;
-    }
     if (event.type === 'context_high') {
       process.stdout.write('\n↯ compaction threshold reached\n');
-      return;
-    }
-    if (event.type === 'compact_end') {
-      const freed = Math.max(0, event.before - event.after);
-      process.stdout.write(
-        `\n↯ compacted ${event.replaced} messages, ~${freed.toLocaleString('en-US')} tokens freed\n`,
-      );
       return;
     }
     process.stdout.write(

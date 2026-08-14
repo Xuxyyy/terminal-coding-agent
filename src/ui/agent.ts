@@ -70,7 +70,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   const sessionRef = useRef<Session | null>(null);
   const storeRef = useRef<SessionStore | null | undefined>(undefined);
   const liveTextRef = useRef('');
-  const compactingRef = useRef(false);
   const controllerRef = useRef<AbortController | null>(null);
   const resolveConfirmRef = useRef<((d: ConfirmDecision) => void) | null>(null);
 
@@ -112,7 +111,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'idle') return false;
     const controller = new AbortController();
     controllerRef.current = controller;
-    compactingRef.current = false;
     const store = openStore();
     const message = addTask(session, task);
     try {
@@ -124,21 +122,10 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
-        if (event.type === 'compact_start') {
-          flushText();
-          compactingRef.current = true;
-          commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
-          setPhase({kind: 'busy', label: COMPACTING_LABEL});
-          return;
-        }
         if (event.type === 'context_high') {
           flushText();
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
           return;
-        }
-        if (compactingRef.current) {
-          compactingRef.current = false;
-          setPhase({kind: 'busy'});
         }
         if (event.type === 'text_delta') {
           liveTextRef.current += event.text;
@@ -149,7 +136,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           flushText();
           return;
         }
-        if (event.type === 'compact_end') return;
         flushText();
         commit([{kind: 'event', event}]);
       },

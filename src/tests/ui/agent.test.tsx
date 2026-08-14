@@ -555,8 +555,6 @@ test('the threshold notice is a notice, never a raw event', async () => {
 
   const types = eventTypes(agent.current!.committed);
   assert.equal(types.includes('context_high'), false);
-  assert.equal(types.includes('compact_start'), false);
-  assert.equal(types.includes('compact_end'), false);
 });
 
 test('resuming a compacted session shows the summary, not the original conversation', async () => {

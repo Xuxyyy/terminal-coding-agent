@@ -25,8 +25,6 @@ export type AgentEvent =
       diff: DiffPayload | null;
     }
   | {type: 'turn_end'; usage: Usage}
-  | {type: 'compact_start'}
-  | {type: 'compact_end'; replaced: number; before: number; after: number}
   | {type: 'context_high'}
   | {type: 'error'; message: string};
 
