@@ -165,7 +165,7 @@ export async function runAgent(
         host.onEvent({
           type: 'error',
           message:
-            'the context is full and cannot be reduced further; start a new session',
+            'stopped: the context is full and nothing more can be freed; send your next message and it will compact first',
         });
         host.onEvent({type: 'turn_end', usage: total});
         return;

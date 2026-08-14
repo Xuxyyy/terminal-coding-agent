@@ -176,7 +176,7 @@ test('the line moves with ACC_COMPACT_AT', async () => {
 });
 
 const FLOOR_ERROR =
-  'the context is full and cannot be reduced further; start a new session';
+  'stopped: the context is full and nothing more can be freed; send your next message and it will compact first';
 
 test('a run past the window sends no further request', async () => {
   const {choice, calls} = fakeModel((turn) =>
