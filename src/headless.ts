@@ -42,6 +42,10 @@ const host: Host = {
       process.stdout.write('\n↯ compacting…\n');
       return;
     }
+    if (event.type === 'context_high') {
+      process.stdout.write('\n↯ compaction threshold reached\n');
+      return;
+    }
     if (event.type === 'compact_end') {
       const freed = Math.max(0, event.before - event.after);
       process.stdout.write(

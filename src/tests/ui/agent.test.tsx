@@ -517,70 +517,36 @@ function eventTypes(items: Item[]): string[] {
   return items.flatMap((item) => (item.kind === 'event' ? [item.event.type] : []));
 }
 
-test('a turn that fills the window compacts itself and says so', async () => {
+test('a turn that fills the window says so and keeps going', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
-  const {choice, calls} = fakeModel((turn) => {
-    if (turn === 1) return crossingTurn();
-    if (turn === 2) return summaryOf(SUMMARY);
-    return answer('done');
-  });
+  const {choice, calls} = fakeModel((turn) =>
+    turn === 1 ? crossingTurn() : answer('done'),
+  );
   const {agent, unmount} = mount(root, choice);
 
   agent.current!.send('fix the cart');
   await settle(agent);
   unmount();
 
-  assert.equal(calls(), 3);
+  assert.equal(calls(), 2);
   const notices = agent.current!.committed.flatMap((item) =>
     item.kind === 'notice' ? [(item as NoticeItem).text] : [],
   );
   assert.deepEqual(notices, ['compaction threshold reached']);
-  assert.deepEqual(agent.current!.checkpoints(), [
-    {id: '2', index: 2, title: 'fix the cart'},
-  ]);
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant', 'user', 'assistant'],
+    ['user', 'assistant', 'tool', 'assistant'],
   );
-  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
-  assert.equal(stored.messages[1]!.content, 'fix the cart');
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
 });
 
-test('the spinner says compacting mid-run and goes back afterwards', async () => {
+test('the threshold notice is a notice, never a raw event', async () => {
   const root = workspace();
-  const summary = gate();
-  const rest = gate();
-  const {choice} = fakeModel((turn) => {
-    if (turn === 1) return crossingTurn();
-    if (turn === 2) return heldAnswer(summary.wait, SUMMARY, 400);
-    return heldAnswer(rest.wait, 'done', 10);
-  });
-  const {agent, unmount} = mount(root, choice);
-
-  agent.current!.send('fix the cart');
-  await until(() => {
-    const phase = agent.current!.phase;
-    return phase.kind === 'busy' && phase.label === 'Compacting…';
-  }, 'the spinner never said Compacting…');
-  summary.open();
-  await until(() => {
-    const phase = agent.current!.phase;
-    return phase.kind === 'busy' && phase.label === undefined;
-  }, 'the spinner never went back to the normal status');
-  rest.open();
-  await settle(agent);
-  unmount();
-});
-
-test('the two compaction events never land in the scrollback as events', async () => {
-  const root = workspace();
-  const {choice} = fakeModel((turn) => {
-    if (turn === 1) return crossingTurn();
-    if (turn === 2) return summaryOf(SUMMARY);
-    return answer('done');
-  });
+  const {choice} = fakeModel((turn) =>
+    turn === 1 ? crossingTurn() : answer('done'),
+  );
   const {agent, unmount} = mount(root, choice);
 
   agent.current!.send('fix the cart');
@@ -588,63 +554,9 @@ test('the two compaction events never land in the scrollback as events', async (
   unmount();
 
   const types = eventTypes(agent.current!.committed);
+  assert.equal(types.includes('context_high'), false);
   assert.equal(types.includes('compact_start'), false);
   assert.equal(types.includes('compact_end'), false);
-});
-
-test('a failed automatic compaction is reported and the task still finishes', async () => {
-  const root = workspace();
-  const {choice, calls} = fakeModel((turn) => {
-    if (turn === 1) return crossingTurn();
-    if (turn === 2) return statusError(400);
-    return answer('done');
-  });
-  const {agent, unmount} = mount(root, choice);
-
-  agent.current!.send('fix the cart');
-  await settle(agent);
-  unmount();
-
-  assert.equal(calls(), 3);
-  const items = agent.current!.committed;
-  const failure = items.find(
-    (item) => item.kind === 'event' && item.event.type === 'error',
-  );
-  assert.ok(failure, 'expected an error event in the scrollback');
-  assert.equal(
-    failure.kind === 'event' && failure.event.type === 'error'
-      ? failure.event.message
-      : null,
-    'could not compact; the run continues',
-  );
-  const last = items[items.length - 1]!;
-  assert.equal(last.kind, 'text');
-  assert.equal((last as TextItem).text, 'done');
-  assert.equal(agent.current!.phase.kind, 'idle');
-});
-
-test('a failed compaction does not leave the spinner saying compacting', async () => {
-  const root = workspace();
-  const rest = gate();
-  const {choice} = fakeModel((turn) => {
-    if (turn === 1) return crossingTurn();
-    if (turn === 2) return statusError(400);
-    return heldAnswer(rest.wait, 'done', 10);
-  });
-  const {agent, unmount} = mount(root, choice);
-
-  agent.current!.send('fix the cart');
-  await until(
-    () => eventTypes(agent.current!.committed).includes('error'),
-    'the compaction never failed',
-  );
-
-  const phase = agent.current!.phase;
-  assert.equal(phase.kind, 'busy');
-  assert.equal(phase.kind === 'busy' ? phase.label : 'still set', undefined);
-  rest.open();
-  await settle(agent);
-  unmount();
 });
 
 test('resuming a compacted session shows the summary, not the original conversation', async () => {

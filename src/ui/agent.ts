@@ -131,6 +131,11 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
           setPhase({kind: 'busy', label: COMPACTING_LABEL});
           return;
         }
+        if (event.type === 'context_high') {
+          flushText();
+          commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
+          return;
+        }
         if (compactingRef.current) {
           compactingRef.current = false;
           setPhase({kind: 'busy'});

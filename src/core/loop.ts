@@ -5,21 +5,14 @@ import {
   streamTurn,
   type ModelChoice,
 } from './client.js';
-import {compactMidRun, compactThreshold, shouldCompact} from './compact.js';
+import {shouldCompact} from './compact.js';
 import type {Host, Usage} from './host.js';
-import {
-  contextStatus,
-  projectedTokens,
-  recordUsage,
-  type Session,
-} from './session.js';
+import {projectedTokens, recordUsage, type Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
 import type {Tool} from './tools/registry.js';
 
 export const MAX_TURNS = 20;
-
-export const MAX_UNHELPFUL_COMPACTIONS = 2;
 
 export const INTERRUPTED = '[interrupted by the user]';
 
@@ -62,8 +55,7 @@ export async function runAgent(
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
   let checkpoints = true;
-  let compacting = true;
-  let unhelpful = 0;
+  let reportedHigh = false;
 
   const save = (usage: Usage): void => {
     if (!store) return;
@@ -99,27 +91,9 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (compacting && shouldCompact(session, process.env, registry)) {
-        const compaction = await compactMidRun(session, choice, host, store);
-        if (!compaction) {
-          compacting = false;
-          host.onEvent({
-            type: 'error',
-            message: 'could not compact; the run continues',
-          });
-        } else if (
-          contextStatus(session, registry).used >=
-          session.contextWindow * compactThreshold()
-        ) {
-          unhelpful += 1;
-          if (unhelpful >= MAX_UNHELPFUL_COMPACTIONS) {
-            compacting = false;
-            host.onEvent({
-              type: 'error',
-              message: 'compacting no longer frees space; the context may fill up',
-            });
-          }
-        }
+      if (!reportedHigh && shouldCompact(session, process.env, registry)) {
+        reportedHigh = true;
+        host.onEvent({type: 'context_high'});
       }
 
       if (
