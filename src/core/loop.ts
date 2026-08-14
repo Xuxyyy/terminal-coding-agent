@@ -5,9 +5,13 @@ import {
   streamTurn,
   type ModelChoice,
 } from './client.js';
-import {shouldCompact} from './compact.js';
 import type {Host, Usage} from './host.js';
-import {projectedTokens, recordUsage, type Session} from './session.js';
+import {
+  projectedTokens,
+  recordUsage,
+  shouldCompact,
+  type Session,
+} from './session.js';
 import type {SessionStore} from './store.js';
 import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
 import type {Tool} from './tools/registry.js';

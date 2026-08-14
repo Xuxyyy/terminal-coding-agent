@@ -13,11 +13,8 @@ import {
 } from '../fakes.js';
 import type {ModelChoice} from '../../core/client.js';
 import {
-  AUTO_COMPACT_AT,
   compactionPrompt,
   compactSession,
-  compactThreshold,
-  shouldCompact,
   SUMMARY_PREFIX,
 } from '../../core/compact.js';
 import {
@@ -150,63 +147,4 @@ test('the store is told how many messages the summary replaced', async () => {
   assert.equal(seen.length, 1);
   assert.equal(seen[0]!.replaced, 4);
   assert.equal(seen[0]!.summary, active.messages[1]);
-});
-
-test('the threshold is 0.8 unless the environment overrides it', () => {
-  assert.equal(compactThreshold({}), AUTO_COMPACT_AT);
-  assert.equal(compactThreshold({ACC_COMPACT_AT: '0.5'}), 0.5);
-  assert.equal(compactThreshold({ACC_COMPACT_AT: '1'}), 1);
-});
-
-test('an override that is not a fraction is ignored', () => {
-  for (const raw of ['', 'abc', '0', '-1', '2']) {
-    assert.equal(compactThreshold({ACC_COMPACT_AT: raw}), AUTO_COMPACT_AT, raw);
-  }
-});
-
-function measured(tokens: number): Session {
-  const active = createSession(process.cwd(), 'rules', 1_000);
-  setMeasured(active, tokens);
-  return active;
-}
-
-test('compacting starts at the threshold, not before it', () => {
-  assert.equal(shouldCompact(measured(0), {}), false);
-  assert.equal(shouldCompact(measured(799), {}), false);
-  assert.equal(shouldCompact(measured(800), {}), true);
-  assert.equal(shouldCompact(measured(950), {}), true);
-});
-
-test('tool results pushed since the measurement count against the line', () => {
-  const active = measured(700);
-  assert.equal(shouldCompact(active, {}), false);
-
-  active.messages.push({
-    role: 'tool',
-    tool_call_id: 'call-1',
-    content: 'x'.repeat(4_000),
-  });
-
-  assert.equal(shouldCompact(active, {}), true);
-});
-
-test('an emptied result puts the session back under the line', () => {
-  const active = measured(700);
-  const result = {
-    role: 'tool' as const,
-    tool_call_id: 'call-1',
-    content: 'x'.repeat(4_000),
-  };
-  active.messages.push(result);
-  setMeasured(active, 1_700);
-  assert.equal(shouldCompact(active, {}), true);
-
-  result.content = '';
-
-  assert.equal(shouldCompact(active, {}), false);
-});
-
-test('a low override moves the line down', () => {
-  assert.equal(shouldCompact(measured(150), {ACC_COMPACT_AT: '0.1'}), true);
-  assert.equal(shouldCompact(measured(99), {ACC_COMPACT_AT: '0.1'}), false);
 });

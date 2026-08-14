@@ -1,10 +1,9 @@
 import type OpenAI from 'openai';
 import {streamTurn, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
-import {projectedTokens, setMeasured, type Session} from './session.js';
+import {setMeasured, type Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {estimateMessages} from './tokens.js';
-import {tools as defaultTools, type Tool} from './tools/index.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
@@ -28,31 +27,6 @@ export type Compaction = {
   after: number;
   usage: Usage;
 };
-
-export const AUTO_COMPACT_AT = 0.8;
-
-export function compactThreshold(
-  env: NodeJS.ProcessEnv = process.env,
-): number {
-  const raw = env.ACC_COMPACT_AT;
-  if (!raw) return AUTO_COMPACT_AT;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
-    return AUTO_COMPACT_AT;
-  }
-  return parsed;
-}
-
-export function shouldCompact(
-  session: Session,
-  env: NodeJS.ProcessEnv = process.env,
-  registry: Tool[] = defaultTools,
-): boolean {
-  return (
-    projectedTokens(session, registry) >=
-    session.contextWindow * compactThreshold(env)
-  );
-}
 
 export async function compactSession(
   session: Session,
