@@ -106,27 +106,27 @@ export function projectedTokens(
   return Math.max(0, session.lastContextTokens + since);
 }
 
-export const AUTO_COMPACT_AT = 0.8;
+export const THRESHOLD_AT = 0.8;
 
-export function compactThreshold(
+export function contextThreshold(
   env: NodeJS.ProcessEnv = process.env,
 ): number {
   const raw = env.ACC_COMPACT_AT;
-  if (!raw) return AUTO_COMPACT_AT;
+  if (!raw) return THRESHOLD_AT;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
-    return AUTO_COMPACT_AT;
+    return THRESHOLD_AT;
   }
   return parsed;
 }
 
-export function shouldCompact(
+export function overThreshold(
   session: Session,
   env: NodeJS.ProcessEnv = process.env,
   registry: Tool[] = defaultTools,
 ): boolean {
   return (
     projectedTokens(session, registry) >=
-    session.contextWindow * compactThreshold(env)
+    session.contextWindow * contextThreshold(env)
   );
 }

@@ -9,7 +9,7 @@ import type {Host, Usage} from './host.js';
 import {
   projectedTokens,
   recordUsage,
-  shouldCompact,
+  overThreshold,
   type Session,
 } from './session.js';
 import type {SessionStore} from './store.js';
@@ -95,7 +95,7 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (!reportedThreshold && shouldCompact(session, process.env, registry)) {
+      if (!reportedThreshold && overThreshold(session, process.env, registry)) {
         reportedThreshold = true;
         host.onEvent({type: 'context_threshold_reached'});
       }
