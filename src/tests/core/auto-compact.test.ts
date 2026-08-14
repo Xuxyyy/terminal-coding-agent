@@ -69,7 +69,7 @@ function errors(events: AgentEvent[]): string[] {
 }
 
 function notices(events: AgentEvent[]): number {
-  return events.filter((event) => event.type === 'context_high').length;
+  return events.filter((event) => event.type === 'context_threshold_reached').length;
 }
 
 async function withThreshold(

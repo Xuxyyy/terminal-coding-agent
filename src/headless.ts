@@ -38,7 +38,7 @@ const host: Host = {
       process.stdout.write(`\n✖ ${event.message}\n`);
       return;
     }
-    if (event.type === 'context_high') {
+    if (event.type === 'context_threshold_reached') {
       process.stdout.write('\n↯ compaction threshold reached\n');
       return;
     }

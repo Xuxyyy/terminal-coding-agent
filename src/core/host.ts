@@ -25,7 +25,7 @@ export type AgentEvent =
       diff: DiffPayload | null;
     }
   | {type: 'turn_end'; usage: Usage}
-  | {type: 'context_high'}
+  | {type: 'context_threshold_reached'}
   | {type: 'error'; message: string};
 
 export type ConfirmDecision = 'once' | 'session' | 'deny';

@@ -55,7 +55,7 @@ export async function runAgent(
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
   let checkpoints = true;
-  let reportedHigh = false;
+  let reportedThreshold = false;
 
   const save = (usage: Usage): void => {
     if (!store) return;
@@ -91,9 +91,9 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (!reportedHigh && shouldCompact(session, process.env, registry)) {
-        reportedHigh = true;
-        host.onEvent({type: 'context_high'});
+      if (!reportedThreshold && shouldCompact(session, process.env, registry)) {
+        reportedThreshold = true;
+        host.onEvent({type: 'context_threshold_reached'});
       }
 
       if (

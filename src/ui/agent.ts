@@ -122,7 +122,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
-        if (event.type === 'context_high') {
+        if (event.type === 'context_threshold_reached') {
           flushText();
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
           return;
