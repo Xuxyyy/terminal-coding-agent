@@ -15,6 +15,21 @@ throwaway folder. `src/headless.ts` runs the loop with no terminal and
 auto-approves every prompt: it can show a run works, never that a prompt did
 not appear.
 
+## Writing tests
+
+Hand a new test file for code that already exists to the `test-writer` agent. It
+starts on a clean context, reads the source in full, copies the nearest test
+file's style, and finishes by running the suite — work that needs the repo, not
+the conversation.
+
+Write the test inline instead when it covers the change being made in the same
+conversation, or when it is a few more cases in a file already open. A fresh
+agent cannot see what the conversation decided, so handing it over costs more
+than writing it.
+
+Anything needing a real terminal or a live model is `acc-e2e`'s, never
+`test-writer`'s.
+
 ## The seam
 
 `src/core` runs the agent and never imports React; `src/ui` draws it with Ink.
