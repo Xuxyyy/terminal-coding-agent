@@ -19,6 +19,8 @@ import type {Tool} from './tools/registry.js';
 
 export const MAX_TURNS = 20;
 
+export const MAX_UNHELPFUL_COMPACTIONS = 2;
+
 export const INTERRUPTED = '[interrupted by the user]';
 
 function aborted(error: unknown, host: Host): boolean {
@@ -61,6 +63,7 @@ export async function runAgent(
   let warned = false;
   let checkpoints = true;
   let compacting = true;
+  let unhelpful = 0;
 
   const save = (usage: Usage): void => {
     if (!store) return;
@@ -108,7 +111,14 @@ export async function runAgent(
           contextStatus(session, registry).used >=
           session.contextWindow * compactThreshold()
         ) {
-          compacting = false;
+          unhelpful += 1;
+          if (unhelpful >= MAX_UNHELPFUL_COMPACTIONS) {
+            compacting = false;
+            host.onEvent({
+              type: 'error',
+              message: 'compacting no longer frees space; the context may fill up',
+            });
+          }
         }
       }
 

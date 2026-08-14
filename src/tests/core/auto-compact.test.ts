@@ -189,10 +189,45 @@ test('a failed compaction is reported once and never retried', async () => {
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
 
-test('a compaction that frees nothing stops the trigger for the run', async () => {
+test('one compaction that frees nothing is not reported and not the last', async () => {
   await withThreshold('0.0001', async () => {
     const {choice, calls} = fakeModel((turn) => {
       if (turn === 2) return summaryTurn(LONG_RECAP);
+      return turn === 1 ? underTheLine(turn) : finalTurn();
+    });
+    const {host, events} = fakeHost();
+
+    await runAgent(session(), choice, host, [noop]);
+
+    assert.equal(calls(), 3);
+    assert.equal(compactions(events), 1);
+    assert.equal(errors(events).length, 0);
+  });
+});
+
+test('two compactions that free nothing stop the trigger and say so', async () => {
+  await withThreshold('0.0001', async () => {
+    const {choice, calls} = fakeModel((turn) => {
+      if (turn === 2 || turn === 4) return summaryTurn(LONG_RECAP);
+      if (turn === 5) return finalTurn();
+      return underTheLine(turn);
+    });
+    const {host, events} = fakeHost();
+
+    await runAgent(session(), choice, host, [noop]);
+
+    assert.equal(calls(), 5);
+    assert.equal(compactions(events), 2);
+    assert.deepEqual(errors(events), [
+      'compacting no longer frees space; the context may fill up',
+    ]);
+  });
+});
+
+test('the two guards do not share a counter', async () => {
+  await withThreshold('0.0001', async () => {
+    const {choice, calls} = fakeModel((turn) => {
+      if (turn === 2) return statusError(400);
       if (turn === 4) return finalTurn();
       return underTheLine(turn);
     });
@@ -202,7 +237,7 @@ test('a compaction that frees nothing stops the trigger for the run', async () =
 
     assert.equal(calls(), 4);
     assert.equal(compactions(events), 1);
-    assert.equal(errors(events).length, 0);
+    assert.deepEqual(errors(events), ['could not compact; the run continues']);
   });
 });
 
