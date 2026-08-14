@@ -22,6 +22,7 @@ export type Session = {
   lastContextTokens: number;
   measuredAt: number;
   contextWindow: number;
+  clearingExhausted: boolean;
 };
 
 export function createSession(
@@ -38,6 +39,7 @@ export function createSession(
     lastContextTokens: 0,
     measuredAt: 0,
     contextWindow,
+    clearingExhausted: false,
   };
 }
 
@@ -64,12 +66,14 @@ export function recordUsage(session: Session, usage: Usage): void {
 
 export function rewindTo(session: Session, index: number): void {
   session.messages = session.messages.slice(0, Math.max(1, index));
+  session.clearingExhausted = false;
   setMeasured(session, 0);
 }
 
 export function clearSession(session: Session): void {
   session.messages = [{role: 'system', content: session.systemPrompt}];
   session.allowed.clear();
+  session.clearingExhausted = false;
   setMeasured(session, 0);
 }
 

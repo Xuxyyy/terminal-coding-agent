@@ -10,6 +10,7 @@ import {
   toolCallChunk,
   usageChunk,
 } from '../fakes.js';
+import {CLEARED_READ} from '../../core/clear.js';
 import {MAX_OUTPUT_TOKENS} from '../../core/client.js';
 import type {AgentEvent} from '../../core/host.js';
 import {runAgent} from '../../core/loop.js';
@@ -42,6 +43,27 @@ function measuredSession(tokens: number): Session {
   return active;
 }
 
+const BIG_READ = 'a'.repeat(400_000);
+
+function readingSession(): Session {
+  const active = session();
+  active.messages.push(
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'r1',
+          type: 'function',
+          function: {name: 'read_file', arguments: '{"path":"a.ts"}'},
+        },
+      ],
+    },
+    {role: 'tool', tool_call_id: 'r1', content: BIG_READ},
+  );
+  return active;
+}
+
 function toolTurn(n: number, total: number): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(`call-${n}`, 'noop', '{}'),
@@ -70,6 +92,12 @@ function errors(events: AgentEvent[]): string[] {
 
 function notices(events: AgentEvent[]): number {
   return events.filter((event) => event.type === 'context_threshold_reached').length;
+}
+
+function freed(events: AgentEvent[]): number[] {
+  return events.flatMap((event) =>
+    event.type === 'context_cleared' ? [event.freed] : [],
+  );
 }
 
 async function withThreshold(
@@ -187,13 +215,47 @@ test('the floor keeps the reply its own room', async () => {
   }
 });
 
-test('a session over the line but inside the window keeps running', async () => {
+test('a turn over the line frees what it can and keeps running', async () => {
+  const {choice, calls} = fakeModel((turn) =>
+    turn === 1 ? overTheLine(turn) : finalTurn(),
+  );
+  const {host, events} = fakeHost();
+  const active = readingSession();
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.equal(calls(), 2);
+  assert.equal(freed(events).length, 1);
+  assert.ok(freed(events)[0] > 90_000, `freed ${freed(events)[0]}`);
+  assert.equal(notices(events), 0);
+  assert.equal(errors(events).length, 0);
+  assert.equal(active.clearingExhausted, false);
+  assert.equal(active.messages[3].content, CLEARED_READ);
+});
+
+test('a turn with nothing left to free is remembered as exhausted', async () => {
+  const {choice} = fakeModel((turn) => (turn <= 2 ? overTheLine(turn) : finalTurn()));
+  const {host, events} = fakeHost();
+  const active = session();
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.equal(active.clearingExhausted, true);
+  assert.equal(freed(events).length, 0);
+  assert.equal(notices(events), 1);
+});
+
+test('turn 0 over the line neither clears nor reports', async () => {
   const {choice, calls} = fakeModel(() => finalTurn());
   const {host, events} = fakeHost();
+  const active = readingSession();
+  setMeasured(active, 850_000);
 
-  await runAgent(measuredSession(850_000), choice, host, [noop]);
+  await runAgent(active, choice, host, [noop]);
 
   assert.equal(calls(), 1);
-  assert.equal(notices(events), 1);
+  assert.equal(freed(events).length, 0);
+  assert.equal(notices(events), 0);
   assert.equal(errors(events).length, 0);
+  assert.equal(active.messages[3].content, BIG_READ);
 });

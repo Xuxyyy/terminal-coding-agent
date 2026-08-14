@@ -26,6 +26,7 @@ export type AgentEvent =
     }
   | {type: 'turn_end'; usage: Usage}
   | {type: 'context_threshold_reached'}
+  | {type: 'context_cleared'; freed: number}
   | {type: 'error'; message: string};
 
 export type ConfirmDecision = 'once' | 'session' | 'deny';

@@ -16,6 +16,7 @@ import {
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
+  clearedNotice,
   compactionNotice,
   COMPACTING_LABEL,
   COMPACTION_NOTICE,
@@ -125,6 +126,11 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         if (event.type === 'context_threshold_reached') {
           flushText();
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
+          return;
+        }
+        if (event.type === 'context_cleared') {
+          flushText();
+          commit([{kind: 'notice', text: clearedNotice(event.freed)}]);
           return;
         }
         if (event.type === 'text_delta') {

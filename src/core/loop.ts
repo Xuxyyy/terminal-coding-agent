@@ -6,7 +6,9 @@ import {
   type ModelChoice,
 } from './client.js';
 import type {Host, Usage} from './host.js';
+import {clearRecoverable} from './clear.js';
 import {
+  contextThreshold,
   projectedTokens,
   recordUsage,
   overThreshold,
@@ -95,9 +97,18 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (!reportedThreshold && overThreshold(session, process.env, registry)) {
-        reportedThreshold = true;
-        host.onEvent({type: 'context_threshold_reached'});
+      if (turn > 0 && overThreshold(session, process.env, registry)) {
+        const target = session.contextWindow * contextThreshold();
+        const freed = clearRecoverable(session, target, registry);
+        if (freed > 0) {
+          host.onEvent({type: 'context_cleared', freed});
+        } else {
+          session.clearingExhausted = true;
+          if (!reportedThreshold) {
+            reportedThreshold = true;
+            host.onEvent({type: 'context_threshold_reached'});
+          }
+        }
       }
 
       if (
