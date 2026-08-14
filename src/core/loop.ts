@@ -86,7 +86,7 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (compacting && shouldCompact(session)) {
+      if (compacting && shouldCompact(session, process.env, registry)) {
         const compaction = await compactMidRun(session, choice, host, store);
         if (!compaction) {
           compacting = false;
@@ -103,11 +103,11 @@ export async function runAgent(
       }
 
       const result = await streamTurn(choice, session.messages, definitions, host);
-      recordUsage(session, result.usage);
       total.prompt += result.usage.prompt;
       total.completion += result.usage.completion;
       total.total += result.usage.total;
       session.messages.push(assistantMessage(result.content, result.toolCalls));
+      recordUsage(session, result.usage);
 
       if (result.toolCalls.length === 0) {
         if (result.finishReason === 'length') {

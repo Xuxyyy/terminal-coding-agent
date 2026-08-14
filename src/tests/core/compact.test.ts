@@ -21,7 +21,12 @@ import {
   shouldCompact,
   SUMMARY_PREFIX,
 } from '../../core/compact.js';
-import {addTask, createSession, type Session} from '../../core/session.js';
+import {
+  addTask,
+  createSession,
+  setMeasured,
+  type Session,
+} from '../../core/session.js';
 
 type Body = OpenAI.ChatCompletionCreateParams;
 
@@ -88,11 +93,12 @@ test('a compaction clears the measured context size', async () => {
   const {choice} = fakeModel(() => summaryTurn('a short recap'));
   const {host} = fakeHost();
   const active = session();
-  active.lastContextTokens = 4_000;
+  setMeasured(active, 4_000);
 
   await compactSession(active, choice, host);
 
   assert.equal(active.lastContextTokens, 0);
+  assert.equal(active.measuredAt, 0);
 });
 
 test('a failed summary leaves the conversation alone', async () => {
@@ -161,7 +167,7 @@ test('an override that is not a fraction is ignored', () => {
 
 function measured(tokens: number): Session {
   const active = createSession(process.cwd(), 'rules', 1_000);
-  active.lastContextTokens = tokens;
+  setMeasured(active, tokens);
   return active;
 }
 
@@ -170,6 +176,35 @@ test('compacting starts at the threshold, not before it', () => {
   assert.equal(shouldCompact(measured(799), {}), false);
   assert.equal(shouldCompact(measured(800), {}), true);
   assert.equal(shouldCompact(measured(950), {}), true);
+});
+
+test('tool results pushed since the measurement count against the line', () => {
+  const active = measured(700);
+  assert.equal(shouldCompact(active, {}), false);
+
+  active.messages.push({
+    role: 'tool',
+    tool_call_id: 'call-1',
+    content: 'x'.repeat(4_000),
+  });
+
+  assert.equal(shouldCompact(active, {}), true);
+});
+
+test('an emptied result puts the session back under the line', () => {
+  const active = measured(700);
+  const result = {
+    role: 'tool' as const,
+    tool_call_id: 'call-1',
+    content: 'x'.repeat(4_000),
+  };
+  active.messages.push(result);
+  setMeasured(active, 1_700);
+  assert.equal(shouldCompact(active, {}), true);
+
+  result.content = '';
+
+  assert.equal(shouldCompact(active, {}), false);
 });
 
 test('a low override moves the line down', () => {
@@ -237,7 +272,7 @@ test('the summarizing call is billed but is not the new context size', async () 
   const {choice} = fakeModel(() => summaryTurn('a short recap'));
   const {host} = fakeHost();
   const active = session();
-  active.lastContextTokens = 900;
+  setMeasured(active, 900);
   const before = active.usage.total;
 
   await compactMidRun(active, choice, host);

@@ -5,8 +5,12 @@ import {
   clearSession,
   contextStatus,
   createSession,
+  projectedTokens,
   recordUsage,
+  rewindTo,
+  setMeasured,
 } from '../../core/session.js';
+import {estimateMessages} from '../../core/tokens.js';
 
 test('clearing the session forgets approvals', () => {
   const session = createSession('/tmp/work', 'rules', 1_000);
@@ -19,6 +23,117 @@ test('clearing the session forgets approvals', () => {
   assert.equal(session.allowed.size, 0);
   assert.deepEqual(session.messages, [{role: 'system', content: 'rules'}]);
   assert.equal(session.lastContextTokens, 0);
+  assert.equal(session.measuredAt, 0);
+});
+
+test('rewinding forgets the measurement and where it was taken', () => {
+  const session = createSession('/tmp/work', 'rules', 1_000);
+  addTask(session, 'do the thing');
+  recordUsage(session, {prompt: 10, completion: 5, total: 15});
+
+  rewindTo(session, 1);
+
+  assert.equal(session.lastContextTokens, 0);
+  assert.equal(session.measuredAt, 0);
+});
+
+test('a measurement of zero leaves both fields at zero', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+
+  setMeasured(session, 0);
+
+  assert.equal(session.lastContextTokens, 0);
+  assert.equal(session.measuredAt, 0);
+});
+
+test('a real measurement records the estimate it was taken at', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+
+  setMeasured(session, 12_450);
+
+  assert.equal(session.lastContextTokens, 12_450);
+  assert.equal(session.measuredAt, estimateMessages(session.messages));
+});
+
+test('the projection is the measurement while nothing has changed', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+  setMeasured(session, 12_450);
+
+  assert.equal(projectedTokens(session), 12_450);
+});
+
+test('the projection rises with a tool result the measurement never saw', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+  setMeasured(session, 12_450);
+
+  session.messages.push({
+    role: 'tool',
+    tool_call_id: 'call-1',
+    content: 'x'.repeat(4_000),
+  });
+
+  assert.ok(
+    projectedTokens(session) > 12_450 + 900,
+    `expected roughly 1,000 tokens more, got ${projectedTokens(session)}`,
+  );
+});
+
+test('the projection falls when a message is emptied', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+  const result = {
+    role: 'tool' as const,
+    tool_call_id: 'call-1',
+    content: 'x'.repeat(4_000),
+  };
+  session.messages.push(result);
+  setMeasured(session, 12_450);
+
+  const before = projectedTokens(session);
+  result.content = '';
+
+  assert.equal(before, 12_450);
+  assert.ok(
+    projectedTokens(session) < 12_450 - 900,
+    `expected roughly 1,000 tokens less, got ${projectedTokens(session)}`,
+  );
+});
+
+test('with no measurement yet the projection is the estimate', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+
+  assert.equal(projectedTokens(session), contextStatus(session).used);
+});
+
+test('the projection never goes below zero', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  addTask(session, 'do the thing');
+  session.messages.push({role: 'assistant', content: 'x'.repeat(40_000)});
+  setMeasured(session, 100);
+
+  session.messages.pop();
+
+  assert.equal(projectedTokens(session), 0);
+});
+
+test('a resumed session projects the stored total, not double it', () => {
+  const session = createSession('/tmp/work', 'rules', 200_000);
+  clearSession(session);
+  for (const message of [
+    {role: 'user' as const, content: 'do the thing'},
+    {role: 'assistant' as const, content: 'did the thing'},
+  ]) {
+    session.messages.push(message);
+  }
+
+  setMeasured(session, 12_450);
+
+  assert.equal(projectedTokens(session), 12_450);
 });
 
 test('a session with no turn yet reports an estimated total', () => {

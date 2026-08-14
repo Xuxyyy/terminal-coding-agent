@@ -11,6 +11,7 @@ import {
   contextStatus,
   createSession,
   rewindTo,
+  setMeasured,
   type Session,
 } from '../core/session.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
@@ -267,7 +268,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     }
     opened.store.seed(session.messages);
     session.usage = {...opened.stored.meta.usage};
-    session.lastContextTokens = opened.stored.lastUsage?.total ?? 0;
+    setMeasured(session, opened.stored.lastUsage?.total ?? 0);
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);

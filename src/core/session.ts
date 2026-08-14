@@ -20,6 +20,7 @@ export type Session = {
   allowed: Set<string>;
   usage: Usage;
   lastContextTokens: number;
+  measuredAt: number;
   contextWindow: number;
 };
 
@@ -35,6 +36,7 @@ export function createSession(
     allowed: new Set<string>(),
     usage: {prompt: 0, completion: 0, total: 0},
     lastContextTokens: 0,
+    measuredAt: 0,
     contextWindow,
   };
 }
@@ -48,22 +50,27 @@ export function addTask(
   return message;
 }
 
+export function setMeasured(session: Session, total: number): void {
+  session.lastContextTokens = total;
+  session.measuredAt = total > 0 ? estimateMessages(session.messages) : 0;
+}
+
 export function recordUsage(session: Session, usage: Usage): void {
   session.usage.prompt += usage.prompt;
   session.usage.completion += usage.completion;
   session.usage.total += usage.total;
-  if (usage.total) session.lastContextTokens = usage.total;
+  if (usage.total) setMeasured(session, usage.total);
 }
 
 export function rewindTo(session: Session, index: number): void {
   session.messages = session.messages.slice(0, Math.max(1, index));
-  session.lastContextTokens = 0;
+  setMeasured(session, 0);
 }
 
 export function clearSession(session: Session): void {
   session.messages = [{role: 'system', content: session.systemPrompt}];
   session.allowed.clear();
-  session.lastContextTokens = 0;
+  setMeasured(session, 0);
 }
 
 export function contextStatus(
@@ -88,4 +95,13 @@ export function contextStatus(
     conversation: used - system - tools,
     free: Math.max(0, session.contextWindow - used),
   };
+}
+
+export function projectedTokens(
+  session: Session,
+  registry: Tool[] = defaultTools,
+): number {
+  if (session.lastContextTokens === 0) return contextStatus(session, registry).used;
+  const since = estimateMessages(session.messages) - session.measuredAt;
+  return Math.max(0, session.lastContextTokens + since);
 }

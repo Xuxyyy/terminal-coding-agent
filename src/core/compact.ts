@@ -1,9 +1,10 @@
 import type OpenAI from 'openai';
 import {streamTurn, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
-import type {Session} from './session.js';
+import {projectedTokens, setMeasured, type Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {estimateMessages} from './tokens.js';
+import {tools as defaultTools, type Tool} from './tools/index.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
@@ -45,8 +46,12 @@ export function compactThreshold(
 export function shouldCompact(
   session: Session,
   env: NodeJS.ProcessEnv = process.env,
+  registry: Tool[] = defaultTools,
 ): boolean {
-  return session.lastContextTokens >= session.contextWindow * compactThreshold(env);
+  return (
+    projectedTokens(session, registry) >=
+    session.contextWindow * compactThreshold(env)
+  );
 }
 
 export async function compactSession(
@@ -81,7 +86,7 @@ export async function compactSession(
   const summary: Message = {role: 'assistant', content: SUMMARY_PREFIX + text};
 
   session.messages = [system, summary];
-  session.lastContextTokens = 0;
+  setMeasured(session, 0);
   try {
     store?.appendCompact(summary, replaced);
   } catch {}

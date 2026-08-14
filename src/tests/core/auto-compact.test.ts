@@ -36,7 +36,7 @@ const noop: Tool = {
 };
 
 function session(): Session {
-  const active = createSession(process.cwd(), 'rules', 1_000);
+  const active = createSession(process.cwd(), 'rules', 1_000_000);
   addTask(active, 'rename the widget');
   return active;
 }
@@ -50,16 +50,18 @@ function toolTurn(n: number, total: number): AsyncIterable<unknown> {
 }
 
 function overTheLine(n: number): AsyncIterable<unknown> {
-  return toolTurn(n, 902);
+  return toolTurn(n, 902_000);
 }
 
 function underTheLine(n: number): AsyncIterable<unknown> {
-  return toolTurn(n, 12);
+  return toolTurn(n, 12_000);
 }
 
 function finalTurn(): AsyncIterable<unknown> {
   return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
 }
+
+const LONG_RECAP = 'a recap too long to fit under the line. '.repeat(12);
 
 function summaryTurn(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(20, 5));
@@ -79,7 +81,7 @@ function recordingModel(next: (turn: number) => AsyncIterable<unknown>): {
       client: {chat: {completions: {create}}} as unknown as OpenAI,
       model: 'fake-model',
       label: 'Fake',
-      contextWindow: 1_000,
+      contextWindow: 1_000_000,
     },
     bodies,
   };
@@ -185,7 +187,7 @@ test('a failed compaction is reported once and never retried', async () => {
 test('a compaction that frees nothing stops the trigger for the run', async () => {
   await withThreshold('0.0001', async () => {
     const {choice, calls} = fakeModel((turn) => {
-      if (turn === 2) return summaryTurn('a short recap');
+      if (turn === 2) return summaryTurn(LONG_RECAP);
       if (turn === 4) return finalTurn();
       return underTheLine(turn);
     });
@@ -202,12 +204,12 @@ test('a compaction that frees nothing stops the trigger for the run', async () =
 test('the line moves with ACC_COMPACT_AT', async () => {
   await withThreshold('0.1', async () => {
     const crossing = fakeModel((turn) => {
-      if (turn === 1) return toolTurn(turn, 100);
+      if (turn === 1) return toolTurn(turn, 100_000);
       if (turn === 2) return summaryTurn('a short recap');
       return finalTurn();
     });
     const short = fakeModel((turn) =>
-      turn === 1 ? toolTurn(turn, 99) : finalTurn(),
+      turn === 1 ? toolTurn(turn, 99_000) : finalTurn(),
     );
     const {host: first} = fakeHost();
     const {host: second, events} = fakeHost();
@@ -226,7 +228,7 @@ test('the turn after an automatic compaction writes neither the summary nor the 
   const work = tempDir('acc-work-');
   try {
     const store = startSession(work, root);
-    const active = createSession(work, 'rules', 1_000);
+    const active = createSession(work, 'rules', 1_000_000);
     store.appendMessage(addTask(active, 'rename the widget'));
     const {choice, calls} = fakeModel((turn) => {
       if (turn === 1) return overTheLine(turn);
