@@ -41,6 +41,7 @@ export function App({
     resume,
     pickRewind,
     checkpoints,
+    rewindEmpty,
     rewind,
     context,
     compact,
@@ -163,7 +164,7 @@ export function App({
             title="Rewind to before a message"
             rows={rewindable}
             hint="↑↓ to move · enter to rewind · esc to cancel"
-            empty="Nothing to rewind yet."
+            empty={rewindEmpty()}
             renderRow={rewindLine}
             onPick={rewind}
             onCancel={cancelPick}

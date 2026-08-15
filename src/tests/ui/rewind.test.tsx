@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {render} from 'ink';
 import type OpenAI from 'openai';
+import {SUMMARY_PREFIX} from '../../core/compact.js';
 import {Picker} from '../../ui/components/Picker.js';
-import {rewindLine, rewindRows} from '../../ui/rewind.js';
+import {
+  NOTHING_TO_REWIND,
+  REWIND_STOPS_AT_COMPACT,
+  rewindEmpty,
+  rewindLine,
+  rewindRows,
+} from '../../ui/rewind.js';
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');
@@ -88,5 +95,19 @@ test('an empty conversation offers nothing to rewind', () => {
   const rows = rewindRows([{role: 'system', content: 'rules'}]);
 
   assert.deepEqual(rows, []);
-  assert.ok(drawn(rows).some((line) => line.includes('Nothing to rewind yet.')));
+  assert.ok(drawn(rows).some((line) => line.includes(NOTHING_TO_REWIND)));
+});
+
+test('a compacted conversation says why nothing is rewindable', () => {
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    {role: 'system', content: 'rules'},
+    {role: 'assistant', content: `${SUMMARY_PREFIX}we fixed the cart`},
+  ];
+
+  assert.deepEqual(rewindRows(messages), []);
+  assert.equal(rewindEmpty(messages), REWIND_STOPS_AT_COMPACT);
+});
+
+test('an untouched conversation keeps the plain empty line', () => {
+  assert.equal(rewindEmpty(conversation()), NOTHING_TO_REWIND);
 });
