@@ -9,7 +9,7 @@ import {
   overThreshold,
   projectedTokens,
   recordUsage,
-  rewindTo,
+  restoreMessages,
   setMeasured,
   THRESHOLD_AT,
   type Session,
@@ -35,7 +35,7 @@ test('rewinding forgets the measurement and where it was taken', () => {
   addTask(session, 'do the thing');
   recordUsage(session, {prompt: 10, completion: 5, total: 15});
 
-  rewindTo(session, 1);
+  restoreMessages(session, []);
 
   assert.equal(session.lastContextTokens, 0);
   assert.equal(session.measuredAt, 0);

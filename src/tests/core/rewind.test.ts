@@ -8,7 +8,7 @@ import {
   addTask,
   createSession,
   recordUsage,
-  rewindTo,
+  restoreMessages,
   type Session,
 } from '../../core/session.js';
 import {openSession, startSession} from '../../core/store.js';
@@ -40,7 +40,7 @@ test('a rewind cuts the messages the model sees', () => {
   const session = conversation();
   recordUsage(session, {prompt: 40, completion: 10, total: 50});
 
-  rewindTo(session, 5);
+  restoreMessages(session, session.messages.slice(1, 5));
 
   assert.equal(session.messages.length, 5);
   assert.equal(
@@ -53,7 +53,7 @@ test('a rewind cuts the messages the model sees', () => {
 test('a rewind keeps everything before the cut', () => {
   const session = conversation();
 
-  rewindTo(session, 5);
+  restoreMessages(session, session.messages.slice(1, 5));
 
   assert.deepEqual(texts(session), [
     'rules',
@@ -68,7 +68,7 @@ test('a rewind does not forget approvals', () => {
   const session = conversation();
   session.allowed.add('command:npm test');
 
-  rewindTo(session, 3);
+  restoreMessages(session, session.messages.slice(1, 3));
 
   assert.deepEqual([...session.allowed], ['command:npm test']);
 });
@@ -76,7 +76,7 @@ test('a rewind does not forget approvals', () => {
 test('rewinding to the first message leaves only the system message', () => {
   const session = conversation();
 
-  rewindTo(session, 1);
+  restoreMessages(session, []);
 
   assert.deepEqual(texts(session), ['rules']);
 });
@@ -84,8 +84,8 @@ test('rewinding to the first message leaves only the system message', () => {
 test('a second rewind cuts again', () => {
   const session = conversation();
 
-  rewindTo(session, 5);
-  rewindTo(session, 3);
+  restoreMessages(session, session.messages.slice(1, 5));
+  restoreMessages(session, session.messages.slice(1, 3));
 
   assert.deepEqual(texts(session), ['rules', 'fix the cart', 'fixed']);
 });

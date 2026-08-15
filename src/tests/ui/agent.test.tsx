@@ -314,6 +314,33 @@ test('a rewind cuts the screen, the messages and the file together', async () =>
   assert.equal(JSON.stringify(stored.view).includes('and the readme'), false);
 });
 
+test('a turn after a rewind writes each message once', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.send('and the readme');
+  await settle(agent);
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  agent.current!.send('and the total');
+  await settle(agent);
+  unmount();
+
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.content),
+    ['fix the cart', 'done', 'and the total', 'done'],
+  );
+  assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
+});
+
 test('clearing the repl starts a session that forgets the old one', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;

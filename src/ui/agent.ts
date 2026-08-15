@@ -4,13 +4,13 @@ import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
-import {checkpointsOf, viewOf} from '../core/records.js';
+import {checkpointsOf, messagesOf, viewOf} from '../core/records.js';
 import {
   addTask,
   clearSession,
   contextStatus,
   createSession,
-  rewindTo,
+  restoreMessages,
   setMeasured,
   type Session,
 } from '../core/session.js';
@@ -221,27 +221,29 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     const before = session.messages
       .slice(0, index)
       .filter((message) => message.role === 'user').length;
+    const title = truncate(
+      textOf(session.messages[index]?.content).replace(/\s+/g, ' ').trim(),
+      60,
+    );
 
     let kept: Item[] | null = null;
     const store = storeRef.current;
     if (store) {
       try {
-        const records = store.records();
-        const cut = checkpointsOf(records)[before];
+        const cut = checkpointsOf(store.records())[before];
         if (cut) {
           store.rewind(cut.at);
-          kept = viewOf(records.slice(0, cut.at)) as Item[];
+          const after = store.records();
+          restoreMessages(session, messagesOf(after));
+          store.seed(session.messages);
+          kept = viewOf(after) as Item[];
         }
       } catch {
         commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
         return;
       }
     }
-    const title = truncate(
-      textOf(session.messages[index]?.content).replace(/\s+/g, ' ').trim(),
-      60,
-    );
-    rewindTo(session, index);
+    if (!kept) restoreMessages(session, session.messages.slice(1, index));
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);

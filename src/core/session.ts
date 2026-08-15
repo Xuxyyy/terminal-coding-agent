@@ -64,8 +64,11 @@ export function recordUsage(session: Session, usage: Usage): void {
   if (usage.total) setMeasured(session, usage.total);
 }
 
-export function rewindTo(session: Session, index: number): void {
-  session.messages = session.messages.slice(0, Math.max(1, index));
+export function restoreMessages(
+  session: Session,
+  messages: OpenAI.ChatCompletionMessageParam[],
+): void {
+  session.messages = [{role: 'system', content: session.systemPrompt}, ...messages];
   session.clearingExhausted = false;
   setMeasured(session, 0);
 }
