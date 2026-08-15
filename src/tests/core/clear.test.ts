@@ -101,6 +101,45 @@ test('write_file arguments lose the body and keep the path', () => {
   assert.deepEqual(argsOf(session, 2), {path: 'b.ts', content: CLEARED_CONTENT});
 });
 
+test('a result smaller than its marker is left alone', () => {
+  const session = sessionOf(
+    callTurn('r1', 'read_file', '{"path":"notes.txt"}'),
+    result('r1', '1\tline one'),
+    ...lastRound(),
+  );
+
+  const freed = clearRecoverable(session, 0, []);
+
+  assert.equal(freed, 0);
+  assert.equal(contentOf(session, 3), '1\tline one');
+});
+
+test('a short bash result keeps its body', () => {
+  const session = sessionOf(
+    callTurn('b1', 'bash', '{"command":"ls"}'),
+    result('b1', '[exit 0]\nok'),
+    ...lastRound(),
+  );
+
+  const freed = clearRecoverable(session, 0, []);
+
+  assert.equal(freed, 0);
+  assert.equal(contentOf(session, 3), '[exit 0]\nok');
+});
+
+test('a small write_file body is left alone', () => {
+  const session = sessionOf(
+    callTurn('w1', 'write_file', '{"path":"b.ts","content":"hi"}'),
+    result('w1', "Wrote 2 chars to 'b.ts'."),
+    ...lastRound(),
+  );
+
+  const freed = clearRecoverable(session, 0, []);
+
+  assert.equal(freed, 0);
+  assert.deepEqual(argsOf(session, 2), {path: 'b.ts', content: 'hi'});
+});
+
 test('the last round is never cleared', () => {
   const session = sessionOf(
     callTurn('r1', 'read_file', '{"path":"a.ts"}'),
