@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {render} from 'ink';
+import stringWidth from 'string-width';
 import {liveRecords, type SessionRecord} from '../../core/records.js';
 import {Picker} from '../../ui/components/Picker.js';
-import {NOTHING_TO_REWIND, rewindLine, rewindRows} from '../../ui/rewind.js';
+import {
+  BEFORE_SUMMARY,
+  NOTHING_TO_REWIND,
+  rewindLine,
+  rewindRows,
+} from '../../ui/rewind.js';
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');
@@ -112,7 +118,7 @@ test('the newest checkpoint is selected first', () => {
 });
 
 test('a long message is truncated to the width', () => {
-  const row = {id: 'aa', at: 0, title: 'a'.repeat(80)};
+  const row = {id: 'aa', at: 0, title: 'a'.repeat(80), beforeSummary: false};
 
   const line = rewindLine(row, true, 30);
 
@@ -126,6 +132,38 @@ test('an empty conversation offers nothing to rewind', () => {
 
   assert.deepEqual(rows, []);
   assert.ok(drawn(rows).some((line) => line.includes(NOTHING_TO_REWIND)));
+});
+
+test('only the rows older than the summary are marked', () => {
+  const rows = rewindRows([...compacted(), ...asked('dd', 'and the total')]);
+
+  assert.deepEqual(
+    rows.map((row) => row.beforeSummary),
+    [true, true, true, false],
+  );
+  const lines = rows.map((row) => rewindLine(row, false, 60));
+  assert.equal(lines.filter((line) => line.endsWith(BEFORE_SUMMARY)).length, 3);
+  assert.ok(lines[3]!.endsWith('and the total'));
+});
+
+test('a session with no compaction keeps the plain rows', () => {
+  const rows = rewindRows(records());
+
+  assert.deepEqual(
+    rows.map((row) => row.beforeSummary),
+    [false, false, false],
+  );
+  assert.equal(rewindLine(rows[0]!, false, 60), '  fix the failing cart test');
+});
+
+test('a narrow width cuts the title and keeps the mark whole', () => {
+  const [row] = rewindRows(compacted());
+
+  const line = rewindLine({...row!, title: 'a'.repeat(80)}, true, 40);
+
+  assert.ok(line.endsWith(BEFORE_SUMMARY));
+  assert.equal(stringWidth(line), 40);
+  assert.ok(line.includes('…'));
 });
 
 test('a summary does not hide the messages before it', () => {
