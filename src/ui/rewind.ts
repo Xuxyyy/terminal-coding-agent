@@ -1,9 +1,10 @@
 import type OpenAI from 'openai';
 import stringWidth from 'string-width';
 import {SUMMARY_PREFIX} from '../core/compact.js';
+import {checkpointsOf, type SessionRecord} from '../core/records.js';
 import {textOf} from './restore.js';
 
-export type RewindRow = {id: string; title: string; index: number};
+export type RewindRow = {id: string; title: string; at: number};
 
 export const NOTHING_TO_REWIND = 'Nothing to rewind yet.';
 
@@ -22,13 +23,12 @@ export function rewindEmpty(
   return compacted ? REWIND_STOPS_AT_COMPACT : NOTHING_TO_REWIND;
 }
 
-export function rewindRows(
-  messages: OpenAI.ChatCompletionMessageParam[],
-): RewindRow[] {
-  return messages.flatMap((message, index) => {
-    if (message.role !== 'user') return [];
-    const title = textOf(message.content).replace(/\s+/g, ' ').trim();
-    return [{id: String(index), index, title: title || '(empty message)'}];
+export function rewindRows(records: SessionRecord[]): RewindRow[] {
+  return checkpointsOf(records).flatMap(({id, at}) => {
+    const record = records[at];
+    if (record?.kind !== 'message' || record.message.role !== 'user') return [];
+    const title = textOf(record.message.content).replace(/\s+/g, ' ').trim();
+    return [{id, at, title: title || '(empty message)'}];
   });
 }
 

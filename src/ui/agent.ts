@@ -4,7 +4,7 @@ import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
-import {checkpointsOf, messagesOf, viewOf} from '../core/records.js';
+import {messagesOf, viewOf} from '../core/records.js';
 import {
   addTask,
   clearSession,
@@ -24,7 +24,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
-import {restoreItems, restoreView, textOf} from './restore.js';
+import {restoreView} from './restore.js';
 import {rewindEmpty, rewindRows, type RewindRow} from './rewind.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
@@ -209,48 +209,38 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     setPhase({kind: 'rewinding'});
   };
 
-  const checkpoints = (): RewindRow[] => rewindRows(session.messages);
+  const checkpoints = (): RewindRow[] => {
+    const store = storeRef.current;
+    return store ? rewindRows(store.records()) : [];
+  };
 
   const emptyRewind = (): string => rewindEmpty(session.messages);
 
   const rewind = (id: string) => {
     if (phase.kind !== 'rewinding') return;
     setPhase({kind: 'idle'});
-    const index = Number.parseInt(id, 10);
-    if (!Number.isInteger(index) || index < 1) return;
-    const before = session.messages
-      .slice(0, index)
-      .filter((message) => message.role === 'user').length;
-    const title = truncate(
-      textOf(session.messages[index]?.content).replace(/\s+/g, ' ').trim(),
-      60,
-    );
-
-    let kept: Item[] | null = null;
     const store = storeRef.current;
-    if (store) {
-      try {
-        const cut = checkpointsOf(store.records())[before];
-        if (cut) {
-          store.rewind(cut.at);
-          const after = store.records();
-          restoreMessages(session, messagesOf(after));
-          store.seed(session.messages);
-          kept = viewOf(after) as Item[];
-        }
-      } catch {
-        commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
-        return;
-      }
+    if (!store) return;
+
+    let kept: Item[];
+    let title: string;
+    try {
+      const cut = rewindRows(store.records()).find((row) => row.id === id);
+      if (!cut) return;
+      title = truncate(cut.title, 60);
+      store.rewind(cut.at);
+      const after = store.records();
+      restoreMessages(session, messagesOf(after));
+      store.seed(session.messages);
+      kept = viewOf(after) as Item[];
+    } catch {
+      commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
+      return;
     }
-    if (!kept) restoreMessages(session, session.messages.slice(1, index));
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);
-    setCommitted([
-      {kind: 'notice', text: `rewound to before "${title}"`},
-      ...(kept ?? restoreItems(session.messages)),
-    ]);
+    setCommitted([{kind: 'notice', text: `rewound to before "${title}"`}, ...kept]);
   };
 
   const resume = (id: string) => {
