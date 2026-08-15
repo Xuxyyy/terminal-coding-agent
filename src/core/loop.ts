@@ -117,6 +117,7 @@ export async function runAgent(
         if (stuck || overThreshold(session, process.env, registry)) {
           const last = session.messages[session.messages.length - 1];
           const task = last?.role === 'user' ? last : null;
+          if (task) session.messages.pop();
           host.onEvent({type: 'compact_start'});
           const result = await compactSession(
             session,
@@ -136,7 +137,7 @@ export async function runAgent(
           }
           host.onEvent({
             type: 'compact_end',
-            replaced: result ? result.replaced - (task ? 1 : 0) : 0,
+            replaced: result?.replaced ?? 0,
             before: result?.before ?? 0,
             after: result?.after ?? 0,
           });

@@ -12,7 +12,8 @@ import {
   usageChunk,
 } from '../fakes.js';
 import {CLEARED_READ} from '../../core/clear.js';
-import {SUMMARY_PREFIX} from '../../core/compact.js';
+import type {ModelChoice} from '../../core/client.js';
+import {compactionPrompt, SUMMARY_PREFIX} from '../../core/compact.js';
 import type {AgentEvent} from '../../core/host.js';
 import {runAgent} from '../../core/loop.js';
 import {
@@ -97,6 +98,53 @@ function streamed(events: AgentEvent[]): string {
     .flatMap((event) => (event.type === 'text_delta' ? [event.text] : []))
     .join('');
 }
+
+function recordingModel(next: (turn: number) => unknown): {
+  choice: ModelChoice;
+  sent: () => Message[][];
+} {
+  let turn = 0;
+  const sent: Message[][] = [];
+  const create = async (body: unknown): Promise<unknown> => {
+    turn += 1;
+    sent.push([...((body as {messages?: Message[]}).messages ?? [])]);
+    return next(turn);
+  };
+  return {
+    choice: {
+      client: {chat: {completions: {create}}} as unknown as OpenAI,
+      model: 'fake-model',
+      label: 'Fake',
+      contextWindow: 1_000_000,
+    },
+    sent: () => sent,
+  };
+}
+
+test('the summarizer is never shown the pending task', async () => {
+  const {choice, sent} = recordingModel((turn) =>
+    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+  );
+  const {host} = fakeHost();
+
+  await runAgent(measured(850_000), choice, host, [noop]);
+
+  const summarizer = sent()[0];
+  assert.equal(
+    summarizer[summarizer.length - 1]?.content,
+    compactionPrompt(),
+    'the instruction must be the last thing the summarizer sees',
+  );
+  assert.equal(
+    summarizer.filter((message) => message.content === TASK).length,
+    0,
+    'the task must be out of the list while the summary is written',
+  );
+  assert.ok(
+    sent()[1]?.some((message) => message.content === TASK),
+    'the task must be back for the run itself',
+  );
+});
 
 test('turn 0 over the line compacts and keeps the task last', async () => {
   const {choice, calls} = fakeModel((turn) =>
