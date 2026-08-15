@@ -336,7 +336,9 @@ test('clearing the repl starts a session that forgets the old one', async () => 
   assert.equal(JSON.stringify(newest.messages).includes('fix the cart'), false);
 });
 
-const SUMMARY = 'the cart was fixed in cart.ts';
+const SUMMARY =
+  'The user asked for the cart to be fixed and it was fixed in cart.ts. ' +
+  'No other file was touched and nothing is left to do on the cart.';
 
 function summaryOf(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(400, 20));
@@ -378,7 +380,7 @@ test('/compact on an idle session replaces the conversation and commits only a n
     stored.messages.map((message) => message.role),
     ['assistant'],
   );
-  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
+  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
   assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
 });
 
@@ -582,7 +584,7 @@ test('resuming a compacted session shows the summary, not the original conversat
     stored.messages.map((message) => message.role),
     ['assistant'],
   );
-  assert.match(String(stored.messages[0]!.content), /the cart was fixed in cart\.ts/);
+  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
   assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
 });
 

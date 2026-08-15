@@ -37,6 +37,10 @@ const noop: Tool = {
   },
 };
 
+const STORY =
+  'The user asked for a rename and it is done. No file is left open and ' +
+  'nothing else is pending in the workspace right now, so the task is complete.';
+
 function textTurn(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(10, 2));
 }
@@ -123,7 +127,7 @@ function recordingModel(next: (turn: number) => unknown): {
 
 test('the summarizer is never shown the pending task', async () => {
   const {choice, sent} = recordingModel((turn) =>
-    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+    turn === 1 ? textTurn(STORY) : textTurn('done'),
   );
   const {host} = fakeHost();
 
@@ -148,7 +152,7 @@ test('the summarizer is never shown the pending task', async () => {
 
 test('turn 0 over the line compacts and keeps the task last', async () => {
   const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+    turn === 1 ? textTurn(STORY) : textTurn('done'),
   );
   const {host, events} = fakeHost();
   const active = measured(850_000);
@@ -158,17 +162,14 @@ test('turn 0 over the line compacts and keeps the task last', async () => {
 
   assert.equal(calls(), 2);
   assert.ok(compacted(events));
-  assert.equal(
-    active.messages[1].content,
-    `${SUMMARY_PREFIX}the story so far`,
-  );
+  assert.equal(active.messages[1].content, SUMMARY_PREFIX + STORY);
   assert.equal(active.messages[2], task);
   assert.equal(errors(events).length, 0);
 });
 
 test('the summary never streams into the transcript', async () => {
   const {choice} = fakeModel((turn) =>
-    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+    turn === 1 ? textTurn(STORY) : textTurn('done'),
   );
   const {host, events} = fakeHost();
 
@@ -179,7 +180,7 @@ test('the summary never streams into the transcript', async () => {
 
 test('a session past the window compacts instead of stopping', async () => {
   const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+    turn === 1 ? textTurn(STORY) : textTurn('done'),
   );
   const {host, events} = fakeHost();
 
@@ -192,7 +193,7 @@ test('a session past the window compacts instead of stopping', async () => {
 
 test('turn 0 compacts when clearing was exhausted, even under the line', async () => {
   const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn('the story so far') : textTurn('done'),
+    turn === 1 ? textTurn(STORY) : textTurn('done'),
   );
   const {host, events} = fakeHost();
   const active = session();
@@ -233,17 +234,31 @@ test('clearing runs first, and a session it saves is never summarized', async ()
 
 test('a failed summary is reported and the run continues', async () => {
   const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? emptyTurn() : textTurn('done'),
+    turn <= 2 ? emptyTurn() : textTurn('done'),
   );
   const {host, events} = fakeHost();
   const active = measured(850_000);
 
   await runAgent(active, choice, host, [noop]);
 
-  assert.equal(calls(), 2);
+  assert.equal(calls(), 3);
   assert.deepEqual(errors(events), ['could not compact; the run continues']);
   assert.equal(active.messages[1].content, TASK);
   assert.ok(events.some((event) => event.type === 'compact_end'));
+});
+
+test('a summary refused twice leaves the conversation alone', async () => {
+  const {choice, calls} = fakeModel((turn) =>
+    turn <= 2 ? textTurn('<｜｜DSML｜｜tool_calls>') : textTurn('done'),
+  );
+  const {host, events} = fakeHost();
+  const active = measured(850_000);
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.equal(calls(), 3);
+  assert.deepEqual(errors(events), ['could not compact; the run continues']);
+  assert.equal(active.messages[1].content, TASK);
 });
 
 test('the summarizer is never called once a run is in flight', async () => {
