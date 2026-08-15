@@ -164,7 +164,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {
-        commit([{kind: 'notice', text: '⏹ stopped'}]);
+        commit([{kind: 'notice', text: 'stopped'}]);
       }
       controllerRef.current = null;
       setPhase({kind: 'idle'});
@@ -243,7 +243,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     setStreamText('');
     setGeneration((current) => current + 1);
     setCommitted([
-      {kind: 'notice', text: `↩ rewound to before "${title}"`},
+      {kind: 'notice', text: `rewound to before "${title}"`},
       ...(kept ?? restoreItems(session.messages)),
     ]);
   };
@@ -304,7 +304,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         if (!result) {
           liveTextRef.current = '';
           setStreamText('');
-          commit([{kind: 'notice', text: '↯ nothing compacted: the summary failed'}]);
+          commit([{kind: 'notice', text: 'nothing compacted: the summary failed'}]);
           return;
         }
         flushText();

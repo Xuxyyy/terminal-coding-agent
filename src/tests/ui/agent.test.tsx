@@ -465,7 +465,7 @@ test('a failed compaction commits a notice and leaves the messages alone', async
   const items = agent.current!.committed;
   const last = items[items.length - 1]!;
   assert.equal(last.kind, 'notice');
-  assert.match((last as NoticeItem).text, /^↯ nothing compacted/);
+  assert.match((last as NoticeItem).text, /^nothing compacted/);
   assert.equal(
     items.some((item) => item.kind === 'context'),
     false,

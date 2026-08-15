@@ -39,7 +39,7 @@ const host: Host = {
       return;
     }
     if (event.type === 'context_threshold_reached') {
-      process.stdout.write('\n↯ compaction threshold reached\n');
+      process.stdout.write('\ncompaction threshold reached\n');
       return;
     }
     if (
