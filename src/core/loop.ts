@@ -148,6 +148,7 @@ export async function runAgent(
         const target = session.contextWindow * contextThreshold();
         const freed = clearRecoverable(session, target, registry);
         if (freed > 0) {
+          session.clearingExhausted = false;
           host.onEvent({type: 'context_cleared', freed});
         } else {
           session.clearingExhausted = true;

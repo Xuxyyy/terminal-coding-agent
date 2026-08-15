@@ -61,6 +61,23 @@ function toolTurn(n: number, total: number): AsyncIterable<unknown> {
   );
 }
 
+const bigRead: Tool = {
+  name: 'read_file',
+  description: 'returns a large file',
+  schema: z.object({}),
+  async run() {
+    return {text: BIG_READ};
+  },
+};
+
+function readTurn(n: number): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk(`call-${n}`, 'read_file', '{}'),
+    finishChunk('tool_calls'),
+    usageChunk(699_998, 2),
+  );
+}
+
 function overTheLine(n: number): AsyncIterable<unknown> {
   return toolTurn(n, 902_000);
 }
@@ -228,6 +245,21 @@ test('a turn over the line frees what it can and keeps running', async () => {
   assert.equal(errors(events).length, 0);
   assert.equal(active.clearingExhausted, false);
   assert.equal(active.messages[3].content, CLEARED_READ);
+});
+
+test('a later turn that frees something takes back the exhausted flag', async () => {
+  const {choice, calls} = fakeModel((turn) =>
+    turn <= 2 ? readTurn(turn) : finalTurn(),
+  );
+  const {host, events} = fakeHost();
+  const active = session();
+
+  await runAgent(active, choice, host, [bigRead]);
+
+  assert.equal(calls(), 3);
+  assert.equal(notices(events), 1);
+  assert.equal(freed(events).length, 1);
+  assert.equal(active.clearingExhausted, false);
 });
 
 test('a turn with nothing left to free is remembered as exhausted', async () => {
