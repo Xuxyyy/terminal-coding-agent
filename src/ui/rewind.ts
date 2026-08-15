@@ -1,27 +1,10 @@
-import type OpenAI from 'openai';
 import stringWidth from 'string-width';
-import {SUMMARY_PREFIX} from '../core/compact.js';
 import {checkpointsOf, type SessionRecord} from '../core/records.js';
 import {textOf} from './restore.js';
 
 export type RewindRow = {id: string; title: string; at: number};
 
 export const NOTHING_TO_REWIND = 'Nothing to rewind yet.';
-
-export const REWIND_STOPS_AT_COMPACT =
-  'The history was compacted; only messages after it can be rewound.';
-
-export function rewindEmpty(
-  messages: OpenAI.ChatCompletionMessageParam[],
-): string {
-  const compacted = messages.some(
-    (message) =>
-      message.role === 'assistant' &&
-      typeof message.content === 'string' &&
-      message.content.startsWith(SUMMARY_PREFIX),
-  );
-  return compacted ? REWIND_STOPS_AT_COMPACT : NOTHING_TO_REWIND;
-}
 
 export function rewindRows(records: SessionRecord[]): RewindRow[] {
   return checkpointsOf(records).flatMap(({id, at}) => {

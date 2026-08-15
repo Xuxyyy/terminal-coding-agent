@@ -1,31 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {render} from 'ink';
-import type OpenAI from 'openai';
-import {SUMMARY_PREFIX} from '../../core/compact.js';
 import {liveRecords, type SessionRecord} from '../../core/records.js';
 import {Picker} from '../../ui/components/Picker.js';
-import {
-  NOTHING_TO_REWIND,
-  REWIND_STOPS_AT_COMPACT,
-  rewindEmpty,
-  rewindLine,
-  rewindRows,
-} from '../../ui/rewind.js';
+import {NOTHING_TO_REWIND, rewindLine, rewindRows} from '../../ui/rewind.js';
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');
-
-function conversation(): OpenAI.ChatCompletionMessageParam[] {
-  return [
-    {role: 'system', content: 'rules'},
-    {role: 'user', content: 'fix the failing cart test'},
-    {role: 'assistant', content: 'fixed'},
-    {role: 'user', content: 'also update the README'},
-    {role: 'assistant', content: 'updated'},
-    {role: 'user', content: 'now make it handle an empty cart'},
-  ];
-}
 
 const USAGE = {prompt: 10, completion: 5, total: 15};
 
@@ -49,6 +30,10 @@ function records(): SessionRecord[] {
     ...asked('bb', 'also update the README'),
     ...asked('cc', 'now make it handle an empty cart'),
   ];
+}
+
+function compacted(): SessionRecord[] {
+  return [...records(), {kind: 'compact', summary: 'we fixed the cart', replaced: 6}];
 }
 
 function drawn(rows: ReturnType<typeof rewindRows>): string[] {
@@ -143,19 +128,16 @@ test('an empty conversation offers nothing to rewind', () => {
   assert.ok(drawn(rows).some((line) => line.includes(NOTHING_TO_REWIND)));
 });
 
-test('a compacted conversation says why nothing is rewindable', () => {
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    {role: 'system', content: 'rules'},
-    {role: 'assistant', content: `${SUMMARY_PREFIX}we fixed the cart`},
-  ];
+test('a summary does not hide the messages before it', () => {
+  const rows = rewindRows([...compacted(), ...asked('dd', 'and the total')]);
 
   assert.deepEqual(
-    rewindRows([...records(), {kind: 'compact', summary: 'we fixed the cart', replaced: 6}]),
-    [],
+    rows.map((row) => row.title),
+    [
+      'fix the failing cart test',
+      'also update the README',
+      'now make it handle an empty cart',
+      'and the total',
+    ],
   );
-  assert.equal(rewindEmpty(messages), REWIND_STOPS_AT_COMPACT);
-});
-
-test('an untouched conversation keeps the plain empty line', () => {
-  assert.equal(rewindEmpty(conversation()), NOTHING_TO_REWIND);
 });

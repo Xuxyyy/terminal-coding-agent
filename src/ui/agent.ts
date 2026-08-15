@@ -25,7 +25,7 @@ import {
   type ReadyInfo,
 } from './events.js';
 import {restoreView} from './restore.js';
-import {rewindEmpty, rewindRows, type RewindRow} from './rewind.js';
+import {rewindRows, type RewindRow} from './rewind.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
 
@@ -43,7 +43,6 @@ export type Agent = {
   resume: (id: string) => void;
   pickRewind: () => void;
   checkpoints: () => RewindRow[];
-  rewindEmpty: () => string;
   rewind: (id: string) => void;
   context: () => void;
   compact: () => void;
@@ -214,8 +213,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     return store ? rewindRows(store.records()) : [];
   };
 
-  const emptyRewind = (): string => rewindEmpty(session.messages);
-
   const rewind = (id: string) => {
     if (phase.kind !== 'rewinding') return;
     setPhase({kind: 'idle'});
@@ -340,7 +337,6 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     resume,
     pickRewind,
     checkpoints,
-    rewindEmpty: emptyRewind,
     rewind,
     context,
     compact,

@@ -77,10 +77,9 @@ export function lastUsageOf(records: SessionRecord[]): Usage | null {
 export type Checkpoint = {id: string; at: number};
 
 export function checkpointsOf(records: SessionRecord[]): Checkpoint[] {
-  let checkpoints: Checkpoint[] = [];
+  const checkpoints: Checkpoint[] = [];
   records.forEach((record, at) => {
-    if (record.kind === 'compact') checkpoints = [];
-    else if (record.kind === 'message') checkpoints.push({id: record.id, at});
+    if (record.kind === 'message') checkpoints.push({id: record.id, at});
   });
   return checkpoints;
 }

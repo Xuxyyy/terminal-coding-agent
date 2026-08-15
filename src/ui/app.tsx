@@ -11,7 +11,7 @@ import {Confirm} from './components/Confirm.js';
 import {Markdown} from './components/Markdown.js';
 import {Picker} from './components/Picker.js';
 import {SessionPicker} from './components/SessionPicker.js';
-import {rewindLine} from './rewind.js';
+import {NOTHING_TO_REWIND, rewindLine} from './rewind.js';
 import {sessionRows} from './sessions.js';
 import {HistoryList} from './components/history/HistoryList.js';
 import {theme} from './theme.js';
@@ -41,7 +41,6 @@ export function App({
     resume,
     pickRewind,
     checkpoints,
-    rewindEmpty,
     rewind,
     context,
     compact,
@@ -164,7 +163,7 @@ export function App({
             title="Rewind to before a message"
             rows={rewindable}
             hint="↑↓ to move · enter to rewind · esc to cancel"
-            empty={rewindEmpty()}
+            empty={NOTHING_TO_REWIND}
             renderRow={rewindLine}
             onPick={rewind}
             onCancel={cancelPick}

@@ -527,7 +527,7 @@ test('what is said after a compaction follows the summary', () => {
   ]);
 });
 
-test('a compaction forgets the checkpoints made before it', () => {
+test('the checkpoints reach back past a compaction', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
@@ -541,29 +541,39 @@ test('a compaction forgets the checkpoints made before it', () => {
 
   const checkpoints = checkpointsOf(store.records());
 
-  assert.equal(checkpoints.length, 2);
+  assert.equal(checkpoints.length, 4);
   assert.deepEqual(
     checkpoints.map((checkpoint) => askedAt(store, checkpoint.at)),
-    [user('and the readme'), user('and the changelog')],
+    [
+      user('fix the cart'),
+      user('and the total'),
+      user('and the readme'),
+      user('and the changelog'),
+    ],
   );
 });
 
-test('a rewind after a compaction cannot land before the summary', () => {
+test('a rewind after a compaction can land before the summary', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendMessage(user('fix the cart'));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const first = user('fix the cart');
+  store.appendMessage(first);
+  store.appendTurn([first, assistant('fixed')], usage(10));
+  const second = user('and the total');
+  store.appendMessage(second);
+  store.appendTurn([second, assistant('counted')], usage(20));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
   store.appendMessage(user('and the readme'));
-  store.appendMessage(user('and the changelog'));
 
-  const [first] = checkpointsOf(store.records());
-  store.rewind(first!.at);
+  const [, middle] = checkpointsOf(store.records());
+  store.rewind(middle!.at);
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
-    assistant('SUMMARY: we fixed the cart'),
+    user('fix the cart'),
+    assistant('fixed'),
   ]);
 });
 

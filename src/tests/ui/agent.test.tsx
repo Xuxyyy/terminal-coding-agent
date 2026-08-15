@@ -371,8 +371,8 @@ function summaryOf(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(400, 20));
 }
 
-function summarizingModel(): ReturnType<typeof fakeModel> {
-  return fakeModel((turn) => (turn === 2 ? summaryOf(SUMMARY) : answer('done')));
+function summarizingModel(at = 2): ReturnType<typeof fakeModel> {
+  return fakeModel((turn) => (turn === at ? summaryOf(SUMMARY) : answer('done')));
 }
 
 function occurrences(messages: unknown, needle: string): number {
@@ -669,11 +669,11 @@ test('a rewind after a compaction cuts at the right place', async () => {
   const rows = agent.current!.checkpoints();
   assert.deepEqual(
     rows.map((row) => row.title),
-    ['and the total'],
+    ['fix the cart', 'and the total'],
   );
   agent.current!.pickRewind();
   await tick();
-  agent.current!.rewind(rows[0]!.id);
+  agent.current!.rewind(rows[1]!.id);
   await tick();
   unmount();
 
@@ -684,4 +684,72 @@ test('a rewind after a compaction cuts at the right place', async () => {
   );
   assert.equal(occurrences(stored.messages, SUMMARY), 1);
   assert.equal(JSON.stringify(stored.messages).includes('and the total'), false);
+});
+
+async function compactedTurns(root: string): Promise<{
+  agent: Ref;
+  unmount: () => void;
+  rows: ReturnType<Agent['checkpoints']>;
+}> {
+  const {choice} = summarizingModel(3);
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.send('and the total');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+
+  return {agent, unmount, rows: agent.current!.checkpoints()};
+}
+
+test('a rewind to before the summary brings the conversation back', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {agent, unmount, rows} = await compactedTurns(root);
+
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    ['fix the cart', 'and the total'],
+  );
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  unmount();
+
+  const items = agent.current!.committed;
+  assert.deepEqual(
+    items.map((item) => (item.kind === 'task' ? item.text : item.kind)),
+    ['notice', 'fix the cart', 'text'],
+  );
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.content),
+    ['fix the cart', 'done'],
+  );
+  assert.equal(occurrences(stored.messages, SUMMARY), 0);
+});
+
+test('a turn after a rewind across a compaction writes each message once', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {agent, unmount, rows} = await compactedTurns(root);
+
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  agent.current!.send('and the readme');
+  await settle(agent);
+  unmount();
+
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.content),
+    ['fix the cart', 'done', 'and the readme', 'done'],
+  );
+  assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
+  assert.equal(occurrences(stored.messages, SUMMARY), 0);
 });
