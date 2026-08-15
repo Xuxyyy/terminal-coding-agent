@@ -9,7 +9,8 @@ export type SessionRecord =
   | {kind: 'view'; items: unknown[]}
   | {kind: 'message'; id: string; message: Message}
   | {kind: 'messages'; messages: Message[]; usage: Usage}
-  | {kind: 'compact'; summary: string; replaced: number};
+  | {kind: 'compact'; summary: string; replaced: number}
+  | {kind: 'rewind'; to: number};
 
 const RECORDS = 'session.jsonl';
 
@@ -38,14 +39,16 @@ export function readRecords(dir: string): SessionRecord[] {
   return records;
 }
 
-export function truncateRecords(dir: string, keep: number): void {
-  const records = readRecords(dir);
-  if (keep >= records.length) return;
-  const text = records
-    .slice(0, Math.max(0, keep))
-    .map((record) => `${JSON.stringify(record)}\n`)
-    .join('');
-  fs.writeFileSync(recordsFile(dir), text, {mode: 0o600});
+export function liveRecords(records: SessionRecord[]): SessionRecord[] {
+  const live: SessionRecord[] = [];
+  for (const record of records) {
+    if (record.kind === 'rewind') {
+      live.length = Math.min(live.length, Math.max(0, record.to));
+    } else {
+      live.push(record);
+    }
+  }
+  return live;
 }
 
 export function messagesOf(records: SessionRecord[]): Message[] {

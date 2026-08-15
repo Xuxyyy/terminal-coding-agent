@@ -421,8 +421,42 @@ test('a rewind drops the records above the cut', () => {
   const restored = loadSession(work, null, root);
   assert.deepEqual(restored.messages, [user('fix the cart'), assistant('fixed')]);
   assert.deepEqual(restored.view, [{kind: 'task', text: 'fix the cart'}]);
-  assert.equal(records(store.dir).length, 3);
+  assert.equal(store.records().length, 3);
   assert.equal(restored.meta.usage.total, 30);
+});
+
+test('a rewind leaves the dropped records in the file', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  twoTasks(store);
+
+  store.rewind(3);
+  store.close();
+
+  const written = records(store.dir);
+  assert.equal(written.length, 7);
+  assert.deepEqual(written[6], {kind: 'rewind', to: 3});
+  assert.deepEqual(
+    written.slice(3, 6).map((record) => record['kind']),
+    ['message', 'view', 'messages'],
+  );
+});
+
+test('a second rewind cuts from what the first one left', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  twoTasks(store);
+
+  store.rewind(3);
+  store.rewind(1);
+  store.close();
+
+  const restored = loadSession(work, null, root);
+  assert.deepEqual(restored.messages, [user('fix the cart')]);
+  assert.deepEqual(restored.view, []);
+  assert.equal(store.records().length, 1);
 });
 
 test('the next append after a rewind continues from the cut', () => {
@@ -448,7 +482,7 @@ test('the next append after a rewind continues from the cut', () => {
     'session.json',
     'session.jsonl',
   ]);
-  assert.equal(records(store.dir).length, 5);
+  assert.equal(store.records().length, 5);
 });
 
 function askedAt(
@@ -512,6 +546,25 @@ test('a compaction forgets the checkpoints made before it', () => {
     checkpoints.map((checkpoint) => askedAt(store, checkpoint.at)),
     [user('and the readme'), user('and the changelog')],
   );
+});
+
+test('a rewind after a compaction cannot land before the summary', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendMessage(user('fix the cart'));
+  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  store.appendMessage(user('and the readme'));
+  store.appendMessage(user('and the changelog'));
+
+  const [first] = checkpointsOf(store.records());
+  store.rewind(first!.at);
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    assistant('SUMMARY: we fixed the cart'),
+  ]);
 });
 
 test('the last usage is not read across a compaction', () => {

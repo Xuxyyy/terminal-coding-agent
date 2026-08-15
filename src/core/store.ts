@@ -5,9 +5,9 @@ import type {Usage} from './host.js';
 import {
   appendRecord,
   lastUsageOf,
+  liveRecords,
   messagesOf,
   readRecords,
-  truncateRecords,
   viewOf,
   type SessionRecord,
 } from './records.js';
@@ -148,10 +148,10 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       writeMeta();
     },
     records() {
-      return readRecords(dir);
+      return liveRecords(readRecords(dir));
     },
     rewind(to) {
-      truncateRecords(dir, to);
+      appendRecord(dir, {kind: 'rewind', to});
       writeMeta();
     },
     close() {
@@ -178,7 +178,7 @@ export function loadSession(
   if (owner !== workspace) {
     throw new Error(`that session belongs to another folder: ${owner}`);
   }
-  const records = readRecords(entry.dir);
+  const records = liveRecords(readRecords(entry.dir));
   return {
     meta: entry.meta,
     messages: messagesOf(records),
