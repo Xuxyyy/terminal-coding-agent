@@ -48,8 +48,12 @@ read it. They record *why*; the code is the truth about *what*.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
 - `docs/features.md` — what ships today; read before planning what is next.
 
-Amend a doc in place when a decision is reversed; leave the original next to the
-note, so the reasoning survives.
+A doc describes the code as it is now. When a decision is reversed, **rewrite the
+part it changed** — do not leave the old version behind with a dated note next to
+it. Layered notes turn a doc into a changelog, and a reader cannot tell which
+layer is live. Keep a reason only where it still decides something: why the
+shape is this way, or what a future change must not break. `git log` is where
+the history goes.
 
 `plans/` holds the plan being run, numbered in order — `01-context-readout.md`.
 A plan is disposable: delete it once it ships and fold what lasts into a doc or
