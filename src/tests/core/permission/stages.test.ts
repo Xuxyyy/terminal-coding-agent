@@ -4,6 +4,7 @@ import {
   basename,
   commandParts,
   discardNoiseRedirects,
+  maskQuotedRedirects,
   splitStages,
   stripWrappers,
   tokenize,
@@ -156,6 +157,20 @@ test('basename reads the executable out of a path', () => {
   assert.equal(basename('/usr/bin/sudo'), 'sudo');
   assert.equal(basename('ls'), 'ls');
   assert.equal(basename('./scripts/build.sh'), 'build.sh');
+});
+
+test('maskQuotedRedirects blanks the angle brackets shell would read literally', () => {
+  assert.equal(maskQuotedRedirects("node -e 'a=>b'"), "node -e 'a= b'");
+  assert.equal(maskQuotedRedirects('grep -rn "=>" src'), 'grep -rn "= " src');
+  assert.equal(maskQuotedRedirects('echo a\\>b'), 'echo a\\ b');
+  assert.equal(maskQuotedRedirects("grep '<div>' page.html"), "grep ' div ' page.html");
+});
+
+test('maskQuotedRedirects leaves a real redirect alone', () => {
+  assert.equal(maskQuotedRedirects('echo a=>b'), 'echo a=>b');
+  assert.equal(maskQuotedRedirects('echo x > src/a.ts'), 'echo x > src/a.ts');
+  assert.equal(maskQuotedRedirects('cat package.json 2>/dev/null'), 'cat package.json 2>/dev/null');
+  assert.equal(maskQuotedRedirects("echo 'hi' > out.txt"), "echo 'hi' > out.txt");
 });
 
 test('commandParts discards noise, tokenizes, and strips wrappers', () => {

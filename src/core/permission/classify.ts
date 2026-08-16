@@ -1,6 +1,12 @@
 import * as path from 'node:path';
 import {expandUser, insideRoot, isProtectedPath, realPath} from './protected.js';
-import {basename, commandParts, discardNoiseRedirects, splitStages} from './stages.js';
+import {
+  basename,
+  commandParts,
+  discardNoiseRedirects,
+  maskQuotedRedirects,
+  splitStages,
+} from './stages.js';
 
 export type Level = 'observe' | 'recoverable' | 'protected' | 'destroy' | 'escape';
 
@@ -106,7 +112,7 @@ function worst(items: Classification[]): Classification {
 }
 
 function stageTargets(stage: string, parts: string[]): string[] {
-  const cleaned = discardNoiseRedirects(stage);
+  const cleaned = discardNoiseRedirects(maskQuotedRedirects(stage));
   const targets = [...cleaned.matchAll(REDIRECT_TARGET_PATTERN)].map((match) => match[1]);
   const executable = executableOf(parts);
   const unsafeRead =
@@ -120,7 +126,9 @@ function stageTargets(stage: string, parts: string[]): string[] {
 
 function isReadOnlyStage(stage: string, parts: string[]): boolean {
   if (SUBSTITUTION_PATTERN.test(stage)) return false;
-  if (REDIRECT_PATTERN.test(discardNoiseRedirects(stage))) return false;
+  if (REDIRECT_PATTERN.test(discardNoiseRedirects(maskQuotedRedirects(stage)))) {
+    return false;
+  }
   if (!parts.length) return false;
   const executable = executableOf(parts);
   if (parts[0] !== executable) return false;

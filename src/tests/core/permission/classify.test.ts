@@ -106,6 +106,24 @@ test('a write target that cannot be determined escapes', () => {
   );
 });
 
+test('an angle bracket inside quotes is not a redirect', () => {
+  for (const command of [
+    "node -e 'a=>b'",
+    "node -e 'xs.map(x => x.y)'",
+    'python3 -c "print(1 > 0)"',
+  ]) {
+    assert.equal(level(command), null, command);
+  }
+  assert.equal(level('grep -rn "=>" src'), 'observe');
+  assert.equal(level("grep '<div>' src"), 'observe');
+});
+
+test('an angle bracket the shell would act on is still a redirect', () => {
+  assert.equal(level('echo a=>b'), 'recoverable');
+  assert.equal(level('echo a=>../out.txt'), 'escape');
+  assert.equal(level("echo 'hi' > src/a.ts"), 'recoverable');
+});
+
 test('the project root itself cannot be destroyed', () => {
   assert.equal(level('rm -rf .'), 'escape');
   assert.equal(level(`rm -rf ${project}`), 'escape');

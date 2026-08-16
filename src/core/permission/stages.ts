@@ -29,6 +29,27 @@ export function discardNoiseRedirects(stage: string): string {
   return stage.replace(DISCARDED_REDIRECT_PATTERN, '');
 }
 
+export function maskQuotedRedirects(stage: string): string {
+  let masked = '';
+  let quote: string | null = null;
+  let index = 0;
+  while (index < stage.length) {
+    const character = stage[index] as string;
+    if (character === '\\' && quote !== "'" && index + 1 < stage.length) {
+      const next = stage[index + 1] as string;
+      masked += character + (next === '<' || next === '>' ? ' ' : next);
+      index += 2;
+      continue;
+    }
+    if (quote === null && (character === "'" || character === '"')) quote = character;
+    else if (quote === character) quote = null;
+    masked +=
+      quote !== null && (character === '<' || character === '>') ? ' ' : character;
+    index += 1;
+  }
+  return masked;
+}
+
 function separatorAt(command: string, index: number): string | null {
   const character = command[index];
   const previous = command[index - 1];
