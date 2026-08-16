@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {captureBefore, filesDir} from '../../core/history.js';
+import {captureBefore, filesDir, restorePlan} from '../../core/history.js';
+import type {SessionRecord} from '../../core/records.js';
 
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -107,4 +108,63 @@ test('capturing a folder is an error the caller sees', () => {
   fs.mkdirSync(path.join(work, 'src'));
 
   assert.throws(() => captureBefore(dir, path.join(work, 'src')));
+});
+
+function code(target: string, before: string | null): SessionRecord {
+  return {kind: 'code', path: target, before};
+}
+
+const TASK: SessionRecord = {
+  kind: 'message',
+  id: 'one',
+  message: {role: 'user', content: 'fix the cart'},
+};
+
+test('two edits to one file restore what the first one found', () => {
+  const plan = restorePlan(
+    [code('cart.ts', sha256('one\n')), code('cart.ts', sha256('two\n'))],
+    0,
+  );
+
+  assert.deepEqual([...plan], [['cart.ts', sha256('one\n')]]);
+});
+
+test('a file written below the cut is left alone', () => {
+  const plan = restorePlan([code('early.ts', sha256('one\n')), TASK, code('late.ts', null)], 1);
+
+  assert.deepEqual([...plan.keys()], ['late.ts']);
+});
+
+test('two paths above the cut are two entries', () => {
+  const plan = restorePlan([code('cart.ts', sha256('one\n')), code('total.ts', null)], 0);
+
+  assert.equal(plan.size, 2);
+  assert.equal(plan.get('cart.ts'), sha256('one\n'));
+  assert.equal(plan.get('total.ts'), null);
+});
+
+test('a file that did not exist yet is planned as null, not as missing', () => {
+  const plan = restorePlan([code('new.txt', null), code('new.txt', sha256('one\n'))], 0);
+
+  assert.equal(plan.has('new.txt'), true);
+  assert.equal(plan.get('new.txt'), null);
+});
+
+test('a rewind over no edits at all restores nothing', () => {
+  assert.equal(restorePlan([TASK, {kind: 'view', items: []}], 0).size, 0);
+});
+
+test('the records between the edits change nothing', () => {
+  const plan = restorePlan(
+    [
+      code('cart.ts', sha256('one\n')),
+      {kind: 'view', items: [{kind: 'text', text: 'done'}]},
+      {kind: 'compact', summary: 'a summary', replaced: 4},
+      TASK,
+      code('cart.ts', sha256('two\n')),
+    ],
+    0,
+  );
+
+  assert.deepEqual([...plan], [['cart.ts', sha256('one\n')]]);
 });
