@@ -4,7 +4,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {captureBefore, filesDir, restorePlan} from '../../core/history.js';
+import {
+  captureBefore,
+  filesDir,
+  restoreFiles,
+  restorePlan,
+} from '../../core/history.js';
 import type {SessionRecord} from '../../core/records.js';
 
 function tempDir(prefix: string): string {
@@ -152,6 +157,106 @@ test('a file that did not exist yet is planned as null, not as missing', () => {
 
 test('a rewind over no edits at all restores nothing', () => {
   assert.equal(restorePlan([TASK, {kind: 'view', items: []}], 0).size, 0);
+});
+
+function planOf(entries: [string, string | null][]): Map<string, string | null> {
+  return new Map(entries);
+}
+
+test('a file goes back to the bytes that were captured', () => {
+  const dir = session();
+  const work = workspace();
+  const file = path.join(work, 'note.txt');
+  fs.writeFileSync(file, 'one\n');
+  const sha = captureBefore(dir, file)!;
+  fs.writeFileSync(file, 'two\n');
+
+  const counts = restoreFiles(dir, work, planOf([['note.txt', sha]]));
+
+  assert.deepEqual(counts, {restored: 1, deleted: 0, skipped: 0});
+  assert.equal(fs.readFileSync(file, 'utf8'), 'one\n');
+});
+
+test('a file whose copy was never written is left as it is', () => {
+  const dir = session();
+  const work = workspace();
+  const file = path.join(work, 'note.txt');
+  fs.writeFileSync(file, 'two\n');
+
+  const counts = restoreFiles(dir, work, planOf([['note.txt', sha256('one\n')]]));
+
+  assert.deepEqual(counts, {restored: 0, deleted: 0, skipped: 1});
+  assert.equal(fs.readFileSync(file, 'utf8'), 'two\n');
+});
+
+test('a file the agent created is deleted again', () => {
+  const dir = session();
+  const work = workspace();
+  const file = path.join(work, 'new.txt');
+  fs.writeFileSync(file, 'made up\n');
+
+  const counts = restoreFiles(dir, work, planOf([['new.txt', null]]));
+
+  assert.deepEqual(counts, {restored: 0, deleted: 1, skipped: 0});
+  assert.equal(fs.existsSync(file), false);
+});
+
+test('deleting a file that is already gone is what was asked for', () => {
+  const dir = session();
+  const work = workspace();
+
+  const counts = restoreFiles(dir, work, planOf([['new.txt', null]]));
+
+  assert.deepEqual(counts, {restored: 0, deleted: 1, skipped: 0});
+});
+
+test('a file comes back with the folders it used to live in', () => {
+  const dir = session();
+  const work = workspace();
+  const nested = path.join(work, 'src', 'deep');
+  fs.mkdirSync(nested, {recursive: true});
+  const file = path.join(nested, 'cart.ts');
+  fs.writeFileSync(file, 'one\n');
+  const sha = captureBefore(dir, file)!;
+  fs.rmSync(path.join(work, 'src'), {recursive: true});
+
+  const counts = restoreFiles(dir, work, planOf([['src/deep/cart.ts', sha]]));
+
+  assert.deepEqual(counts, {restored: 1, deleted: 0, skipped: 0});
+  assert.equal(fs.readFileSync(file, 'utf8'), 'one\n');
+});
+
+test('an empty plan touches nothing', () => {
+  const dir = session();
+  const work = workspace();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'two\n');
+
+  const counts = restoreFiles(dir, work, planOf([]));
+
+  assert.deepEqual(counts, {restored: 0, deleted: 0, skipped: 0});
+  assert.deepEqual(fs.readdirSync(work), ['note.txt']);
+});
+
+test('one path that cannot be written does not stop the next one', () => {
+  const dir = session();
+  const work = workspace();
+  fs.mkdirSync(path.join(work, 'blocked'));
+  const file = path.join(work, 'note.txt');
+  fs.writeFileSync(file, 'one\n');
+  const sha = captureBefore(dir, file)!;
+  fs.writeFileSync(file, 'two\n');
+
+  const counts = restoreFiles(
+    dir,
+    work,
+    planOf([
+      ['blocked', sha],
+      ['note.txt', sha],
+    ]),
+  );
+
+  assert.deepEqual(counts, {restored: 1, deleted: 0, skipped: 1});
+  assert.equal(fs.readFileSync(file, 'utf8'), 'one\n');
 });
 
 test('the records between the edits change nothing', () => {
