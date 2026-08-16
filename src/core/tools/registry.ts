@@ -7,6 +7,7 @@ export type ToolContext = {
   root: string;
   host: Host;
   allowed: Set<string>;
+  backup?: (path: string) => void;
 };
 
 export type ToolOutput = {text: string; diff?: DiffPayload | null};
@@ -113,6 +114,12 @@ export async function runTool(
   try {
     const permission = await permitted(tool, parsed.data, ctx);
     if (permission.denied) return {text: `Error: ${permission.denied}`};
+    if (ctx.backup && tool.request) {
+      try {
+        const request = tool.request(parsed.data);
+        if (request.kind === 'write') ctx.backup(request.path);
+      } catch {}
+    }
     return await tool.run(permission.args, ctx);
   } catch (error) {
     return {text: `Error: ${(error as Error).message}`};

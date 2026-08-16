@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import test from 'node:test';
 import type OpenAI from 'openai';
 import {z} from 'zod';
@@ -16,7 +20,10 @@ import {
 } from '../fakes.js';
 import type {AgentEvent} from '../../core/host.js';
 import {INTERRUPTED, MAX_TURNS, runAgent} from '../../core/loop.js';
+import {filesDir} from '../../core/history.js';
 import {createSession, type Session} from '../../core/session.js';
+import {startSession} from '../../core/store.js';
+import {writeFile} from '../../core/tools/write.js';
 import type {Tool} from '../../core/tools/registry.js';
 
 const noop: Tool = {
@@ -201,6 +208,85 @@ test('an interrupted stream keeps what arrived', async () => {
     content: 'half an answer',
   });
   assert.equal(errors(events).length, 0);
+});
+
+function tempDir(prefix: string): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function writeTurn(target: string, content: string): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk(
+      'call-write',
+      'write_file',
+      JSON.stringify({path: target, content}),
+    ),
+    finishChunk('tool_calls'),
+    usageChunk(10, 2),
+  );
+}
+
+test('the old file is in the session before the agent overwrites it', async () => {
+  const work = tempDir('acc-work-');
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const {choice} = fakeModel((turn) =>
+    turn === 1 ? writeTurn('note.txt', 'two\n') : finalTurn(),
+  );
+  const {host} = fakeHost();
+  const store = startSession(work, tempDir('acc-home-'));
+
+  await runAgent(
+    createSession(work, 'rules', 1_000_000),
+    choice,
+    host,
+    [writeFile],
+    store,
+  );
+
+  const sha = crypto.createHash('sha256').update('one\n').digest('hex');
+  assert.deepEqual(
+    store.records().filter((record) => record.kind === 'code'),
+    [{kind: 'code', path: 'note.txt', before: sha}],
+  );
+  assert.equal(fs.readFileSync(path.join(filesDir(store.dir), sha), 'utf8'), 'one\n');
+  assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
+});
+
+test('a file the agent creates is recorded as having no old version', async () => {
+  const work = tempDir('acc-work-');
+  const {choice} = fakeModel((turn) =>
+    turn === 1 ? writeTurn('new.txt', 'fresh\n') : finalTurn(),
+  );
+  const {host} = fakeHost();
+  const store = startSession(work, tempDir('acc-home-'));
+
+  await runAgent(
+    createSession(work, 'rules', 1_000_000),
+    choice,
+    host,
+    [writeFile],
+    store,
+  );
+
+  assert.deepEqual(
+    store.records().filter((record) => record.kind === 'code'),
+    [{kind: 'code', path: 'new.txt', before: null}],
+  );
+  assert.equal(fs.existsSync(filesDir(store.dir)), false);
+});
+
+test('without a session nothing is captured and the write still lands', async () => {
+  const work = tempDir('acc-work-');
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const {choice} = fakeModel((turn) =>
+    turn === 1 ? writeTurn('note.txt', 'two\n') : finalTurn(),
+  );
+  const {host, events} = fakeHost();
+
+  await runAgent(createSession(work, 'rules', 1_000_000), choice, host, [writeFile]);
+
+  assert.deepEqual(errors(events), []);
+  assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
 });
 
 test('a dropped connection after output keeps the partial answer', async () => {

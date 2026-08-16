@@ -436,6 +436,111 @@ test('an edit tool asks before changing a protected path', async () => {
   assert.equal(fs.readFileSync(config, 'utf8'), '[core]\n');
 });
 
+function watching(answers: ConfirmDecision[], backup?: (path: string) => void) {
+  const {ctx, asked, root} = session(answers);
+  const seen: Array<{path: string; bytes: string | null}> = [];
+  ctx.backup = (asked: string) => {
+    const target = path.join(root, asked);
+    seen.push({
+      path: asked,
+      bytes: fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null,
+    });
+    backup?.(asked);
+  };
+  return {ctx, asked, root, seen};
+}
+
+test('write_file is captured before it changes the file', async () => {
+  const {ctx, root, seen} = watching(['once']);
+  fs.writeFileSync(path.join(root, 'a.ts'), 'old\n');
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: 'a.ts', content: 'new\n'}),
+    ctx,
+  );
+
+  assert.deepEqual(seen, [{path: 'a.ts', bytes: 'old\n'}]);
+  assert.match(output.text, /^Wrote /);
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), 'new\n');
+});
+
+test('edit_file is captured before it changes the file', async () => {
+  const {ctx, root, seen} = watching(['once']);
+  fs.writeFileSync(path.join(root, 'a.ts'), 'a = 1\n');
+
+  const output = await runTool(
+    registry,
+    'edit_file',
+    JSON.stringify({path: 'a.ts', old_string: 'a = 1', new_string: 'a = 2'}),
+    ctx,
+  );
+
+  assert.deepEqual(seen, [{path: 'a.ts', bytes: 'a = 1\n'}]);
+  assert.equal(output.text, "Edited 'a.ts'.");
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), 'a = 2\n');
+});
+
+test('a write the user denied is never captured', async () => {
+  const {ctx, root, seen} = watching(['deny']);
+  fs.mkdirSync(path.join(root, '.git'), {recursive: true});
+  fs.writeFileSync(path.join(root, '.git', 'config'), '[core]\n');
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: '.git/config', content: 'x'}),
+    ctx,
+  );
+
+  assert.deepEqual(seen, []);
+  assert.match(output.text, /^Error: /);
+});
+
+test('a tool that writes nothing is never captured', async () => {
+  const {ctx, root, seen} = watching(['once']);
+  fs.writeFileSync(path.join(root, 'a.ts'), 'a = 1\n');
+
+  await runTool(registry, 'read_file', JSON.stringify({path: 'a.ts'}), ctx);
+  await bashCall(ctx, 'git diff');
+
+  assert.deepEqual(seen, []);
+});
+
+test('a capture that fails does not fail the write', async () => {
+  const {ctx, root, seen} = watching(['once'], () => {
+    throw new Error('disk full');
+  });
+  fs.writeFileSync(path.join(root, 'a.ts'), 'old\n');
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: 'a.ts', content: 'new\n'}),
+    ctx,
+  );
+
+  assert.equal(seen.length, 1);
+  assert.match(output.text, /^Wrote /);
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), 'new\n');
+});
+
+test('a write runs the same when nothing is capturing', async () => {
+  const {ctx, root} = session(['once']);
+  fs.writeFileSync(path.join(root, 'a.ts'), 'old\n');
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: 'a.ts', content: 'new\n'}),
+    ctx,
+  );
+
+  assert.match(output.text, /^Wrote /);
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), 'new\n');
+});
+
 test('bash runs a real command and reports its exit code', async () => {
   const root = workspace();
   const {host} = hostThatAnswers('once');

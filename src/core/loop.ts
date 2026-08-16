@@ -16,7 +16,9 @@ import {
   type Session,
 } from './session.js';
 import type {SessionStore} from './store.js';
+import {captureBefore} from './history.js';
 import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
+import {displayPath, resolveInWorkspace} from './tools/paths.js';
 import type {Tool} from './tools/registry.js';
 
 export const MAX_TURNS = 20;
@@ -69,6 +71,14 @@ export async function runAgent(
   let warned = false;
   let checkpoints = true;
   let reportedThreshold = false;
+
+  const backup = store
+    ? (asked: string): void => {
+        const target = resolveInWorkspace(session.root, asked);
+        const before = captureBefore(store.dir, target);
+        store.appendCode(displayPath(session.root, target), before);
+      }
+    : undefined;
 
   const save = (usage: Usage): void => {
     if (!store) return;
@@ -215,6 +225,7 @@ export async function runAgent(
           root: session.root,
           host,
           allowed: session.allowed,
+          backup,
         });
         session.messages.push({
           role: 'tool',
