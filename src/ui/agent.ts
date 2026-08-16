@@ -1,6 +1,7 @@
 import {useRef, useState} from 'react';
 import type {ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
+import {restoreFiles, restorePlan} from '../core/history.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
@@ -25,7 +26,7 @@ import {
   type ReadyInfo,
 } from './events.js';
 import {restoreView} from './restore.js';
-import {rewindRows, type RewindRow} from './rewind.js';
+import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
 export const PERMISSION_LABEL = 'asks before anything git cannot undo';
 
@@ -44,6 +45,8 @@ export type Agent = {
   pickRewind: () => void;
   checkpoints: () => RewindRow[];
   rewind: (id: string) => void;
+  cancelRewind: () => void;
+  applyRewind: (id: string) => void;
   context: () => void;
   compact: () => void;
   shutdown: () => void;
@@ -215,22 +218,61 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
 
   const rewind = (id: string) => {
     if (phase.kind !== 'rewinding') return;
+    const store = storeRef.current;
+    if (!store) {
+      setPhase({kind: 'idle'});
+      return;
+    }
+
+    let plan: Map<string, string | null>;
+    let title: string;
+    try {
+      const cut = rewindRows(store.records()).find((row) => row.id === id);
+      if (!cut) {
+        setPhase({kind: 'idle'});
+        return;
+      }
+      title = truncate(cut.title, 60);
+      plan = restorePlan(store.records(), cut.at);
+    } catch {
+      setPhase({kind: 'idle'});
+      commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
+      return;
+    }
+    if (plan.size === 0) {
+      applyRewind(id);
+      return;
+    }
+    setPhase({kind: 'rewind-confirm', id, title, files: rewindFiles(plan)});
+  };
+
+  const cancelRewind = () => {
+    if (phase.kind !== 'rewind-confirm') return;
+    setPhase({kind: 'idle'});
+  };
+
+  const applyRewind = (id: string) => {
     setPhase({kind: 'idle'});
     const store = storeRef.current;
     if (!store) return;
 
     let kept: Item[];
-    let title: string;
+    let notice: string;
     try {
       const cut = rewindRows(store.records()).find((row) => row.id === id);
       if (!cut) return;
-      title = truncate(cut.title, 60);
+      const counts = restoreFiles(
+        store.dir,
+        session.root,
+        restorePlan(store.records(), cut.at),
+      );
       store.rewind(cut.at);
       const after = store.records();
       restoreMessages(session, messagesOf(after));
       setMeasured(session, lastUsageOf(after)?.total ?? 0);
       store.seed(session.messages);
       kept = viewOf(after) as Item[];
+      notice = rewoundNotice(truncate(cut.title, 60), counts);
     } catch {
       commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
       return;
@@ -238,7 +280,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     liveTextRef.current = '';
     setStreamText('');
     setGeneration((current) => current + 1);
-    setCommitted([{kind: 'notice', text: `rewound to before "${title}"`}, ...kept]);
+    setCommitted([{kind: 'notice', text: notice}, ...kept]);
   };
 
   const resume = (id: string) => {
@@ -339,6 +381,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     pickRewind,
     checkpoints,
     rewind,
+    cancelRewind,
+    applyRewind,
     context,
     compact,
     shutdown,

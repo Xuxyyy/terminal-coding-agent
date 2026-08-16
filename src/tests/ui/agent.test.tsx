@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {render} from 'ink';
-import {listSessions} from '../../core/projects.js';
+import {listSessions, sessionsDir} from '../../core/projects.js';
 import {loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import type {
@@ -825,6 +825,206 @@ test('a rewind in a session that never finished a turn measures nothing', async 
 
   const status = lastContext(agent.current!.committed);
   assert.equal(status.measured, false);
+});
+
+function writing(target: string, content: string): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk('call-1', 'write_file', JSON.stringify({path: target, content})),
+    finishChunk('tool_calls'),
+    usageChunk(10, 5),
+  );
+}
+
+function editingModel(
+  edits: Record<number, AsyncIterable<unknown>>,
+): ReturnType<typeof fakeModel> {
+  return fakeModel((turn) => edits[turn] ?? answer('done'));
+}
+
+function noticeOf(items: Item[]): string {
+  const first = items[0];
+  assert.equal(first!.kind, 'notice');
+  return (first as NoticeItem).text;
+}
+
+function sessionDir(root: string): string {
+  const home = process.env.ACC_HOME!;
+  const [meta] = listSessions(root, home);
+  return path.join(sessionsDir(root, home), meta!.id);
+}
+
+test('confirming a rewind puts the old bytes back', async () => {
+  const root = workspace();
+  const note = path.join(root, 'note.txt');
+  fs.writeFileSync(note, 'one\n');
+  const {choice} = editingModel({1: writing('note.txt', 'two\n')});
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  assert.equal(fs.readFileSync(note, 'utf8'), 'two\n');
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  const asking = agent.current!.phase;
+  assert.equal(asking.kind, 'rewind-confirm');
+  assert.deepEqual(asking.kind === 'rewind-confirm' ? asking.files : [], [
+    {path: 'note.txt', deleted: false},
+  ]);
+  agent.current!.applyRewind(rows[0]!.id);
+  await tick();
+  unmount();
+
+  assert.equal(fs.readFileSync(note, 'utf8'), 'one\n');
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.match(noticeOf(agent.current!.committed), /1 file restored/);
+});
+
+test('a file the agent created is taken away again', async () => {
+  const root = workspace();
+  const made = path.join(root, 'new.txt');
+  const {choice} = editingModel({1: writing('new.txt', 'made up\n')});
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  assert.equal(fs.existsSync(made), true);
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  const asking = agent.current!.phase;
+  assert.deepEqual(asking.kind === 'rewind-confirm' ? asking.files : [], [
+    {path: 'new.txt', deleted: true},
+  ]);
+  agent.current!.applyRewind(rows[0]!.id);
+  await tick();
+  unmount();
+
+  assert.equal(fs.existsSync(made), false);
+  assert.match(noticeOf(agent.current!.committed), /1 file deleted/);
+});
+
+test('a rewind whose copy went missing still rewinds and says so', async () => {
+  const root = workspace();
+  const note = path.join(root, 'note.txt');
+  fs.writeFileSync(note, 'one\n');
+  const {choice} = editingModel({1: writing('note.txt', 'two\n')});
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  fs.rmSync(path.join(sessionDir(root), 'files'), {recursive: true, force: true});
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  agent.current!.applyRewind(rows[0]!.id);
+  await tick();
+  unmount();
+
+  assert.equal(fs.readFileSync(note, 'utf8'), 'two\n');
+  assert.match(noticeOf(agent.current!.committed), /1 file had no saved copy/);
+  assert.deepEqual(loadSession(root, null, process.env.ACC_HOME!).messages, []);
+});
+
+test('esc at the confirm leaves the files and the conversation alone', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const note = path.join(root, 'note.txt');
+  fs.writeFileSync(note, 'one\n');
+  const {choice} = editingModel({1: writing('note.txt', 'two\n')});
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  const before = agent.current!.committed;
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  agent.current!.cancelRewind();
+  await tick();
+  unmount();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.deepEqual(agent.current!.committed, before);
+  assert.equal(fs.readFileSync(note, 'utf8'), 'two\n');
+  assert.equal(
+    fs.readFileSync(path.join(sessionDir(root), 'session.jsonl'), 'utf8').includes('"rewind"'),
+    false,
+  );
+  assert.deepEqual(
+    loadSession(root, null, home).messages.map((message) => message.role),
+    ['user', 'assistant', 'tool', 'assistant'],
+  );
+});
+
+test('a rewind that changes no file never asks', async () => {
+  const root = workspace();
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.send('and the readme');
+  await settle(agent);
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  unmount();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.equal(noticeOf(agent.current!.committed), 'rewound to before "and the readme"');
+});
+
+test('a rewind across a summary brings back the conversation and the files', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const note = path.join(root, 'note.txt');
+  fs.writeFileSync(note, 'one\n');
+  const {choice} = editingModel({
+    1: writing('note.txt', 'two\n'),
+    3: writing('note.txt', 'three\n'),
+    5: summaryOf(SUMMARY),
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.send('and the total');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+  assert.equal(fs.readFileSync(note, 'utf8'), 'three\n');
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'rewind-confirm');
+  agent.current!.applyRewind(rows[1]!.id);
+  await tick();
+  unmount();
+
+  assert.equal(fs.readFileSync(note, 'utf8'), 'two\n');
+  const stored = loadSession(root, null, home);
+  assert.equal(occurrences(stored.messages, SUMMARY), 0);
+  assert.equal(occurrences(stored.messages, 'and the total'), 0);
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
 });
 
 test('a turn after a rewind across a compaction writes each message once', async () => {

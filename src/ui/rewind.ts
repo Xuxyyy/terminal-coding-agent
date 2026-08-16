@@ -1,5 +1,7 @@
 import stringWidth from 'string-width';
+import type {RestoreCounts} from '../core/history.js';
 import {checkpointsOf, type SessionRecord} from '../core/records.js';
+import type {RewindFile} from './events.js';
 import {textOf} from './restore.js';
 
 export type RewindRow = {
@@ -31,6 +33,28 @@ export function rewindRows(records: SessionRecord[]): RewindRow[] {
       {id, at, title: title || '(empty message)', beforeSummary: at < summary},
     ];
   });
+}
+
+export function rewindFiles(plan: Map<string, string | null>): RewindFile[] {
+  return [...plan]
+    .sort(([one], [two]) => one.localeCompare(two))
+    .map(([target, before]) => ({path: target, deleted: before === null}));
+}
+
+function files(n: number): string {
+  return `${n} file${n === 1 ? '' : 's'}`;
+}
+
+export function rewoundNotice(title: string, counts: RestoreCounts): string {
+  const parts = [`rewound to before "${title}"`];
+  const done: string[] = [];
+  if (counts.restored) done.push(`${files(counts.restored)} restored`);
+  if (counts.deleted) {
+    done.push(done.length ? `${counts.deleted} deleted` : `${files(counts.deleted)} deleted`);
+  }
+  if (done.length) parts.push(done.join(', '));
+  if (counts.skipped) parts.push(`${files(counts.skipped)} had no saved copy`);
+  return parts.join(' · ');
 }
 
 export function rewindLine(row: RewindRow, active: boolean, width: number): string {

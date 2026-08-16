@@ -10,6 +10,7 @@ import {CommandInput, commandMatches} from './components/CommandInput.js';
 import {Confirm} from './components/Confirm.js';
 import {Markdown} from './components/Markdown.js';
 import {Picker} from './components/Picker.js';
+import {RewindConfirm} from './components/RewindConfirm.js';
 import {SessionPicker} from './components/SessionPicker.js';
 import {NOTHING_TO_REWIND, rewindLine} from './rewind.js';
 import {sessionRows} from './sessions.js';
@@ -42,6 +43,8 @@ export function App({
     pickRewind,
     checkpoints,
     rewind,
+    cancelRewind,
+    applyRewind,
     context,
     compact,
     shutdown,
@@ -168,6 +171,13 @@ export function App({
             onPick={rewind}
             onCancel={cancelPick}
             initial={rewindable.length - 1}
+          />
+        ) : phase.kind === 'rewind-confirm' ? (
+          <RewindConfirm
+            title={phase.title}
+            files={phase.files}
+            onConfirm={() => applyRewind(phase.id)}
+            onCancel={cancelRewind}
           />
         ) : phase.kind === 'busy' ? (
           <Box flexDirection="column">
