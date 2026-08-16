@@ -131,6 +131,7 @@ export function fakeStore(overrides: Partial<SessionStore> = {}): SessionStore {
     appendTurn() {},
     appendCompact() {},
     appendView() {},
+    appendCode() {},
     records: () => [],
     rewind() {},
     close() {},

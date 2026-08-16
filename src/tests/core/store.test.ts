@@ -143,7 +143,7 @@ test('a record of an unknown kind is ignored, not an error', () => {
   store.close();
   fs.appendFileSync(
     path.join(store.dir, 'session.jsonl'),
-    `${JSON.stringify({kind: 'code', at: '9f3a1c07', files: {}})}\n`,
+    `${JSON.stringify({kind: 'something-new', at: '9f3a1c07', files: {}})}\n`,
   );
 
   const restored = loadSession(work, null, root);
@@ -483,6 +483,76 @@ test('the next append after a rewind continues from the cut', () => {
     'session.jsonl',
   ]);
   assert.equal(store.records().length, 5);
+});
+
+test('a file version is one record in the log', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendCode('src/a.ts', 'f1e2d3');
+  store.appendCode('src/new.ts', null);
+  store.close();
+
+  assert.deepEqual(records(store.dir), [
+    {kind: 'code', path: 'src/a.ts', before: 'f1e2d3'},
+    {kind: 'code', path: 'src/new.ts', before: null},
+  ]);
+  assert.deepEqual(store.records(), [
+    {kind: 'code', path: 'src/a.ts', before: 'f1e2d3'},
+    {kind: 'code', path: 'src/new.ts', before: null},
+  ]);
+});
+
+test('a file version changes neither the conversation nor the screen', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  const asked = user('fix the cart');
+  store.appendMessage(asked);
+  store.appendView([{kind: 'task', text: 'fix the cart'}]);
+  store.appendCode('src/cart.ts', 'f1e2d3');
+  store.appendTurn([asked, assistant('fixed')], usage(10));
+  store.appendMessage(user('and the readme'));
+  store.close();
+
+  const restored = loadSession(work, null, root);
+
+  assert.deepEqual(restored.messages, [
+    user('fix the cart'),
+    assistant('fixed'),
+    user('and the readme'),
+  ]);
+  assert.deepEqual(restored.view, [{kind: 'task', text: 'fix the cart'}]);
+  assert.deepEqual(
+    checkpointsOf(store.records()).map((checkpoint) => checkpoint.at),
+    [0, 4],
+  );
+});
+
+test('a rewind drops the file versions above the cut and keeps those below', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  const first = user('fix the cart');
+  store.appendMessage(first);
+  store.appendCode('src/cart.ts', 'aaaa');
+  store.appendTurn([first, assistant('fixed')], usage(10));
+  const second = user('and the readme');
+  store.appendMessage(second);
+  store.appendCode('README.md', null);
+  store.appendTurn([second, assistant('updated')], usage(20));
+
+  store.rewind(3);
+  store.close();
+
+  assert.deepEqual(
+    store.records().filter((record) => record.kind === 'code'),
+    [{kind: 'code', path: 'src/cart.ts', before: 'aaaa'}],
+  );
+  assert.equal(store.records().length, 3);
 });
 
 function askedAt(

@@ -51,6 +51,7 @@ export type SessionStore = {
   appendTurn(messages: Message[], usage: Usage): void;
   appendCompact(summary: Message, replaced: number): void;
   appendView(items: unknown[]): void;
+  appendCode(path: string, before: string | null): void;
   records(): SessionRecord[];
   rewind(to: number): void;
   close(): void;
@@ -145,6 +146,10 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
     appendView(items) {
       if (items.length === 0) return;
       appendRecord(dir, {kind: 'view', items});
+      writeMeta();
+    },
+    appendCode(path, before) {
+      appendRecord(dir, {kind: 'code', path, before});
       writeMeta();
     },
     records() {

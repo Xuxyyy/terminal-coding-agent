@@ -10,6 +10,7 @@ export type SessionRecord =
   | {kind: 'message'; id: string; message: Message}
   | {kind: 'messages'; messages: Message[]; usage: Usage}
   | {kind: 'compact'; summary: string; replaced: number}
+  | {kind: 'code'; path: string; before: string | null}
   | {kind: 'rewind'; to: number};
 
 const RECORDS = 'session.jsonl';
