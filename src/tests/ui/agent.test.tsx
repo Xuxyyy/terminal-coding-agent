@@ -196,7 +196,7 @@ test('resuming restores the context reading of the last turn', async () => {
   assert.equal(lastContext(two.agent.current!.committed).used, 15);
 });
 
-test('a rewind after a resume forgets the measured reading', async () => {
+test('a rewind after a resume keeps the measured reading', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
   const first = fakeModel(() => answer('done'));
@@ -228,12 +228,8 @@ test('a rewind after a resume forgets the measured reading', async () => {
     ['fix the cart', 'and the readme'],
   );
   const status = lastContext(two.agent.current!.committed);
-  assert.equal(status.measured, false);
-  assert.equal(
-    status.system! + status.tools! + status.conversation!,
-    status.used,
-  );
-  assert.ok(status.used > 0, `expected the prompt to still cost, got ${status.used}`);
+  assert.equal(status.measured, true);
+  assert.equal(status.used, 15);
 });
 
 test('cancelling the picker leaves the conversation alone', async () => {
@@ -764,6 +760,71 @@ test('a rewind to before the summary brings the conversation back', async () => 
     ['fix the cart', 'done'],
   );
   assert.equal(occurrences(stored.messages, SUMMARY), 0);
+});
+
+test('a rewind across a summary measures the context from the turn before it', async () => {
+  const root = workspace();
+  const {agent, unmount, rows} = await compactedTurns(root);
+
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  agent.current!.context();
+  await tick();
+  unmount();
+
+  const status = lastContext(agent.current!.committed);
+  assert.equal(status.measured, true);
+  assert.equal(status.used, 15);
+});
+
+test('a rewind that lands after a summary falls back to the estimate', async () => {
+  const root = workspace();
+  const {choice} = summarizingModel();
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  agent.current!.compact();
+  await settle(agent);
+  agent.current!.send('and the total');
+  await settle(agent);
+
+  const rows = agent.current!.checkpoints();
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[1]!.id);
+  await tick();
+  agent.current!.context();
+  await tick();
+  unmount();
+
+  const status = lastContext(agent.current!.committed);
+  assert.equal(status.measured, false);
+  assert.ok(status.used > 0, `expected the prompt to still cost, got ${status.used}`);
+});
+
+test('a rewind in a session that never finished a turn measures nothing', async () => {
+  const root = workspace();
+  const {choice} = fakeModel(() => statusError(400));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+
+  const rows = agent.current!.checkpoints();
+  assert.equal(rows.length, 1);
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(rows[0]!.id);
+  await tick();
+  agent.current!.context();
+  await tick();
+  unmount();
+
+  const status = lastContext(agent.current!.committed);
+  assert.equal(status.measured, false);
 });
 
 test('a turn after a rewind across a compaction writes each message once', async () => {

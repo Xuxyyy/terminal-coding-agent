@@ -4,7 +4,7 @@ import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
-import {messagesOf, viewOf} from '../core/records.js';
+import {lastUsageOf, messagesOf, viewOf} from '../core/records.js';
 import {
   addTask,
   clearSession,
@@ -228,6 +228,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       store.rewind(cut.at);
       const after = store.records();
       restoreMessages(session, messagesOf(after));
+      setMeasured(session, lastUsageOf(after)?.total ?? 0);
       store.seed(session.messages);
       kept = viewOf(after) as Item[];
     } catch {
