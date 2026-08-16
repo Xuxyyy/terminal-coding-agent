@@ -5,6 +5,13 @@ import stringWidth from 'string-width';
 import {liveRecords, type SessionRecord} from '../../core/records.js';
 import {Picker} from '../../ui/components/Picker.js';
 import {
+  DELETED_MARK,
+  RewindConfirm,
+  SHELL_CAVEAT,
+  SHOWN_FILES,
+} from '../../ui/components/RewindConfirm.js';
+import type {RewindFile} from '../../ui/events.js';
+import {
   BEFORE_SUMMARY,
   NOTHING_TO_REWIND,
   rewindLine,
@@ -42,7 +49,7 @@ function compacted(): SessionRecord[] {
   return [...records(), {kind: 'compact', summary: 'we fixed the cart', replaced: 6}];
 }
 
-function drawn(rows: ReturnType<typeof rewindRows>): string[] {
+function screen(draw: (stdout: NodeJS.WriteStream) => ReturnType<typeof render>): string[] {
   let buffer = '';
   const stdout = {
     columns: 60,
@@ -54,26 +61,42 @@ function drawn(rows: ReturnType<typeof rewindRows>): string[] {
     on() {},
     off() {},
     removeListener() {},
-  };
-  const instance = render(
-    <Picker
-      title="Rewind to before a message"
-      rows={rows}
-      hint="↑↓ to move · enter to rewind · esc to cancel"
-      empty="Nothing to rewind yet."
-      renderRow={rewindLine}
-      onPick={() => {}}
-      onCancel={() => {}}
-      initial={rows.length - 1}
-    />,
-    {
-      stdout: stdout as unknown as NodeJS.WriteStream,
-      patchConsole: false,
-      exitOnCtrlC: false,
-    },
-  );
+  } as unknown as NodeJS.WriteStream;
+  const instance = draw(stdout);
   instance.unmount();
   return buffer.replace(ANSI, '').split('\n');
+}
+
+function drawnConfirm(files: RewindFile[]): string[] {
+  return screen((stdout) =>
+    render(
+      <RewindConfirm
+        title="fix the cart"
+        files={files}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+      {stdout, patchConsole: false, exitOnCtrlC: false},
+    ),
+  );
+}
+
+function drawn(rows: ReturnType<typeof rewindRows>): string[] {
+  return screen((stdout) =>
+    render(
+      <Picker
+        title="Rewind to before a message"
+        rows={rows}
+        hint="↑↓ to move · enter to rewind · esc to cancel"
+        empty="Nothing to rewind yet."
+        renderRow={rewindLine}
+        onPick={() => {}}
+        onCancel={() => {}}
+        initial={rows.length - 1}
+      />,
+      {stdout, patchConsole: false, exitOnCtrlC: false},
+    ),
+  );
 }
 
 test('the picker lists one row per user message', () => {
@@ -164,6 +187,48 @@ test('a narrow width cuts the title and keeps the mark whole', () => {
   assert.ok(line.endsWith(BEFORE_SUMMARY));
   assert.equal(stringWidth(line), 40);
   assert.ok(line.includes('…'));
+});
+
+function file(target: string, deleted = false): RewindFile {
+  return {path: target, deleted};
+}
+
+test('only the files that did not exist yet are marked as deleted', () => {
+  const lines = drawnConfirm([file('cart.ts'), file('note.txt', true)]);
+
+  const cart = lines.find((line) => line.includes('cart.ts'));
+  const note = lines.find((line) => line.includes('note.txt'));
+  assert.ok(cart && note, 'expected both files on the screen');
+  assert.equal(cart.includes(DELETED_MARK), false);
+  assert.ok(note.includes(DELETED_MARK));
+  assert.ok(lines.some((line) => line.includes('2 files will be restored')));
+});
+
+test('a long list of files is capped and says how many are left', () => {
+  const many = Array.from({length: 14}, (_, n) => file(`src/f${n}.ts`));
+
+  const lines = drawnConfirm(many);
+
+  const listed = lines.filter((line) => /src\/f\d+\.ts/.test(line));
+  assert.equal(listed.length, SHOWN_FILES);
+  assert.ok(lines.some((line) => line.includes('… and 4 more')));
+  assert.ok(lines.some((line) => line.includes('14 files will be restored')));
+});
+
+function flowed(lines: string[]): string {
+  return lines
+    .map((line) => line.replace(/[│╭╮╰╯─]/g, ''))
+    .join(' ')
+    .replace(/\s+/g, ' ');
+}
+
+test('the shell caveat is printed however many files there are', () => {
+  const one = drawnConfirm([file('cart.ts')]);
+  const many = drawnConfirm([file('cart.ts'), file('total.ts'), file('note.txt', true)]);
+
+  assert.ok(flowed(one).includes(SHELL_CAVEAT));
+  assert.ok(flowed(many).includes(SHELL_CAVEAT));
+  assert.ok(one.some((line) => line.includes('1 file will be restored')));
 });
 
 test('a summary does not hide the messages before it', () => {

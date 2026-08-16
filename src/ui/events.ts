@@ -43,12 +43,15 @@ export type Item =
 
 import type {ConfirmRequest} from '../core/host.js';
 
+export type RewindFile = {path: string; deleted: boolean};
+
 export type Phase =
   | {kind: 'idle'}
   | {kind: 'busy'; label?: string}
   | {kind: 'confirming'; request: ConfirmRequest}
   | {kind: 'picking'}
   | {kind: 'rewinding'}
+  | {kind: 'rewind-confirm'; id: string; title: string; files: RewindFile[]}
   | {kind: 'closed'};
 
 export function truncate(text: string, max: number): string {
