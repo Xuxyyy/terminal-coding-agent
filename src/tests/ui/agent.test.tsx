@@ -363,6 +363,40 @@ test('clearing the repl starts a session that forgets the old one', async () => 
   assert.equal(JSON.stringify(newest.messages).includes('fix the cart'), false);
 });
 
+test('the session a clear left behind is still there to resume', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  const [older] = listSessions(root, home);
+  agent.current!.clear();
+  agent.current!.send('something else');
+  await settle(agent);
+
+  const both = listSessions(root, home);
+  assert.equal(both.length, 2);
+  const newer = both.find((meta) => meta.id !== older!.id);
+  assert.ok(newer, 'expected the clear to have started a second session');
+
+  agent.current!.pick();
+  await tick();
+  agent.current!.resume(older!.id);
+  await tick();
+
+  const items = agent.current!.committed;
+  assert.match((items[1] as NoticeItem).text, /^restored 2 messages/);
+  assert.equal((items[2] as TaskItem).text, 'fix the cart');
+  unmount();
+
+  const back = loadSession(root, older!.id, home);
+  assert.equal(JSON.stringify(back.messages).includes('fix the cart'), true);
+  const kept = loadSession(root, newer.id, home);
+  assert.equal(JSON.stringify(kept.messages).includes('something else'), true);
+});
+
 const SUMMARY =
   'The user asked for the cart to be fixed and it was fixed in cart.ts. ' +
   'No other file was touched and nothing is left to do on the cart.';
