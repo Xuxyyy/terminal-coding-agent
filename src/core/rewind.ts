@@ -6,8 +6,9 @@ import type {SessionStore} from './store.js';
 export type RewindOutcome = {counts: RestoreCounts; kept: unknown[]};
 
 export const REWIND_NOTE =
-  'Some earlier turns were removed. The workspace may not match what they said, so read a ' +
-  'file from disk before relying on anything above about what it contains.';
+  'Some earlier turns were removed. What the turns above say about a file, that it exists or ' +
+  'what it holds, may be out of date, so read it from disk before relying on it. What they ' +
+  'asked for still stands: it is the workspace that may have moved on, not the goal.';
 
 export function rewindPlan(
   store: SessionStore,
