@@ -5,6 +5,10 @@ import type {SessionStore} from './store.js';
 
 export type RewindOutcome = {counts: RestoreCounts; kept: unknown[]};
 
+export const REWIND_NOTE =
+  'Some earlier turns were removed. The workspace may not match what they said, so read a ' +
+  'file from disk before relying on anything above about what it contains.';
+
 export function rewindPlan(
   store: SessionStore,
   at: number,
@@ -22,6 +26,7 @@ export function rewindSession(
   const after = store.records();
   restoreMessages(session, messagesOf(after));
   setMeasured(session, lastUsageOf(after)?.total ?? 0);
+  session.messages.push({role: 'user', content: REWIND_NOTE});
   store.seed(session.messages);
   return {counts, kept: viewOf(after)};
 }

@@ -6,7 +6,7 @@ import test from 'node:test';
 import type OpenAI from 'openai';
 import {captureBefore, filesDir} from '../../core/history.js';
 import {checkpointsOf} from '../../core/records.js';
-import {rewindSession} from '../../core/rewind.js';
+import {REWIND_NOTE, rewindSession} from '../../core/rewind.js';
 import {
   addTask,
   createSession,
@@ -115,7 +115,7 @@ test('a rewind survives quitting and reopening', () => {
 function onDisk() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-home-'));
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-work-'));
-  return {session: createSession(work, 'rules', 1_000), store: startSession(work, home)};
+  return {home, session: createSession(work, 'rules', 1_000), store: startSession(work, home)};
 }
 
 function turn(
@@ -204,7 +204,7 @@ test('a rewind brings the conversation and the measurement back', () => {
 
   rewindSession(store, session, checkpointsOf(store.records())[1]!.at);
 
-  assert.deepEqual(texts(session), ['rules', 'fix the cart', 'fixed']);
+  assert.deepEqual(texts(session), ['rules', 'fix the cart', 'fixed', REWIND_NOTE]);
   assert.equal(session.lastContextTokens, 50);
 });
 
@@ -215,8 +215,37 @@ test('a rewind to the very first message leaves nothing measured', () => {
 
   rewindSession(store, session, checkpointsOf(store.records())[0]!.at);
 
-  assert.deepEqual(texts(session), ['rules']);
+  assert.deepEqual(texts(session), ['rules', REWIND_NOTE]);
   assert.equal(session.lastContextTokens, 0);
+});
+
+test('the note is the last thing the model reads after a rewind', () => {
+  const {session, store} = onDisk();
+  turn(session, store, 'fix the cart', 'fixed', 50);
+  turn(session, store, 'and the readme', 'updated', 100);
+
+  rewindSession(store, session, checkpointsOf(store.records())[1]!.at);
+
+  assert.deepEqual(session.messages[session.messages.length - 1], {
+    role: 'user',
+    content: REWIND_NOTE,
+  });
+});
+
+test('the note stays in the run and never reaches the log', () => {
+  const {home, session, store} = onDisk();
+  turn(session, store, 'fix the cart', 'fixed', 50);
+  turn(session, store, 'and the readme', 'updated', 100);
+  rewindSession(store, session, checkpointsOf(store.records())[1]!.at);
+
+  store.appendTurn(session.messages, {prompt: 60, completion: 0, total: 60});
+
+  const saved = openSession(session.root, store.id, home);
+  assert.deepEqual(
+    saved.stored.messages.map((message) => message.content),
+    ['fix the cart', 'fixed'],
+  );
+  saved.store.close();
 });
 
 test('a rewind keeps the view items that survived the cut', () => {
