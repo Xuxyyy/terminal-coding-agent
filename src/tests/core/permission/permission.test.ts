@@ -4,17 +4,25 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {approvalKey, decide, type Outcome} from '../../../core/permission/decide.js';
+import {clearSession, createSession} from '../../../core/session.js';
+import type {Rules} from '../../../core/settings.js';
 
 const project = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-permission-')),
 );
 
-function command(text: string): Outcome {
-  return decide({kind: 'command', command: text}, project);
+function rules(some: Partial<Rules>): Rules {
+  return {allow: [], ask: [], deny: [], ...some};
 }
 
-function write(target: string): Outcome {
-  return decide({kind: 'write', path: target}, project);
+function command(text: string, some?: Partial<Rules>): Outcome {
+  const request = {kind: 'command', command: text} as const;
+  return some ? decide(request, project, rules(some)) : decide(request, project);
+}
+
+function write(target: string, some?: Partial<Rules>): Outcome {
+  const request = {kind: 'write', path: target} as const;
+  return some ? decide(request, project, rules(some)) : decide(request, project);
 }
 
 const QUIET = [
@@ -208,4 +216,86 @@ test('a write outside the project asks and cannot be remembered', () => {
   assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
   assert.match(outcome.reason, /outside the project/);
+});
+
+test('an allow rule stops a command being asked about', () => {
+  const outcome = command('python3 scripts/build.py', {
+    allow: ['python3 scripts/*'],
+  });
+
+  assert.equal(outcome.decision, 'allow');
+  assert.match(outcome.reason, /settings\.json/);
+  assert.equal(outcome.command, 'python3 scripts/build.py');
+});
+
+test('a deny rule refuses a command the classifier would have run', () => {
+  const outcome = command('ls', {deny: ['ls*']});
+
+  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.suppressible, false);
+  assert.match(outcome.reason, /settings\.json/);
+});
+
+test('an ask rule puts a prompt back on a quiet command', () => {
+  const outcome = command('ls', {ask: ['ls*']});
+
+  assert.equal(outcome.decision, 'ask');
+  assert.equal(outcome.suppressible, true);
+  assert.match(outcome.reason, /settings\.json/);
+});
+
+test('no allow rule can rescue a guardrail', () => {
+  const everything = {allow: ['*']};
+  const guardrails = [
+    'sudo rm -rf /',
+    'git push',
+    'dd of=/dev/sda',
+    'mkfs.ext4 /dev/sda',
+    'cat ../../outside.txt',
+    ':(){ :|:& };:',
+  ];
+
+  for (const text of guardrails) {
+    const outcome = command(text, everything);
+    assert.equal(outcome.decision, 'ask', text);
+    assert.equal(outcome.suppressible, false, text);
+    assert.doesNotMatch(outcome.reason, /settings\.json/, text);
+  }
+});
+
+test('a deny rule can still refuse a guardrail', () => {
+  const outcome = command('git push', {deny: ['git push*']});
+
+  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.suppressible, false);
+});
+
+test('empty rules reproduce the outcomes of the classifier alone', () => {
+  for (const text of [...QUIET, ...ADVERSARIAL]) {
+    assert.deepEqual(command(text, {}), command(text), text);
+  }
+  for (const text of QUIET) {
+    assert.equal(command(text, {}).decision, 'allow', text);
+  }
+  for (const text of ADVERSARIAL) {
+    const outcome = command(text, {});
+    assert.equal(outcome.decision, 'ask', text);
+    assert.equal(outcome.suppressible, false, text);
+  }
+});
+
+test('a rule never decides a write', () => {
+  assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
+  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'ask');
+});
+
+test('clearing the conversation keeps the rules', () => {
+  const session = createSession(project, 'system', 100);
+  session.rules = rules({allow: ['npm run *']});
+  session.allowed.add('bash ls');
+
+  clearSession(session);
+
+  assert.deepEqual(session.rules, rules({allow: ['npm run *']}));
+  assert.equal(session.allowed.size, 0);
 });

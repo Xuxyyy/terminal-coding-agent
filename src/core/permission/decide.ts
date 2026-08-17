@@ -1,5 +1,7 @@
+import {type Rules} from '../settings.js';
 import {classifyCommand, classifyWrite, type Classification, type Level} from './classify.js';
 import {hardenCommand} from './harden.js';
+import {ruleVerdict} from './rules.js';
 import {commandParts, splitStages} from './stages.js';
 
 export type Request =
@@ -28,12 +30,40 @@ function outcomeFor(classification: Classification, fallback?: string): Outcome 
   };
 }
 
-export function decide(request: Request, root: string): Outcome {
+const NO_RULES: Rules = {allow: [], ask: [], deny: []};
+
+const RULE_REASON = {
+  deny: 'denied by a rule in settings.json',
+  ask: 'a rule in settings.json asks about this',
+  allow: 'allowed by a rule in settings.json',
+};
+
+export function decide(
+  request: Request,
+  root: string,
+  rules: Rules = NO_RULES,
+): Outcome {
   if (request.kind === 'write') {
     return outcomeFor(classifyWrite(request.path, root));
   }
   const command = hardenCommand(request.command);
-  return {...outcomeFor(classifyCommand(command, root), request.reason), command};
+  const verdict = ruleVerdict(command, rules);
+  if (verdict === 'deny') {
+    return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false, command};
+  }
+  const classification = classifyCommand(command, root);
+  if (classification.level === 'escape') {
+    return {...outcomeFor(classification, request.reason), command};
+  }
+  if (verdict !== null) {
+    return {
+      decision: verdict,
+      reason: RULE_REASON[verdict],
+      suppressible: true,
+      command,
+    };
+  }
+  return {...outcomeFor(classification, request.reason), command};
 }
 
 export function approvalKey(request: Request): string {

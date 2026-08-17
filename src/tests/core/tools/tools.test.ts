@@ -29,7 +29,7 @@ function hostThatAnswers(...answers: ConfirmDecision[]) {
 }
 
 function context(root: string, host: Host): ToolContext {
-  return {root, host, allowed: new Set<string>()};
+  return {root, host, allowed: new Set<string>(), rules: {allow: [], ask: [], deny: []}};
 }
 
 const ran: string[] = [];

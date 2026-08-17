@@ -2,11 +2,13 @@ import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import type {DiffPayload, Host} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
+import type {Rules} from '../settings.js';
 
 export type ToolContext = {
   root: string;
   host: Host;
   allowed: Set<string>;
+  rules: Rules;
   backup?: (path: string) => void;
 };
 
@@ -66,7 +68,7 @@ async function permitted(
 ): Promise<Permission> {
   if (!tool.request) return {args};
   const request = tool.request(args);
-  const outcome = decide(request, ctx.root);
+  const outcome = decide(request, ctx.root, ctx.rules);
   if (outcome.decision === 'allow') return approved(request, args, outcome.command);
   if (outcome.decision === 'deny') return {denied: outcome.reason, args};
   const key = approvalKey(request);

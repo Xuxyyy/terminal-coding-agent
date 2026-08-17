@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
+import {rulesOf, type Rules} from './settings.js';
 import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
 import {toolDefinitions, tools as defaultTools, type Tool} from './tools/index.js';
 
@@ -18,6 +19,7 @@ export type Session = {
   systemPrompt: string;
   messages: OpenAI.ChatCompletionMessageParam[];
   allowed: Set<string>;
+  rules: Rules;
   usage: Usage;
   lastContextTokens: number;
   measuredAt: number;
@@ -35,6 +37,7 @@ export function createSession(
     systemPrompt,
     messages: [{role: 'system', content: systemPrompt}],
     allowed: new Set<string>(),
+    rules: rulesOf(),
     usage: {prompt: 0, completion: 0, total: 0},
     lastContextTokens: 0,
     measuredAt: 0,
