@@ -1,17 +1,15 @@
 import {useRef, useState} from 'react';
 import type {ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
-import {restoreFiles, restorePlan} from '../core/history.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import {systemPrompt} from '../core/prompt.js';
-import {lastUsageOf, messagesOf, viewOf} from '../core/records.js';
+import {rewindPlan, rewindSession} from '../core/rewind.js';
 import {
   addTask,
   clearSession,
   contextStatus,
   createSession,
-  restoreMessages,
   setMeasured,
   type Session,
 } from '../core/session.js';
@@ -233,7 +231,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
         return;
       }
       title = truncate(cut.title, 60);
-      plan = restorePlan(store.records(), cut.at);
+      plan = rewindPlan(store, cut.at);
     } catch {
       setPhase({kind: 'idle'});
       commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
@@ -261,18 +259,9 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     try {
       const cut = rewindRows(store.records()).find((row) => row.id === id);
       if (!cut) return;
-      const counts = restoreFiles(
-        store.dir,
-        session.root,
-        restorePlan(store.records(), cut.at),
-      );
-      store.rewind(cut.at);
-      const after = store.records();
-      restoreMessages(session, messagesOf(after));
-      setMeasured(session, lastUsageOf(after)?.total ?? 0);
-      store.seed(session.messages);
-      kept = viewOf(after) as Item[];
-      notice = rewoundNotice(truncate(cut.title, 60), counts);
+      const outcome = rewindSession(store, session, cut.at);
+      kept = outcome.kept as Item[];
+      notice = rewoundNotice(truncate(cut.title, 60), outcome.counts);
     } catch {
       commit([{kind: 'notice', text: 'could not rewind: the session was not written'}]);
       return;
