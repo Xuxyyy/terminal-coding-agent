@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {render} from 'ink';
 import stringWidth from 'string-width';
+import type {RestoreCounts} from '../../core/history.js';
 import {liveRecords, type SessionRecord} from '../../core/records.js';
 import {Picker} from '../../ui/components/Picker.js';
 import {
@@ -16,6 +17,7 @@ import {
   NOTHING_TO_REWIND,
   rewindLine,
   rewindRows,
+  rewoundNotice,
 } from '../../ui/rewind.js';
 
 const ESC = String.fromCharCode(27);
@@ -229,6 +231,45 @@ test('the shell caveat is printed however many files there are', () => {
   assert.ok(flowed(one).includes(SHELL_CAVEAT));
   assert.ok(flowed(many).includes(SHELL_CAVEAT));
   assert.ok(one.some((line) => line.includes('1 file will be restored')));
+});
+
+function counted(restored = 0, deleted = 0, skipped = 0): RestoreCounts {
+  return {restored, deleted, skipped};
+}
+
+test('the notice says how many files came back', () => {
+  assert.equal(
+    rewoundNotice('fix the cart', counted(2)),
+    'rewound to before "fix the cart" · 2 files restored',
+  );
+});
+
+test('the notice puts the deleted files beside the restored ones', () => {
+  assert.equal(
+    rewoundNotice('fix the cart', counted(2, 1)),
+    'rewound to before "fix the cart" · 2 files restored, 1 deleted',
+  );
+});
+
+test('a deletion on its own still names the files', () => {
+  assert.equal(
+    rewoundNotice('fix the cart', counted(0, 1)),
+    'rewound to before "fix the cart" · 1 file deleted',
+  );
+});
+
+test('a file with no saved copy gets its own clause', () => {
+  assert.equal(
+    rewoundNotice('fix the cart', counted(1, 0, 1)),
+    'rewound to before "fix the cart" · 1 file restored · 1 file had no saved copy',
+  );
+});
+
+test('a rewind that touched no file says only where it went', () => {
+  const notice = rewoundNotice('fix the cart', counted());
+
+  assert.equal(notice, 'rewound to before "fix the cart"');
+  assert.equal(notice.includes('·'), false);
 });
 
 test('a summary does not hide the messages before it', () => {
