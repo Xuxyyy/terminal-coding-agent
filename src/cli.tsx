@@ -2,12 +2,14 @@
 import {render} from 'ink';
 import {createClient} from './core/client.js';
 import {evictSessions} from './core/projects.js';
+import {loadSettings, settingsFiles} from './core/settings.js';
 import {App} from './ui/app.js';
 import {parseArgs} from './ui/args.js';
 import {dimText, formatExitSummary} from './ui/exit-summary.js';
 
 try {
   const options = parseArgs(process.argv.slice(2));
+  loadSettings(settingsFiles(options.workspaceRoot));
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('interactive mode requires a terminal');
   }
