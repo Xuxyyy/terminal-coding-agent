@@ -95,7 +95,7 @@ export function createClient(modelId?: string): ModelChoice {
 
 export type RawToolCall = {id: string; name: string; args: string};
 
-export type AssistantTurn = {
+export type AssistantResponse = {
   content: string;
   toolCalls: RawToolCall[];
   finishReason: string;
@@ -103,27 +103,27 @@ export type AssistantTurn = {
 };
 
 export class StreamFailure extends Error {
-  readonly partial: AssistantTurn;
+  readonly partial: AssistantResponse;
 
-  constructor(message: string, partial: AssistantTurn, cause?: unknown) {
+  constructor(message: string, partial: AssistantResponse, cause?: unknown) {
     super(message, {cause});
     this.name = 'StreamFailure';
     this.partial = partial;
   }
 }
 
-async function attemptTurn(
+async function attemptStep(
   choice: ModelChoice,
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
-): Promise<AssistantTurn> {
+): Promise<AssistantResponse> {
   let content = '';
   let finishReason = 'stop';
   let emitted = false;
   const calls: RawToolCall[] = [];
   const usage: Usage = {prompt: 0, completion: 0, total: 0};
-  const soFar = (): AssistantTurn => ({
+  const soFar = (): AssistantResponse => ({
     content,
     toolCalls: calls.filter(Boolean),
     finishReason,
@@ -183,8 +183,8 @@ export async function streamStep(
   toolDefs: ToolDefinition[],
   host: Host,
   retry: Partial<RetryOptions> = {},
-): Promise<AssistantTurn> {
-  return withRetry(() => attemptTurn(choice, messages, toolDefs, host), {
+): Promise<AssistantResponse> {
+  return withRetry(() => attemptStep(choice, messages, toolDefs, host), {
     signal: host.signal,
     ...retry,
   });
