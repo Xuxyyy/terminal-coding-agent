@@ -19,7 +19,7 @@ import {
   usageChunk,
 } from '../fakes.js';
 import type {AgentEvent} from '../../core/host.js';
-import {INTERRUPTED, MAX_TURNS, runAgent} from '../../core/loop.js';
+import {INTERRUPTED, MAX_STEPS, runAgent} from '../../core/loop.js';
 import {filesDir} from '../../core/history.js';
 import {createSession, type Session} from '../../core/session.js';
 import {startSession} from '../../core/store.js';
@@ -73,9 +73,9 @@ test('the agent asks to keep going instead of giving up', async () => {
 
   assert.equal(asked.length, 2);
   assert.equal(asked[0]!.command, 'continue');
-  assert.match(asked[0]!.reason, /20 turns/);
+  assert.match(asked[0]!.reason, /20 steps/);
   assert.equal(asked[0]!.suppressible, true);
-  assert.equal(calls(), MAX_TURNS * 2);
+  assert.equal(calls(), MAX_STEPS * 2);
 });
 
 test('answering no at the checkpoint stops the run', async () => {
@@ -85,7 +85,7 @@ test('answering no at the checkpoint stops the run', async () => {
   await runAgent(session(), choice, host, [noop]);
 
   assert.equal(asked.length, 1);
-  assert.equal(calls(), MAX_TURNS);
+  assert.equal(calls(), MAX_STEPS);
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
 

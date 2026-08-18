@@ -21,7 +21,7 @@ import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js'
 import {displayPath, resolveInWorkspace} from './tools/paths.js';
 import type {Tool} from './tools/registry.js';
 
-export const MAX_TURNS = 20;
+export const MAX_STEPS = 20;
 
 export const INTERRUPTED = '[interrupted by the user]';
 
@@ -95,18 +95,18 @@ export async function runAgent(
   };
 
   try {
-    for (let turn = 0; ; turn += 1) {
+    for (let step = 0; ; step += 1) {
       if (host.signal.aborted) return;
-      if (checkpoints && turn > 0 && turn % MAX_TURNS === 0) {
+      if (checkpoints && step > 0 && step % MAX_STEPS === 0) {
         const answer = await host.confirm({
           command: 'continue',
-          reason: `${turn} turns without finishing`,
+          reason: `${step} steps without finishing`,
           suppressible: true,
         });
         if (answer === 'deny') {
           host.onEvent({
             type: 'error',
-            message: `stopped after ${turn} turns without finishing`,
+            message: `stopped after ${step} steps without finishing`,
           });
           host.onEvent({type: 'turn_end', usage: total});
           return;
@@ -115,7 +115,7 @@ export async function runAgent(
       }
 
       if (
-        turn === 0 &&
+        step === 0 &&
         (overThreshold(session, process.env, registry) || session.clearingExhausted)
       ) {
         const freed = clearRecoverable(
@@ -155,7 +155,7 @@ export async function runAgent(
         session.clearingExhausted = false;
       }
 
-      if (turn > 0 && overThreshold(session, process.env, registry)) {
+      if (step > 0 && overThreshold(session, process.env, registry)) {
         const target = session.contextWindow * contextThreshold();
         const freed = clearRecoverable(session, target, registry);
         if (freed > 0) {
