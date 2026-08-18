@@ -27,7 +27,9 @@ export function capOutput(text: string): string {
 export const bash: Tool = {
   name: 'bash',
   description:
-    'Run a shell command in the workspace root. Use it to search (grep -rn), run tests, use git, and delete files.',
+    'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
+    'To search file contents use the grep tool instead; reach for a shell search only to build a pipeline, ' +
+    "to search git history, or to search another command's output.",
   schema,
   request(args) {
     const parsed = schema.parse(args);

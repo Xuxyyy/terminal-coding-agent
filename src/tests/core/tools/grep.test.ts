@@ -4,8 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js';
+import {bash} from '../../../core/tools/bash.js';
 import {grep} from '../../../core/tools/grep.js';
 import {runTool, type ToolContext} from '../../../core/tools/registry.js';
+import {systemPrompt} from '../../../core/prompt.js';
 
 function workspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-'));
@@ -181,4 +183,14 @@ test('grep never asks the user', async () => {
   assert.equal(asked.length, 0);
   assert.equal(grep.request, undefined);
   assert.doesNotMatch(text, /^Error: /);
+});
+
+test('nothing still teaches the model to search with grep -rn', () => {
+  assert.doesNotMatch(systemPrompt(process.cwd()), /grep -rn/);
+  assert.doesNotMatch(bash.description, /grep -rn/);
+});
+
+test('both steering strings name the grep tool', () => {
+  assert.match(systemPrompt(process.cwd()), /\bgrep\b/);
+  assert.match(bash.description, /\bgrep\b/);
 });
