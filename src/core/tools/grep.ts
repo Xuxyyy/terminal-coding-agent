@@ -100,6 +100,12 @@ function argv(args: Args, target: string): string[] {
   return flags;
 }
 
+export function searchArgv(raw: unknown): string[] {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) return [];
+  return ['rg', ...argv(parsed.data, parsed.data.path ?? '.')];
+}
+
 function ripgrep(args: string[], cwd: string, signal: AbortSignal): Promise<Run> {
   return new Promise((resolve, reject) => {
     const child = spawn('rg', args, {

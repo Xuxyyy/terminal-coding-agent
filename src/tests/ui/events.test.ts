@@ -15,11 +15,15 @@ import {
   noticeText,
   resultCount,
   resultStatus,
+  searchCommand,
+  shellQuote,
+  splitsCommand,
   statusFor,
   toolDescription,
   writeSummary,
   type Item,
 } from '../../ui/events.js';
+import {searchArgv} from '../../core/tools/grep.js';
 
 test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(
@@ -246,4 +250,74 @@ test('statusFor names the tool that is running', () => {
   assert.equal(statusFor('', items), 'Running bash…');
   assert.equal(statusFor('partial answer', items), 'Responding…');
   assert.equal(statusFor('', []), 'Thinking…');
+});
+
+test('a grep row carries no headline, only its command', () => {
+  const call = {pattern: 'renderWidget', output_mode: 'content'};
+
+  assert.equal(toolDescription('grep', call), '');
+  assert.equal(
+    formatArgs('grep', call),
+    "rg --stats --no-require-git --hidden -n --glob '!.git' --regexp renderWidget .",
+  );
+});
+
+test('a grep command always drops to its own line, a bash one only with a description', () => {
+  assert.equal(splitsCommand('grep', ''), true);
+  assert.equal(splitsCommand('bash', ''), false);
+  assert.equal(splitsCommand('bash', 'Run the project test suite'), true);
+  assert.equal(splitsCommand('read_file', ''), false);
+});
+
+test('the command under a grep row is the argv the tool really spawns', () => {
+  const call = {pattern: 'widget', glob: '*.ts', path: 'src'};
+
+  assert.deepEqual(searchArgv(call), [
+    'rg',
+    '--stats',
+    '--no-require-git',
+    '--hidden',
+    '-l',
+    '--glob',
+    '*.ts',
+    '--glob',
+    '!.git',
+    '--regexp',
+    'widget',
+    'src',
+  ]);
+  assert.equal(searchCommand(call), searchArgv(call).map(shellQuote).join(' '));
+});
+
+test('searchCommand carries the flags the model chose', () => {
+  assert.match(searchCommand({pattern: 'w', output_mode: 'count'}), / -c /);
+  assert.match(searchCommand({pattern: 'w', case_insensitive: true}), / -i /);
+  assert.match(
+    searchCommand({pattern: 'w', output_mode: 'content', context: 2}),
+    / -n -C 2 /,
+  );
+  assert.match(searchCommand({pattern: 'w'}), / -l /);
+});
+
+test('shellQuote quotes only what a shell would need quoted', () => {
+  assert.equal(shellQuote('renderWidget'), 'renderWidget');
+  assert.equal(shellQuote('function render'), "'function render'");
+  assert.equal(shellQuote('render.*Widget'), "'render.*Widget'");
+  assert.equal(shellQuote("it's"), '"it\'s"');
+  assert.equal(shellQuote(''), "''");
+});
+
+test('a grep command line quotes the pattern and the globs', () => {
+  const line = searchCommand({pattern: 'function render', glob: '*.ts'});
+
+  assert.match(line, /'function render'/);
+  assert.match(line, /--glob '\*\.ts'/);
+  assert.match(line, /--glob '!\.git'/);
+});
+
+test('a grep row says nothing when the arguments are unusable', () => {
+  assert.equal(searchCommand({}), '');
+  assert.equal(searchCommand(null), '');
+  assert.equal(formatArgs('grep', {}), '');
+  assert.equal(toolDescription('grep', {}), '');
 });

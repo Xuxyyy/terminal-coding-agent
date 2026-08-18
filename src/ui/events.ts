@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type {AgentEvent, DiffPayload} from '../core/host.js';
 import type {ContextStatus} from '../core/session.js';
+import {searchArgv} from '../core/tools/grep.js';
 
 export type {ContextStatus};
 
@@ -79,12 +80,36 @@ export function toolDescription(name: string, args: unknown): string {
   return truncate(value.replace(/\s+/g, ' ').trim(), 60);
 }
 
+const SEARCH_COMMAND_MAX = 200;
+
+const DETAIL_TOOLS = new Set(['grep']);
+
+export function splitsCommand(name: string, description: string): boolean {
+  return description !== '' || DETAIL_TOOLS.has(name);
+}
+
+const SHELL_SPECIAL = /[\s'"\\|&;<>()$`*?[\]{}!#~]/;
+
+export function shellQuote(text: string): string {
+  if (text === '') return "''";
+  if (!SHELL_SPECIAL.test(text)) return text;
+  if (!text.includes("'")) return `'${text}'`;
+  return `"${text.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
+export function searchCommand(args: unknown): string {
+  const parts = searchArgv(args);
+  if (parts.length === 0) return '';
+  return truncate(parts.map(shellQuote).join(' '), SEARCH_COMMAND_MAX);
+}
+
 export function formatArgs(
   name: string,
   args: unknown,
   workspaceRoot?: string,
 ): string {
   if (!args || typeof args !== 'object') return '';
+  if (name === 'grep') return searchCommand(args);
   const key = ARG_KEY[name];
   if (!key) return '';
   const value = (args as Record<string, unknown>)[key];

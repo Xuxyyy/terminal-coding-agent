@@ -7,6 +7,7 @@ import {
   noticeText,
   resultCount,
   resultStatus,
+  splitsCommand,
   toolDescription,
   writeSummary,
 } from '../../events.js';
@@ -71,6 +72,8 @@ export function ToolEntry({
   const description = toolDescription(name, args);
   const status = statusNode(name, result, diff, awaitingApproval);
   const summaryArgs = formatArgs(name, args, workspaceRoot);
+  const below = summaryArgs !== '' && splitsCommand(name, description);
+  const inline = description || (below ? '' : summaryArgs);
   const failure = result === null ? null : failureOutput(name, result);
   const notice = result === null ? null : noticeText(result);
   return (
@@ -78,9 +81,7 @@ export function ToolEntry({
       <Text color={theme.foreground}>
         <Text color={theme.tool}>{' • '}</Text>
         <Text bold>{name}</Text>
-        {description || summaryArgs ? (
-          <Text color={theme.muted}> {description || summaryArgs}</Text>
-        ) : null}
+        {inline ? <Text color={theme.muted}> {inline}</Text> : null}
         {status ? (
           <Text color={theme.muted}>
             {' — '}
@@ -88,7 +89,7 @@ export function ToolEntry({
           </Text>
         ) : null}
       </Text>
-      {description && summaryArgs ? <TreeLines text={summaryArgs} /> : null}
+      {below ? <TreeLines text={summaryArgs} /> : null}
       {notice ? (
         <Box marginLeft={3}>
           <Text color={theme.warning}>{'⚠ '}{notice}</Text>
