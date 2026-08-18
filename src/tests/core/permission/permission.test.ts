@@ -10,6 +10,9 @@ import type {Rules} from '../../../core/settings.js';
 const project = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-permission-')),
 );
+const outside = fs.realpathSync(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-outside-')),
+);
 
 function rules(some: Partial<Rules>): Rules {
   return {allow: [], ask: [], deny: [], ...some};
@@ -210,12 +213,25 @@ test('adversarial commands ask and never offer to be remembered', () => {
   }
 });
 
-test('a write outside the project asks and cannot be remembered', () => {
+test('a write outside the project is denied and cannot be remembered', () => {
   const outcome = write('../outside.txt');
 
-  assert.equal(outcome.decision, 'ask');
+  assert.equal(outcome.decision, 'deny');
   assert.equal(outcome.suppressible, false);
-  assert.match(outcome.reason, /outside the project/);
+  assert.equal(outcome.reason, "'../outside.txt' is outside the project");
+
+  assert.equal(write(path.join(outside, 'secret.txt')).decision, 'deny');
+  assert.equal(write('~/.ssh/id_rsa').decision, 'deny');
+});
+
+test('a file tool denies what bash only asks about', () => {
+  const denied = write('../outside.txt');
+  const asked = command('rm ../outside.txt');
+
+  assert.equal(denied.decision, 'deny');
+  assert.equal(asked.decision, 'ask');
+  assert.equal(asked.suppressible, false);
+  assert.equal(denied.reason, asked.reason);
 });
 
 test('an allow rule stops a command being asked about', () => {
@@ -286,7 +302,7 @@ test('empty rules reproduce the outcomes of the classifier alone', () => {
 
 test('a rule never decides a write', () => {
   assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
-  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'ask');
+  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'deny');
 });
 
 test('clearing the conversation keeps the rules', () => {

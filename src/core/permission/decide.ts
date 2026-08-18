@@ -30,6 +30,13 @@ function outcomeFor(classification: Classification, fallback?: string): Outcome 
   };
 }
 
+function fileOutcome(classification: Classification): Outcome {
+  if (classification.level === 'escape') {
+    return {decision: 'deny', reason: classification.reason, suppressible: false};
+  }
+  return outcomeFor(classification);
+}
+
 const NO_RULES: Rules = {allow: [], ask: [], deny: []};
 
 const RULE_REASON = {
@@ -44,7 +51,7 @@ export function decide(
   rules: Rules = NO_RULES,
 ): Outcome {
   if (request.kind === 'write') {
-    return outcomeFor(classifyWrite(request.path, root));
+    return fileOutcome(classifyWrite(request.path, root));
   }
   const command = hardenCommand(request.command);
   const verdict = ruleVerdict(command, rules);

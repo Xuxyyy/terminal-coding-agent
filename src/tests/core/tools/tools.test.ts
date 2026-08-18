@@ -152,9 +152,9 @@ test('a path outside the workspace is rejected', async () => {
   );
 });
 
-test('an absolute path outside the workspace is rejected', async () => {
+test('an absolute path outside the workspace is denied without a prompt', async () => {
   const root = workspace();
-  const {host} = hostThatAnswers('once');
+  const {host, asked} = hostThatAnswers('once');
   const output = await runTool(
     registry,
     'write_file',
@@ -162,7 +162,8 @@ test('an absolute path outside the workspace is rejected', async () => {
     context(root, host),
   );
 
-  assert.match(output.text, /^Error: path is outside the workspace/);
+  assert.equal(output.text, "Error: '/etc/passwd' is outside the project");
+  assert.equal(asked.length, 0);
   assert.ok(!fs.existsSync(path.join(root, 'etc')));
 });
 
