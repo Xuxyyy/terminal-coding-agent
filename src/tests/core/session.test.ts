@@ -199,10 +199,10 @@ function measured(tokens: number): Session {
 }
 
 test('the line is crossed at the threshold, not before it', () => {
-  assert.equal(overThreshold(measured(0), {}), false);
-  assert.equal(overThreshold(measured(799), {}), false);
-  assert.equal(overThreshold(measured(800), {}), true);
-  assert.equal(overThreshold(measured(950), {}), true);
+  assert.equal(overThreshold(measured(0), {}, []), false);
+  assert.equal(overThreshold(measured(799), {}, []), false);
+  assert.equal(overThreshold(measured(800), {}, []), true);
+  assert.equal(overThreshold(measured(950), {}, []), true);
 });
 
 test('tool results pushed since the measurement count against the line', () => {
