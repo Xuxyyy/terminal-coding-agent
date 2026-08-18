@@ -52,6 +52,15 @@ async function search(root: string, args: object, answers: ConfirmDecision[] = [
   return {text: output.text, asked};
 }
 
+test('a search outside the project is denied without a prompt', async () => {
+  const root = seeded();
+
+  const {text, asked} = await search(root, {pattern: 'x', path: '~/.ssh'});
+
+  assert.equal(text, "Error: reads '~/.ssh' outside the project");
+  assert.deepEqual(asked, []);
+});
+
 test('a match returns the file paths and nothing else', async () => {
   const root = seeded();
 
@@ -108,9 +117,10 @@ test('an invalid pattern is reported and does not throw', async () => {
 test('a path outside the workspace is rejected', async () => {
   const root = seeded();
 
-  const {text} = await search(root, {pattern: 'widget', path: '../../etc'});
+  const {text, asked} = await search(root, {pattern: 'widget', path: '../../etc'});
 
-  assert.equal(text, 'Error: path is outside the workspace: ../../etc');
+  assert.equal(text, "Error: reads '../../etc' outside the project");
+  assert.deepEqual(asked, []);
 });
 
 test('a path that does not exist is an error, not no matches', async () => {
@@ -181,8 +191,11 @@ test('grep never asks the user', async () => {
   const {text, asked} = await search(root, {pattern: 'widget'}, ['deny']);
 
   assert.equal(asked.length, 0);
-  assert.equal(grep.request, undefined);
   assert.doesNotMatch(text, /^Error: /);
+
+  const inside = await search(root, {pattern: 'widget', path: 'src'}, ['deny']);
+  assert.equal(inside.asked.length, 0);
+  assert.doesNotMatch(inside.text, /^Error: /);
 });
 
 test('nothing still teaches the model to search with grep -rn', () => {

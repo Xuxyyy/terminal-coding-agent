@@ -1,12 +1,19 @@
 import {type Rules} from '../settings.js';
-import {classifyCommand, classifyWrite, type Classification, type Level} from './classify.js';
+import {
+  classifyCommand,
+  classifyRead,
+  classifyWrite,
+  type Classification,
+  type Level,
+} from './classify.js';
 import {hardenCommand} from './harden.js';
 import {ruleVerdict} from './rules.js';
 import {commandParts, splitStages} from './stages.js';
 
 export type Request =
   | {kind: 'command'; command: string; reason?: string}
-  | {kind: 'write'; path: string};
+  | {kind: 'write'; path: string}
+  | {kind: 'read'; path: string};
 
 export type Outcome = {
   decision: 'allow' | 'ask' | 'deny';
@@ -53,6 +60,9 @@ export function decide(
   if (request.kind === 'write') {
     return fileOutcome(classifyWrite(request.path, root));
   }
+  if (request.kind === 'read') {
+    return fileOutcome(classifyRead(request.path, root));
+  }
   const command = hardenCommand(request.command);
   const verdict = ruleVerdict(command, rules);
   if (verdict === 'deny') {
@@ -75,6 +85,7 @@ export function decide(
 
 export function approvalKey(request: Request): string {
   if (request.kind === 'write') return `write ${request.path}`;
+  if (request.kind === 'read') return `read ${request.path}`;
   const stages = splitStages(request.command);
   if (stages === null) return request.command.trim();
   return stages

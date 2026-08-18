@@ -28,6 +28,11 @@ function write(target: string, some?: Partial<Rules>): Outcome {
   return some ? decide(request, project, rules(some)) : decide(request, project);
 }
 
+function read(target: string, some?: Partial<Rules>): Outcome {
+  const request = {kind: 'read', path: target} as const;
+  return some ? decide(request, project, rules(some)) : decide(request, project);
+}
+
 const QUIET = [
   'ls -la',
   'ls',
@@ -234,6 +239,38 @@ test('a file tool denies what bash only asks about', () => {
   assert.equal(denied.reason, asked.reason);
 });
 
+test('a read inside the project runs without asking', () => {
+  for (const target of ['src/a.ts', 'notes/deep/file.md', '.', path.join(project, 'a.ts')]) {
+    const outcome = read(target);
+    assert.equal(outcome.decision, 'allow', target);
+    assert.equal(outcome.suppressible, true, target);
+  }
+});
+
+test('a read of a protected path is still only a read', () => {
+  for (const target of ['.acc/settings.json', '.git/config', '.npmrc']) {
+    assert.equal(read(target).decision, 'allow', target);
+  }
+});
+
+test('a read outside the project is denied and names the path', () => {
+  const outcome = read('~/.ssh/id_rsa');
+
+  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.suppressible, false);
+  assert.equal(outcome.reason, "reads '~/.ssh/id_rsa' outside the project");
+
+  assert.equal(read('../outside.txt').decision, 'deny');
+  assert.equal(read(path.join(outside, 'secret.txt')).decision, 'deny');
+});
+
+test('a read approval has a key of its own', () => {
+  assert.notEqual(
+    approvalKey({kind: 'read', path: 'src/a.ts'}),
+    approvalKey({kind: 'write', path: 'src/a.ts'}),
+  );
+});
+
 test('an allow rule stops a command being asked about', () => {
   const outcome = command('python3 scripts/build.py', {
     allow: ['python3 scripts/*'],
@@ -300,9 +337,11 @@ test('empty rules reproduce the outcomes of the classifier alone', () => {
   }
 });
 
-test('a rule never decides a write', () => {
+test('a rule never decides a write or a read', () => {
   assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
   assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'deny');
+  assert.equal(read('src/a.ts', {deny: ['src/*']}).decision, 'allow');
+  assert.equal(read('../outside.txt', {allow: ['*']}).decision, 'deny');
 });
 
 test('clearing the conversation keeps the rules', () => {

@@ -50,6 +50,9 @@ export const readFile: Tool = {
   description:
     'Read a text file from the workspace. Returns numbered lines so you can quote them exactly in edit_file.',
   schema,
+  request(args) {
+    return {kind: 'read', path: schema.parse(args).path};
+  },
   async run(args, ctx) {
     const parsed = schema.parse(args);
     const target = resolveInWorkspace(ctx.root, parsed.path);

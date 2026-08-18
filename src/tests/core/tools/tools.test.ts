@@ -7,6 +7,8 @@ import {z} from 'zod';
 import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js';
 import {bash} from '../../../core/tools/bash.js';
 import {editFile} from '../../../core/tools/edit.js';
+import {grep} from '../../../core/tools/grep.js';
+import {resolveInWorkspace} from '../../../core/tools/paths.js';
 import {readFile} from '../../../core/tools/read.js';
 import {runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
 import {writeFile} from '../../../core/tools/write.js';
@@ -47,7 +49,7 @@ const fakeBash: Tool = {
   },
 };
 
-const registry = [readFile, editFile, writeFile, fakeBash];
+const registry = [readFile, grep, editFile, writeFile, fakeBash];
 
 function session(answers: ConfirmDecision[]) {
   const root = workspace();
@@ -136,9 +138,9 @@ test('edit_file replaces a unique match and returns a diff', async () => {
   assert.equal(output.diff?.path, 'a.ts');
 });
 
-test('a path outside the workspace is rejected', async () => {
+test('a path outside the workspace is denied without a prompt', async () => {
   const root = workspace();
-  const {host} = hostThatAnswers('once');
+  const {host, asked} = hostThatAnswers('once');
   const output = await runTool(
     registry,
     'read_file',
@@ -146,9 +148,52 @@ test('a path outside the workspace is rejected', async () => {
     context(root, host),
   );
 
-  assert.equal(
-    output.text,
-    'Error: path is outside the workspace: ../../etc/passwd',
+  assert.equal(output.text, "Error: reads '../../etc/passwd' outside the project");
+  assert.equal(asked.length, 0);
+});
+
+test('a home path is refused by the gate, not by a missing file', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('once');
+  const output = await runTool(
+    registry,
+    'read_file',
+    JSON.stringify({path: '~/.ssh/id_rsa'}),
+    context(root, host),
+  );
+
+  assert.equal(output.text, "Error: reads '~/.ssh/id_rsa' outside the project");
+  assert.doesNotMatch(output.text, /ENOENT/);
+  assert.equal(asked.length, 0);
+});
+
+test('read_file and grep answer the same for the same path', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('once');
+  const ctx = context(root, host);
+
+  const read = await runTool(registry, 'read_file', JSON.stringify({path: '../secret'}), ctx);
+  const searched = await runTool(
+    registry,
+    'grep',
+    JSON.stringify({pattern: 'x', path: '../secret'}),
+    ctx,
+  );
+
+  assert.equal(read.text, "Error: reads '../secret' outside the project");
+  assert.equal(searched.text, read.text);
+  assert.equal(asked.length, 0);
+});
+
+test('a link out of the workspace still throws in the resolver', () => {
+  const root = fs.realpathSync(workspace());
+  const outside = fs.realpathSync(workspace());
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'x\n');
+  fs.symlinkSync(outside, path.join(root, 'link'));
+
+  assert.throws(
+    () => resolveInWorkspace(root, 'link/secret.txt'),
+    /escapes the workspace through a link/,
   );
 });
 

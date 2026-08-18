@@ -166,6 +166,9 @@ export const grep: Tool = {
   description:
     'Search file contents in the workspace with ripgrep. Returns matching file paths by default, so use it to find where something lives and then read_file to see it. Respects .gitignore.',
   schema,
+  request(rawArguments) {
+    return {kind: 'read', path: schema.parse(rawArguments).path ?? '.'};
+  },
   async run(rawArguments, ctx) {
     const args = schema.parse(rawArguments);
     const where = args.path ?? '.';

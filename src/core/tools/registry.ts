@@ -86,7 +86,7 @@ async function permitted(
 }
 
 function describe(request: Request): string {
-  return request.kind === 'write' ? request.path : request.command;
+  return request.kind === 'command' ? request.command : request.path;
 }
 
 export async function runTool(

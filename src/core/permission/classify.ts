@@ -196,3 +196,9 @@ export function classifyCommand(command: string, root: string): Classification {
 export function classifyWrite(target: string, root: string): Classification {
   return targetClassification(target, root);
 }
+
+export function classifyRead(target: string, root: string): Classification {
+  const classification = targetClassification(target, root, {reading: true});
+  if (classification.level === 'escape') return classification;
+  return {level: 'observe', reason: ''};
+}
