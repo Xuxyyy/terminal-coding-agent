@@ -59,6 +59,12 @@ export function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
+export function elide(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = Math.ceil(max / 2);
+  return text.slice(0, head) + '…' + text.slice(text.length - (max - head));
+}
+
 export function tailLines(text: string, n: number): string {
   const lines = text.split('\n');
   return lines.length > n ? lines.slice(-n).join('\n') : text;
@@ -154,7 +160,7 @@ export function formatResult(name: string, result: string): string {
 export function resultStatus(name: string, result: string): string {
   if (result.startsWith('Error:')) {
     const message = result.slice('Error:'.length).trim().split('\n')[0]?.trim();
-    return message ? `failed: ${truncate(message, 50)}` : 'failed';
+    return message ? `failed: ${elide(message, 50)}` : 'failed';
   }
   if (COMMAND_TOOLS.has(name)) {
     const match = result.match(/^\[exit (\d+)\]/);

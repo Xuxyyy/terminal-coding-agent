@@ -37,11 +37,21 @@ test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(resultStatus('read_file', 'Error:'), 'failed');
 });
 
-test('resultStatus truncates a long failure reason', () => {
+test('resultStatus shortens a long failure reason from the middle', () => {
   assert.equal(
     resultStatus('bash', `Error: ${'x'.repeat(80)}`),
-    `failed: ${'x'.repeat(50)}…`,
+    `failed: ${'x'.repeat(25)}…${'x'.repeat(25)}`,
   );
+});
+
+test('resultStatus keeps the reason when a long path fills the line', () => {
+  const status = resultStatus(
+    'read_file',
+    "Error: reads '/private/tmp/claude-501/scratchpad/outside/secret.txt' outside the project",
+  );
+
+  assert.match(status, /^failed: reads '\/private/);
+  assert.match(status, /outside the project$/);
 });
 
 test('resultStatus summarizes tool outcomes', () => {
