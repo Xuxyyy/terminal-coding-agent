@@ -33,7 +33,7 @@ async function failureFrom(promise: Promise<unknown>): Promise<StreamFailure> {
   return result;
 }
 
-test('a turn collects the text, the tool calls and the usage', async () => {
+test('a response collects the text, the tool calls and the usage', async () => {
   const {choice, calls} = fakeModel(() =>
     streamOf(
       textChunk('look'),
@@ -46,51 +46,51 @@ test('a turn collects the text, the tool calls and the usage', async () => {
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamStep(choice, [], [], host, fast);
+  const response = await streamStep(choice, [], [], host, fast);
 
-  assert.equal(turn.content, 'looking');
-  assert.equal(turn.finishReason, 'tool_calls');
-  assert.deepEqual(turn.toolCalls, [
+  assert.equal(response.content, 'looking');
+  assert.equal(response.finishReason, 'tool_calls');
+  assert.deepEqual(response.toolCalls, [
     {id: 'c1', name: 'read_file', args: '{"path":"a.js"}'},
   ]);
-  assert.deepEqual(turn.usage, {prompt: 120, completion: 30, total: 150});
+  assert.deepEqual(response.usage, {prompt: 120, completion: 30, total: 150});
   assert.equal(calls(), 1);
   assert.deepEqual(texts(events), ['look', 'ing']);
 });
 
 test('a dropped connection before any output is retried', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn < 3
+  const {choice, calls} = fakeModel((nth) =>
+    nth < 3
       ? connectionError()
       : streamOf(textChunk('hi'), finishChunk('stop'), usageChunk(10, 2)),
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamStep(choice, [], [], host, fast);
+  const response = await streamStep(choice, [], [], host, fast);
 
-  assert.equal(turn.content, 'hi');
+  assert.equal(response.content, 'hi');
   assert.equal(calls(), 3);
   assert.deepEqual(texts(events), ['hi']);
 });
 
 test('a stream that dies before its first chunk is retried', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1
       ? streamOf(connectionError())
       : streamOf(textChunk('hi'), finishChunk('stop')),
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamStep(choice, [], [], host, fast);
+  const response = await streamStep(choice, [], [], host, fast);
 
-  assert.equal(turn.content, 'hi');
+  assert.equal(response.content, 'hi');
   assert.equal(calls(), 2);
   assert.deepEqual(texts(events), ['hi']);
 });
 
 test('a dropped connection after output is not retried', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1
       ? streamOf(textChunk('half'), connectionError())
       : streamOf(textChunk('whole'), finishChunk('stop')),
   );
@@ -104,8 +104,8 @@ test('a dropped connection after output is not retried', async () => {
 });
 
 test('a tool call that has started counts as output', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1
       ? streamOf(toolCallChunk('c1', 'read_file', '{"path":'), connectionError())
       : streamOf(textChunk('whole'), finishChunk('stop')),
   );
@@ -120,8 +120,8 @@ test('a tool call that has started counts as output', async () => {
 });
 
 test('a bad request is not retried', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1
       ? statusError(400)
       : streamOf(textChunk('never'), finishChunk('stop')),
   );

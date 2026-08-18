@@ -39,7 +39,7 @@ function session(): Session {
   return createSession(process.cwd(), 'rules', 1_000_000);
 }
 
-function toolTurn(n: number): AsyncIterable<unknown> {
+function toolResponse(n: number): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(`call-${n}`, 'noop', '{}'),
     finishChunk('tool_calls'),
@@ -47,16 +47,16 @@ function toolTurn(n: number): AsyncIterable<unknown> {
   );
 }
 
-function finalTurn(): AsyncIterable<unknown> {
+function finalResponse(): AsyncIterable<unknown> {
   return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
 }
 
 function keepsCalling() {
-  return fakeModel((turn) => toolTurn(turn));
+  return fakeModel((nth) => toolResponse(nth));
 }
 
 function finishesAt(last: number) {
-  return fakeModel((turn) => (turn < last ? toolTurn(turn) : finalTurn()));
+  return fakeModel((nth) => (nth < last ? toolResponse(nth) : finalResponse()));
 }
 
 function errors(events: AgentEvent[]): string[] {
@@ -99,7 +99,7 @@ test('answering always does not ask again this run', async () => {
   assert.equal(calls(), 65);
 });
 
-test('a session is written after every turn', async () => {
+test('a session is written after every step', async () => {
   const {choice} = finishesAt(3);
   const {host} = fakeHost();
   const seen: number[] = [];
@@ -140,7 +140,7 @@ test('a failed write does not kill the run', async () => {
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
 
-test('an interrupted round is saved complete', async () => {
+test('an interrupted step is saved complete', async () => {
   const {host, controller} = fakeHost();
   const {choice} = fakeModel(() =>
     streamOf(
@@ -214,7 +214,7 @@ function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function writeTurn(target: string, content: string): AsyncIterable<unknown> {
+function writeResponse(target: string, content: string): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(
       'call-write',
@@ -229,8 +229,8 @@ function writeTurn(target: string, content: string): AsyncIterable<unknown> {
 test('the old file is in the session before the agent overwrites it', async () => {
   const work = tempDir('acc-work-');
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? writeTurn('note.txt', 'two\n') : finalTurn(),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? writeResponse('note.txt', 'two\n') : finalResponse(),
   );
   const {host} = fakeHost();
   const store = startSession(work, tempDir('acc-home-'));
@@ -254,8 +254,8 @@ test('the old file is in the session before the agent overwrites it', async () =
 
 test('a file the agent creates is recorded as having no old version', async () => {
   const work = tempDir('acc-work-');
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? writeTurn('new.txt', 'fresh\n') : finalTurn(),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? writeResponse('new.txt', 'fresh\n') : finalResponse(),
   );
   const {host} = fakeHost();
   const store = startSession(work, tempDir('acc-home-'));
@@ -278,8 +278,8 @@ test('a file the agent creates is recorded as having no old version', async () =
 test('without a session nothing is captured and the write still lands', async () => {
   const work = tempDir('acc-work-');
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? writeTurn('note.txt', 'two\n') : finalTurn(),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? writeResponse('note.txt', 'two\n') : finalResponse(),
   );
   const {host, events} = fakeHost();
 
@@ -290,10 +290,10 @@ test('without a session nothing is captured and the write still lands', async ()
 });
 
 test('a dropped connection after output keeps the partial answer', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1
       ? streamOf(textChunk('half an answer'), connectionError())
-      : finalTurn(),
+      : finalResponse(),
   );
   const {host, events} = fakeHost();
   const active = session();

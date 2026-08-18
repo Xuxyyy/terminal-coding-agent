@@ -402,7 +402,7 @@ function summaryOf(text: string): AsyncIterable<unknown> {
 }
 
 function summarizingModel(at = 2): ReturnType<typeof fakeModel> {
-  return fakeModel((turn) => (turn === at ? summaryOf(SUMMARY) : answer('done')));
+  return fakeModel((nth) => (nth === at ? summaryOf(SUMMARY) : answer('done')));
 }
 
 function occurrences(messages: unknown, needle: string): number {
@@ -478,8 +478,8 @@ test('the spinner says compacting while the summary is in flight', async () => {
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const {choice} = fakeModel((turn) =>
-    turn === 1
+  const {choice} = fakeModel((nth) =>
+    nth === 1
       ? answer('done')
       : {
           async *[Symbol.asyncIterator]() {
@@ -508,8 +508,8 @@ test('the spinner says compacting while the summary is in flight', async () => {
 test('a failed compaction commits a notice and leaves the messages alone', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? answer('done') : statusError(400),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? answer('done') : statusError(400),
   );
   const {agent, unmount} = mount(root, choice);
 
@@ -533,7 +533,7 @@ test('a failed compaction commits a notice and leaves the messages alone', async
   );
 });
 
-function crossingTurn(): AsyncIterable<unknown> {
+function crossingResponse(): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk('call-1', 'nope', '{}'),
     finishChunk('tool_calls'),
@@ -579,8 +579,8 @@ function eventTypes(items: Item[]): string[] {
 test('a turn that fills the window says so and keeps going', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? crossingTurn() : answer('done'),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? crossingResponse() : answer('done'),
   );
   const {agent, unmount} = mount(root, choice);
 
@@ -603,8 +603,8 @@ test('a turn that fills the window says so and keeps going', async () => {
 
 test('the threshold notice is a notice, never a raw event', async () => {
   const root = workspace();
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? crossingTurn() : answer('done'),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? crossingResponse() : answer('done'),
   );
   const {agent, unmount} = mount(root, choice);
 
@@ -838,7 +838,7 @@ function writing(target: string, content: string): AsyncIterable<unknown> {
 function editingModel(
   edits: Record<number, AsyncIterable<unknown>>,
 ): ReturnType<typeof fakeModel> {
-  return fakeModel((turn) => edits[turn] ?? answer('done'));
+  return fakeModel((nth) => edits[nth] ?? answer('done'));
 }
 
 function noticeOf(items: Item[]): string {

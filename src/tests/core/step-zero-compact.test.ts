@@ -41,15 +41,15 @@ const STORY =
   'The user asked for a rename and it is done. No file is left open and ' +
   'nothing else is pending in the workspace right now, so the task is complete.';
 
-function textTurn(text: string): AsyncIterable<unknown> {
+function textResponse(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(10, 2));
 }
 
-function emptyTurn(): AsyncIterable<unknown> {
+function emptyResponse(): AsyncIterable<unknown> {
   return streamOf(finishChunk('stop'), usageChunk(10, 0));
 }
 
-function toolTurn(n: number, total: number): AsyncIterable<unknown> {
+function toolResponse(n: number, total: number): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(`call-${n}`, 'noop', '{}'),
     finishChunk('tool_calls'),
@@ -103,16 +103,16 @@ function streamed(events: AgentEvent[]): string {
     .join('');
 }
 
-function recordingModel(next: (turn: number) => unknown): {
+function recordingModel(next: (nth: number) => unknown): {
   choice: ModelChoice;
   sent: () => Message[][];
 } {
-  let turn = 0;
+  let nth = 0;
   const sent: Message[][] = [];
   const create = async (body: unknown): Promise<unknown> => {
-    turn += 1;
+    nth += 1;
     sent.push([...((body as {messages?: Message[]}).messages ?? [])]);
-    return next(turn);
+    return next(nth);
   };
   return {
     choice: {
@@ -126,8 +126,8 @@ function recordingModel(next: (turn: number) => unknown): {
 }
 
 test('the summarizer is never shown the pending task', async () => {
-  const {choice, sent} = recordingModel((turn) =>
-    turn === 1 ? textTurn(STORY) : textTurn('done'),
+  const {choice, sent} = recordingModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host} = fakeHost();
 
@@ -150,9 +150,9 @@ test('the summarizer is never shown the pending task', async () => {
   );
 });
 
-test('turn 0 over the line compacts and keeps the task last', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn(STORY) : textTurn('done'),
+test('step 0 over the line compacts and keeps the task last', async () => {
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
   const active = measured(850_000);
@@ -168,8 +168,8 @@ test('turn 0 over the line compacts and keeps the task last', async () => {
 });
 
 test('the summary never streams into the transcript', async () => {
-  const {choice} = fakeModel((turn) =>
-    turn === 1 ? textTurn(STORY) : textTurn('done'),
+  const {choice} = fakeModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
 
@@ -179,8 +179,8 @@ test('the summary never streams into the transcript', async () => {
 });
 
 test('a session past the window compacts instead of stopping', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn(STORY) : textTurn('done'),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
 
@@ -191,9 +191,9 @@ test('a session past the window compacts instead of stopping', async () => {
   assert.equal(errors(events).length, 0);
 });
 
-test('turn 0 compacts when clearing was exhausted, even under the line', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? textTurn(STORY) : textTurn('done'),
+test('step 0 compacts when clearing was exhausted, even under the line', async () => {
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
   const active = session();
@@ -206,8 +206,8 @@ test('turn 0 compacts when clearing was exhausted, even under the line', async (
   assert.equal(active.clearingExhausted, false);
 });
 
-test('turn 0 under the line with nothing exhausted does not compact', async () => {
-  const {choice, calls} = fakeModel(() => textTurn('done'));
+test('step 0 under the line with nothing exhausted does not compact', async () => {
+  const {choice, calls} = fakeModel(() => textResponse('done'));
   const {host, events} = fakeHost();
 
   await runAgent(session(), choice, host, [noop]);
@@ -217,7 +217,7 @@ test('turn 0 under the line with nothing exhausted does not compact', async () =
 });
 
 test('clearing runs first, and a session it saves is never summarized', async () => {
-  const {choice, calls} = fakeModel(() => textTurn('done'));
+  const {choice, calls} = fakeModel(() => textResponse('done'));
   const {host, events} = fakeHost();
   const active = measured(
     850_000,
@@ -233,8 +233,8 @@ test('clearing runs first, and a session it saves is never summarized', async ()
 });
 
 test('a failed summary is reported and the run continues', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn <= 2 ? emptyTurn() : textTurn('done'),
+  const {choice, calls} = fakeModel((nth) =>
+    nth <= 2 ? emptyResponse() : textResponse('done'),
   );
   const {host, events} = fakeHost();
   const active = measured(850_000);
@@ -248,8 +248,8 @@ test('a failed summary is reported and the run continues', async () => {
 });
 
 test('a summary refused twice leaves the conversation alone', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn <= 2 ? textTurn('<｜｜DSML｜｜tool_calls>') : textTurn('done'),
+  const {choice, calls} = fakeModel((nth) =>
+    nth <= 2 ? textResponse('<｜｜DSML｜｜tool_calls>') : textResponse('done'),
   );
   const {host, events} = fakeHost();
   const active = measured(850_000);
@@ -262,8 +262,8 @@ test('a summary refused twice leaves the conversation alone', async () => {
 });
 
 test('the summarizer is never called once a run is in flight', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn <= 2 ? toolTurn(turn, 902_000) : textTurn('done'),
+  const {choice, calls} = fakeModel((nth) =>
+    nth <= 2 ? toolResponse(nth, 902_000) : textResponse('done'),
   );
   const {host, events} = fakeHost();
   const active = session();

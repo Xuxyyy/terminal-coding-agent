@@ -43,7 +43,7 @@ const DSML =
   '<｜｜DSML｜｜parameter name="path" string="true">three.md</｜｜DSML｜｜parameter>\n' +
   '</｜｜DSML｜｜invoke>\n</｜｜DSML｜｜tool_calls>';
 
-function summaryTurn(text: string): AsyncIterable<unknown> {
+function summaryResponse(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(500, 40));
 }
 
@@ -68,7 +68,7 @@ function recordingModel(reply: () => AsyncIterable<unknown>): {
 }
 
 test('the summarizing request carries no tools', async () => {
-  const {choice, bodies} = recordingModel(() => summaryTurn(RECAP));
+  const {choice, bodies} = recordingModel(() => summaryResponse(RECAP));
   const {host} = fakeHost();
 
   await compactSession(session(), choice, host);
@@ -83,7 +83,7 @@ test('the summarizing request carries no tools', async () => {
 });
 
 test('a compaction leaves the system message and one summary', async () => {
-  const {choice} = fakeModel(() => summaryTurn(RECAP));
+  const {choice} = fakeModel(() => summaryResponse(RECAP));
   const {host} = fakeHost();
   const active = session();
 
@@ -96,7 +96,7 @@ test('a compaction leaves the system message and one summary', async () => {
 });
 
 test('a compaction clears the measured context size', async () => {
-  const {choice} = fakeModel(() => summaryTurn(RECAP));
+  const {choice} = fakeModel(() => summaryResponse(RECAP));
   const {host} = fakeHost();
   const active = session();
   setMeasured(active, 4_000);
@@ -120,7 +120,7 @@ test('a failed summary leaves the conversation alone', async () => {
 });
 
 test('an empty summary is not written to the store', async () => {
-  const {choice} = fakeModel(() => summaryTurn('   \n  '));
+  const {choice} = fakeModel(() => summaryResponse('   \n  '));
   const {host} = fakeHost();
   const active = session();
   const before = structuredClone(active.messages);
@@ -139,7 +139,7 @@ test('an empty summary is not written to the store', async () => {
 });
 
 test('the store is told how many messages the summary replaced', async () => {
-  const {choice} = fakeModel(() => summaryTurn(RECAP));
+  const {choice} = fakeModel(() => summaryResponse(RECAP));
   const {host} = fakeHost();
   const active = session();
   addTask(active, 'now rename the gadget');
@@ -172,7 +172,7 @@ test('prose long enough to be a summary is kept, trimmed', () => {
 });
 
 test('a summary of tool-call markup leaves the conversation alone', async () => {
-  const {choice, bodies} = recordingModel(() => summaryTurn(DSML));
+  const {choice, bodies} = recordingModel(() => summaryResponse(DSML));
   const {host} = fakeHost();
   const active = session();
   const before = structuredClone(active.messages);
@@ -194,7 +194,7 @@ test('a summary of tool-call markup leaves the conversation alone', async () => 
 test('a rejected summary is asked for once more', async () => {
   const texts = [DSML, RECAP];
   let at = 0;
-  const {choice, bodies} = recordingModel(() => summaryTurn(texts[at++]!));
+  const {choice, bodies} = recordingModel(() => summaryResponse(texts[at++]!));
   const {host} = fakeHost();
   const active = session();
 
@@ -211,7 +211,7 @@ test('a rejected summary is asked for once more', async () => {
 test('the second ask tells the model to reply with prose only', async () => {
   const texts = [DSML, RECAP];
   let at = 0;
-  const {choice, bodies} = recordingModel(() => summaryTurn(texts[at++]!));
+  const {choice, bodies} = recordingModel(() => summaryResponse(texts[at++]!));
   const {host} = fakeHost();
 
   await compactSession(session(), choice, host);
@@ -224,7 +224,7 @@ test('the second ask tells the model to reply with prose only', async () => {
 test('the usage of every attempt is reported', async () => {
   const texts = [DSML, RECAP];
   let at = 0;
-  const {choice} = recordingModel(() => summaryTurn(texts[at++]!));
+  const {choice} = recordingModel(() => summaryResponse(texts[at++]!));
   const {host} = fakeHost();
 
   const result = await compactSession(session(), choice, host);

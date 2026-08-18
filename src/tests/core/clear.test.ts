@@ -12,7 +12,7 @@ import {createSession, type Session} from '../../core/session.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
-function callTurn(id: string, name: string, args = '{}'): Message {
+function callMessage(id: string, name: string, args = '{}'): Message {
   return {
     role: 'assistant',
     content: null,
@@ -31,7 +31,7 @@ function sessionOf(...messages: Message[]): Session {
 }
 
 function lastRound(): Message[] {
-  return [callTurn('last', 'bash', '{"command":"ls"}'), result('last', '[exit 0]\nok')];
+  return [callMessage('last', 'bash', '{"command":"ls"}'), result('last', '[exit 0]\nok')];
 }
 
 function contentOf(session: Session, index: number): string {
@@ -50,7 +50,7 @@ function argsOf(session: Session, index: number): {path?: string; content?: stri
 
 test('a read_file result is cleared and the freed tokens are reported', () => {
   const session = sessionOf(
-    callTurn('r1', 'read_file', '{"path":"a.ts"}'),
+    callMessage('r1', 'read_file', '{"path":"a.ts"}'),
     result('r1', 'a'.repeat(40_000)),
     ...lastRound(),
   );
@@ -63,9 +63,9 @@ test('a read_file result is cleared and the freed tokens are reported', () => {
 
 test('edit_file and write_file results are left alone', () => {
   const session = sessionOf(
-    callTurn('e1', 'edit_file', '{"path":"a.ts"}'),
+    callMessage('e1', 'edit_file', '{"path":"a.ts"}'),
     result('e1', "Edited 'a.ts'."),
-    callTurn('w1', 'write_file', '{"path":"b.ts","content":"hi"}'),
+    callMessage('w1', 'write_file', '{"path":"b.ts","content":"hi"}'),
     result('w1', "Wrote 2 chars to 'b.ts'."),
     ...lastRound(),
   );
@@ -78,7 +78,7 @@ test('edit_file and write_file results are left alone', () => {
 
 test('a bash result keeps its exit line and loses its body', () => {
   const session = sessionOf(
-    callTurn('b1', 'bash', '{"command":"ls"}'),
+    callMessage('b1', 'bash', '{"command":"ls"}'),
     result('b1', `[exit 0]\n${'x'.repeat(20_000)}`),
     ...lastRound(),
   );
@@ -91,7 +91,7 @@ test('a bash result keeps its exit line and loses its body', () => {
 
 test('write_file arguments lose the body and keep the path', () => {
   const session = sessionOf(
-    callTurn('w1', 'write_file', JSON.stringify({path: 'b.ts', content: 'z'.repeat(40_000)})),
+    callMessage('w1', 'write_file', JSON.stringify({path: 'b.ts', content: 'z'.repeat(40_000)})),
     result('w1', "Wrote 40000 chars to 'b.ts'."),
     ...lastRound(),
   );
@@ -104,7 +104,7 @@ test('write_file arguments lose the body and keep the path', () => {
 
 test('a result smaller than its marker is left alone', () => {
   const session = sessionOf(
-    callTurn('r1', 'read_file', '{"path":"notes.txt"}'),
+    callMessage('r1', 'read_file', '{"path":"notes.txt"}'),
     result('r1', '1\tline one'),
     ...lastRound(),
   );
@@ -117,7 +117,7 @@ test('a result smaller than its marker is left alone', () => {
 
 test('a short bash result keeps its body', () => {
   const session = sessionOf(
-    callTurn('b1', 'bash', '{"command":"ls"}'),
+    callMessage('b1', 'bash', '{"command":"ls"}'),
     result('b1', '[exit 0]\nok'),
     ...lastRound(),
   );
@@ -130,7 +130,7 @@ test('a short bash result keeps its body', () => {
 
 test('a small write_file body is left alone', () => {
   const session = sessionOf(
-    callTurn('w1', 'write_file', '{"path":"b.ts","content":"hi"}'),
+    callMessage('w1', 'write_file', '{"path":"b.ts","content":"hi"}'),
     result('w1', "Wrote 2 chars to 'b.ts'."),
     ...lastRound(),
   );
@@ -143,7 +143,7 @@ test('a small write_file body is left alone', () => {
 
 test('the last round is never cleared', () => {
   const session = sessionOf(
-    callTurn('r1', 'read_file', '{"path":"a.ts"}'),
+    callMessage('r1', 'read_file', '{"path":"a.ts"}'),
     result('r1', 'a'.repeat(40_000)),
   );
 
@@ -155,9 +155,9 @@ test('the last round is never cleared', () => {
 
 test('a second pass over a cleared session frees nothing', () => {
   const session = sessionOf(
-    callTurn('r1', 'read_file', '{"path":"a.ts"}'),
+    callMessage('r1', 'read_file', '{"path":"a.ts"}'),
     result('r1', 'a'.repeat(40_000)),
-    callTurn('b1', 'bash', '{"command":"ls"}'),
+    callMessage('b1', 'bash', '{"command":"ls"}'),
     result('b1', `[exit 0]\n${'x'.repeat(20_000)}`),
     ...lastRound(),
   );
@@ -168,9 +168,9 @@ test('a second pass over a cleared session frees nothing', () => {
 
 test('clearing stops as soon as the projection is under target', () => {
   const session = sessionOf(
-    callTurn('r1', 'read_file', '{"path":"a.ts"}'),
+    callMessage('r1', 'read_file', '{"path":"a.ts"}'),
     result('r1', 'a'.repeat(40_000)),
-    callTurn('r2', 'read_file', '{"path":"b.ts"}'),
+    callMessage('r2', 'read_file', '{"path":"b.ts"}'),
     result('r2', 'b'.repeat(40_000)),
     ...lastRound(),
   );
@@ -183,7 +183,7 @@ test('clearing stops as soon as the projection is under target', () => {
 
 test('a grep result is cleared and the freed tokens are reported', () => {
   const session = sessionOf(
-    callTurn('g1', 'grep', '{"pattern":"widget"}'),
+    callMessage('g1', 'grep', '{"pattern":"widget"}'),
     result('g1', Array.from({length: 2_000}, (_, i) => `src/file${i}.ts`).join('\n')),
     ...lastRound(),
   );
@@ -196,7 +196,7 @@ test('a grep result is cleared and the freed tokens are reported', () => {
 
 test('a grep result shorter than its marker is left alone', () => {
   const session = sessionOf(
-    callTurn('g1', 'grep', '{"pattern":"widget"}'),
+    callMessage('g1', 'grep', '{"pattern":"widget"}'),
     result('g1', 'a.ts'),
     ...lastRound(),
   );

@@ -53,7 +53,7 @@ function readingSession(): Session {
   return active;
 }
 
-function toolTurn(n: number, total: number): AsyncIterable<unknown> {
+function toolResponse(n: number, total: number): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(`call-${n}`, 'noop', '{}'),
     finishChunk('tool_calls'),
@@ -70,7 +70,7 @@ const bigRead: Tool = {
   },
 };
 
-function readTurn(n: number): AsyncIterable<unknown> {
+function readResponse(n: number): AsyncIterable<unknown> {
   return streamOf(
     toolCallChunk(`call-${n}`, 'read_file', '{}'),
     finishChunk('tool_calls'),
@@ -79,14 +79,14 @@ function readTurn(n: number): AsyncIterable<unknown> {
 }
 
 function overTheLine(n: number): AsyncIterable<unknown> {
-  return toolTurn(n, 902_000);
+  return toolResponse(n, 902_000);
 }
 
 function underTheLine(n: number): AsyncIterable<unknown> {
-  return toolTurn(n, 12_000);
+  return toolResponse(n, 12_000);
 }
 
-function finalTurn(): AsyncIterable<unknown> {
+function finalResponse(): AsyncIterable<unknown> {
   return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
 }
 
@@ -121,8 +121,8 @@ async function withThreshold(
 }
 
 test('a turn that crosses the line is reported, never compacted', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? overTheLine(turn) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? overTheLine(nth) : finalResponse(),
   );
   const {host, events} = fakeHost();
   const active = session();
@@ -150,8 +150,8 @@ test('a turn that crosses the line is reported, never compacted', async () => {
 });
 
 test('a turn that stays under the line says nothing', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? underTheLine(turn) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? underTheLine(nth) : finalResponse(),
   );
   const {host, events} = fakeHost();
 
@@ -162,8 +162,8 @@ test('a turn that stays under the line says nothing', async () => {
 });
 
 test('the notice comes once a run, not once a turn', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn <= 3 ? overTheLine(turn) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth <= 3 ? overTheLine(nth) : finalResponse(),
   );
   const {host, events} = fakeHost();
 
@@ -175,11 +175,11 @@ test('the notice comes once a run, not once a turn', async () => {
 
 test('the line moves with ACC_COMPACT_AT', async () => {
   await withThreshold('0.1', async () => {
-    const crossing = fakeModel((turn) =>
-      turn === 1 ? toolTurn(turn, 100_000) : finalTurn(),
+    const crossing = fakeModel((nth) =>
+      nth === 1 ? toolResponse(nth, 100_000) : finalResponse(),
     );
-    const short = fakeModel((turn) =>
-      turn === 1 ? toolTurn(turn, 99_000) : finalTurn(),
+    const short = fakeModel((nth) =>
+      nth === 1 ? toolResponse(nth, 99_000) : finalResponse(),
     );
     const {host: first, events: over} = fakeHost();
     const {host: second, events: under} = fakeHost();
@@ -196,8 +196,8 @@ const FLOOR_ERROR =
   'stopped: the context is full and nothing more can be freed; send your next message and it will compact first';
 
 test('a run past the window sends no further request', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? toolTurn(turn, 1_200_000) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? toolResponse(nth, 1_200_000) : finalResponse(),
   );
   const {host, events} = fakeHost();
 
@@ -213,8 +213,8 @@ test('the floor keeps the reply its own room', async () => {
     [980_000, true],
     [900_000, false],
   ] as const) {
-    const {choice, calls} = fakeModel((turn) =>
-      turn === 1 ? toolTurn(turn, tokens) : finalTurn(),
+    const {choice, calls} = fakeModel((nth) =>
+      nth === 1 ? toolResponse(nth, tokens) : finalResponse(),
     );
     const {host, events} = fakeHost();
 
@@ -230,8 +230,8 @@ test('the floor keeps the reply its own room', async () => {
 });
 
 test('a turn over the line frees what it can and keeps running', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn === 1 ? overTheLine(turn) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? overTheLine(nth) : finalResponse(),
   );
   const {host, events} = fakeHost();
   const active = readingSession();
@@ -248,8 +248,8 @@ test('a turn over the line frees what it can and keeps running', async () => {
 });
 
 test('a later turn that frees something takes back the exhausted flag', async () => {
-  const {choice, calls} = fakeModel((turn) =>
-    turn <= 2 ? readTurn(turn) : finalTurn(),
+  const {choice, calls} = fakeModel((nth) =>
+    nth <= 2 ? readResponse(nth) : finalResponse(),
   );
   const {host, events} = fakeHost();
   const active = session();
@@ -263,7 +263,7 @@ test('a later turn that frees something takes back the exhausted flag', async ()
 });
 
 test('a turn with nothing left to free is remembered as exhausted', async () => {
-  const {choice} = fakeModel((turn) => (turn <= 2 ? overTheLine(turn) : finalTurn()));
+  const {choice} = fakeModel((nth) => (nth <= 2 ? overTheLine(nth) : finalResponse()));
   const {host, events} = fakeHost();
   const active = session();
 

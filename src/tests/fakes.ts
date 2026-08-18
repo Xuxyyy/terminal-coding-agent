@@ -75,14 +75,14 @@ export function abortError(name = 'APIUserAbortError'): Error {
   return error;
 }
 
-export function fakeModel(next: (turn: number) => unknown): {
+export function fakeModel(next: (nth: number) => unknown): {
   choice: ModelChoice;
   calls: () => number;
 } {
-  let turn = 0;
+  let nth = 0;
   const create = async (): Promise<unknown> => {
-    turn += 1;
-    const result = next(turn);
+    nth += 1;
+    const result = next(nth);
     if (result instanceof Error) throw result;
     return result;
   };
@@ -93,7 +93,7 @@ export function fakeModel(next: (turn: number) => unknown): {
       label: 'Fake',
       contextWindow: 1_000_000,
     },
-    calls: () => turn,
+    calls: () => nth,
   };
 }
 
