@@ -23,7 +23,7 @@ import {
   writeSummary,
   type Item,
 } from '../../ui/events.js';
-import {searchArgv} from '../../core/tools/grep.js';
+import {chosenArgv} from '../../core/tools/grep.js';
 
 test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(
@@ -256,10 +256,21 @@ test('a grep row carries no headline, only its command', () => {
   const call = {pattern: 'renderWidget', output_mode: 'content'};
 
   assert.equal(toolDescription('grep', call), '');
-  assert.equal(
-    formatArgs('grep', call),
-    "rg --stats --no-require-git --hidden -n --glob '!.git' --regexp renderWidget .",
-  );
+  assert.equal(formatArgs('grep', call), 'rg -n renderWidget .');
+});
+
+test('the command line drops the flags every search shares', () => {
+  const line = searchCommand({pattern: 'widget'});
+
+  assert.equal(line, 'rg -l widget .');
+  for (const constant of ['--stats', '--no-require-git', '--hidden', '!.git']) {
+    assert.doesNotMatch(line, new RegExp(constant.replace('.', '\\.')), constant);
+  }
+});
+
+test('a pattern that looks like a flag keeps --regexp in front of it', () => {
+  assert.equal(searchCommand({pattern: '-v'}), 'rg -l --regexp -v .');
+  assert.equal(searchCommand({pattern: 'v'}), 'rg -l v .');
 });
 
 test('a grep command always drops to its own line, a bash one only with a description', () => {
@@ -269,24 +280,18 @@ test('a grep command always drops to its own line, a bash one only with a descri
   assert.equal(splitsCommand('read_file', ''), false);
 });
 
-test('the command under a grep row is the argv the tool really spawns', () => {
+test('the command under a grep row is built from the flags the tool passes', () => {
   const call = {pattern: 'widget', glob: '*.ts', path: 'src'};
 
-  assert.deepEqual(searchArgv(call), [
+  assert.deepEqual(chosenArgv(call), [
     'rg',
-    '--stats',
-    '--no-require-git',
-    '--hidden',
     '-l',
     '--glob',
     '*.ts',
-    '--glob',
-    '!.git',
-    '--regexp',
     'widget',
     'src',
   ]);
-  assert.equal(searchCommand(call), searchArgv(call).map(shellQuote).join(' '));
+  assert.equal(searchCommand(call), chosenArgv(call).map(shellQuote).join(' '));
 });
 
 test('searchCommand carries the flags the model chose', () => {
@@ -307,12 +312,11 @@ test('shellQuote quotes only what a shell would need quoted', () => {
   assert.equal(shellQuote(''), "''");
 });
 
-test('a grep command line quotes the pattern and the globs', () => {
+test('a grep command line quotes the pattern and the glob', () => {
   const line = searchCommand({pattern: 'function render', glob: '*.ts'});
 
   assert.match(line, /'function render'/);
   assert.match(line, /--glob '\*\.ts'/);
-  assert.match(line, /--glob '!\.git'/);
 });
 
 test('a grep row says nothing when the arguments are unusable', () => {

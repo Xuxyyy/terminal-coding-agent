@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type {AgentEvent, DiffPayload} from '../core/host.js';
 import type {ContextStatus} from '../core/session.js';
-import {searchArgv} from '../core/tools/grep.js';
+import {chosenArgv} from '../core/tools/grep.js';
 
 export type {ContextStatus};
 
@@ -98,7 +98,7 @@ export function shellQuote(text: string): string {
 }
 
 export function searchCommand(args: unknown): string {
-  const parts = searchArgv(args);
+  const parts = chosenArgv(args);
   if (parts.length === 0) return '';
   return truncate(parts.map(shellQuote).join(' '), SEARCH_COMMAND_MAX);
 }

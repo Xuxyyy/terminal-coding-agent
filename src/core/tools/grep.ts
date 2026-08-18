@@ -92,18 +92,35 @@ function flagsFor(args: Args): string[] {
   return ['-l'];
 }
 
-function argv(args: Args, target: string): string[] {
-  const flags = ['--stats', '--no-require-git', '--hidden', ...flagsFor(args)];
+function chosenFlags(args: Args): string[] {
+  const flags = flagsFor(args);
   if (args.case_insensitive) flags.push('-i');
   if (args.glob) flags.push('--glob', args.glob);
-  flags.push('--glob', '!.git', '--regexp', args.pattern, target);
   return flags;
 }
 
-export function searchArgv(raw: unknown): string[] {
+function argv(args: Args, target: string): string[] {
+  return [
+    '--stats',
+    '--no-require-git',
+    '--hidden',
+    ...chosenFlags(args),
+    '--glob',
+    '!.git',
+    '--regexp',
+    args.pattern,
+    target,
+  ];
+}
+
+export function chosenArgv(raw: unknown): string[] {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return [];
-  return ['rg', ...argv(parsed.data, parsed.data.path ?? '.')];
+  const args = parsed.data;
+  const pattern = args.pattern.startsWith('-')
+    ? ['--regexp', args.pattern]
+    : [args.pattern];
+  return ['rg', ...chosenFlags(args), ...pattern, args.path ?? '.'];
 }
 
 function ripgrep(args: string[], cwd: string, signal: AbortSignal): Promise<Run> {
