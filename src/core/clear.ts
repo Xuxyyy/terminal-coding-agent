@@ -8,6 +8,8 @@ type Message = OpenAI.ChatCompletionMessageParam;
 export const CLEARED_READ =
   '[file contents cleared; read the file again if needed]';
 export const CLEARED_OUTPUT = '[output cleared]';
+export const CLEARED_SEARCH =
+  '[search results cleared; run the same grep again if needed]';
 export const CLEARED_CONTENT = '[cleared]';
 
 type Call = {id?: unknown; function?: {name?: unknown; arguments?: unknown}};
@@ -54,9 +56,11 @@ function clearResult(message: Message, name: string | undefined): void {
   const cleared =
     name === 'read_file'
       ? CLEARED_READ
-      : name === 'bash'
-        ? clearedBash(content)
-        : null;
+      : name === 'grep'
+        ? CLEARED_SEARCH
+        : name === 'bash'
+          ? clearedBash(content)
+          : null;
   if (cleared === null || !shrinks(content, cleared)) return;
   (message as {content: string}).content = cleared;
 }

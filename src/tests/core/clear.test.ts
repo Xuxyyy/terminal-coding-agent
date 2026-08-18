@@ -5,6 +5,7 @@ import {
   CLEARED_CONTENT,
   CLEARED_OUTPUT,
   CLEARED_READ,
+  CLEARED_SEARCH,
   clearRecoverable,
 } from '../../core/clear.js';
 import {createSession, type Session} from '../../core/session.js';
@@ -178,4 +179,30 @@ test('clearing stops as soon as the projection is under target', () => {
 
   assert.equal(contentOf(session, 3), CLEARED_READ);
   assert.equal(contentOf(session, 5), 'b'.repeat(40_000));
+});
+
+test('a grep result is cleared and the freed tokens are reported', () => {
+  const session = sessionOf(
+    callTurn('g1', 'grep', '{"pattern":"widget"}'),
+    result('g1', Array.from({length: 2_000}, (_, i) => `src/file${i}.ts`).join('\n')),
+    ...lastRound(),
+  );
+
+  const freed = clearRecoverable(session, 0, []);
+
+  assert.ok(freed > 2_000, `freed ${freed}`);
+  assert.equal(contentOf(session, 3), CLEARED_SEARCH);
+});
+
+test('a grep result shorter than its marker is left alone', () => {
+  const session = sessionOf(
+    callTurn('g1', 'grep', '{"pattern":"widget"}'),
+    result('g1', 'a.ts'),
+    ...lastRound(),
+  );
+
+  const freed = clearRecoverable(session, 0, []);
+
+  assert.equal(freed, 0);
+  assert.equal(contentOf(session, 3), 'a.ts');
 });
