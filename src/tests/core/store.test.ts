@@ -83,9 +83,9 @@ test('a session is one file of records', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('one')], usage(10));
+  store.appendStep([user('one')], usage(10));
   store.appendView([{kind: 'task', text: 'one'}]);
-  store.appendTurn([assistant('two')], usage(20));
+  store.appendStep([assistant('two')], usage(20));
   store.close();
 
   const project = projectDir(work, root);
@@ -111,7 +111,7 @@ test('reading a session returns both the messages and the view', () => {
   const store = startSession(work, root);
 
   store.appendView([{kind: 'task', text: 'fix the cart'}]);
-  store.appendTurn([user('fix the cart'), assistant('on it')], usage(15));
+  store.appendStep([user('fix the cart'), assistant('on it')], usage(15));
   store.appendView([{kind: 'text', text: 'on it'}]);
   store.close();
 
@@ -139,7 +139,7 @@ test('a record of an unknown kind is ignored, not an error', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
-  store.appendTurn([user('fix the cart')], usage(15));
+  store.appendStep([user('fix the cart')], usage(15));
   store.close();
   fs.appendFileSync(
     path.join(store.dir, 'session.jsonl'),
@@ -157,8 +157,8 @@ test('resume restores the messages and the token count', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('fix the cart'), assistant('on it')], usage(15));
-  store.appendTurn([user('and the total'), assistant('done')], usage(28));
+  store.appendStep([user('fix the cart'), assistant('on it')], usage(15));
+  store.appendStep([user('and the total'), assistant('done')], usage(28));
   store.close();
 
   const restored = loadSession(work, null, root);
@@ -182,11 +182,11 @@ test('the last usage is the newest turn, not the first', () => {
 
   const first = user('fix the cart');
   store.appendMessage(first);
-  store.appendTurn([first, assistant('fixed')], usage(15));
+  store.appendStep([first, assistant('fixed')], usage(15));
   store.appendView([{kind: 'task', text: 'fix the cart'}]);
   const second = user('and the readme');
   store.appendMessage(second);
-  store.appendTurn([second, assistant('updated')], usage(28));
+  store.appendStep([second, assistant('updated')], usage(28));
   store.appendView([{kind: 'task', text: 'and the readme'}]);
   store.close();
 
@@ -210,7 +210,7 @@ test('resume refuses a session from another folder', () => {
   const mine = workspace();
   const other = workspace();
   const store = startSession(mine, root);
-  store.appendTurn([user('hello')], usage(5));
+  store.appendStep([user('hello')], usage(5));
   store.close();
 
   assert.throws(() => loadSession(other, store.id, root), /another folder/);
@@ -220,10 +220,10 @@ test('the newest session is the one resumed', () => {
   const root = home();
   const work = workspace();
   const older = startSession(work, root, at('2026-08-10T09:00:00Z'));
-  older.appendTurn([user('old')], usage(5));
+  older.appendStep([user('old')], usage(5));
   older.close();
   const newer = startSession(work, root, at('2026-08-11T09:00:00Z'));
-  newer.appendTurn([user('new')], usage(5));
+  newer.appendStep([user('new')], usage(5));
   newer.close();
 
   assert.equal(loadSession(work, null, root).meta.id, newer.id);
@@ -237,7 +237,7 @@ test('a session is not readable by anyone else', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
-  store.appendTurn([user('a password lives in here')], usage(5));
+  store.appendStep([user('a password lives in here')], usage(5));
   store.close();
 
   assert.equal(mode(projectDir(work, root)), 0o700);
@@ -250,10 +250,10 @@ test('an old session is evicted, a recent one is kept', () => {
   const root = home();
   const work = workspace();
   const old = startSession(work, root, at('2026-06-01T10:00:00Z'));
-  old.appendTurn([user('old')], usage(5));
+  old.appendStep([user('old')], usage(5));
   old.close();
   const recent = startSession(work, root, at('2026-08-09T10:00:00Z'));
-  recent.appendTurn([user('recent')], usage(5));
+  recent.appendStep([user('recent')], usage(5));
   recent.close();
 
   const removed = evictSessions(root, new Date('2026-08-11T10:00:00Z'), 1);
@@ -270,10 +270,10 @@ test('a session resumed today survives however old it is', () => {
   const root = home();
   const work = workspace();
   const old = startSession(work, root, at('2026-06-01T10:00:00Z'));
-  old.appendTurn([user('old')], usage(5));
+  old.appendStep([user('old')], usage(5));
   old.close();
   const filler = startSession(work, root, at('2026-08-09T10:00:00Z'));
-  filler.appendTurn([user('filler')], usage(5));
+  filler.appendStep([user('filler')], usage(5));
   filler.close();
 
   const {store} = openSession(work, old.id, root, at('2026-08-11T09:00:00Z'));
@@ -295,7 +295,7 @@ test('the newest fifty survive whatever their age', () => {
       root,
       at(new Date(start + n * 60_000).toISOString()),
     );
-    store.appendTurn([user(`session ${n}`)], usage(1));
+    store.appendStep([user(`session ${n}`)], usage(1));
     store.close();
     ids.push(store.id);
   }
@@ -311,13 +311,13 @@ test('reopening a session keeps the folder and appends to the same file', () => 
   const root = home();
   const work = workspace();
   const first = startSession(work, root);
-  first.appendTurn([user('fix the cart')], usage(15));
+  first.appendStep([user('fix the cart')], usage(15));
   first.appendView([{kind: 'task', text: 'fix the cart'}]);
   first.close();
 
   const {stored, store} = openSession(work, null, root);
   store.seed(stored.messages);
-  store.appendTurn([...stored.messages, assistant('done')], usage(10));
+  store.appendStep([...stored.messages, assistant('done')], usage(10));
   store.close();
 
   assert.equal(store.dir, first.dir);
@@ -339,7 +339,7 @@ test('a reopened session is open again while it runs', () => {
   const root = home();
   const work = workspace();
   const first = startSession(work, root);
-  first.appendTurn([user('hello')], usage(5));
+  first.appendStep([user('hello')], usage(5));
   first.close();
 
   const {store} = openSession(work, null, root);
@@ -352,12 +352,12 @@ test('seeded messages are never written twice', () => {
   const root = home();
   const work = workspace();
   const first = startSession(work, root);
-  first.appendTurn([user('one'), assistant('two')], usage(5));
+  first.appendStep([user('one'), assistant('two')], usage(5));
   first.close();
 
   const {stored, store} = openSession(work, null, root);
   store.seed(stored.messages);
-  store.appendTurn(stored.messages, usage(0));
+  store.appendStep(stored.messages, usage(0));
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
@@ -373,7 +373,7 @@ test('every user message record carries an id', () => {
   const asked = user('fix the cart');
 
   store.appendMessage(asked);
-  store.appendTurn([asked, assistant('on it')], usage(15));
+  store.appendStep([asked, assistant('on it')], usage(15));
   store.close();
 
   const [first, second] = records(store.dir);
@@ -402,11 +402,11 @@ function twoTasks(store: ReturnType<typeof startSession>): void {
   const one = user('fix the cart');
   store.appendMessage(one);
   store.appendView([{kind: 'task', text: 'fix the cart'}]);
-  store.appendTurn([one, assistant('fixed')], usage(10));
+  store.appendStep([one, assistant('fixed')], usage(10));
   const two = user('and the readme');
   store.appendMessage(two);
   store.appendView([{kind: 'task', text: 'and the readme'}]);
-  store.appendTurn([two, assistant('updated')], usage(20));
+  store.appendStep([two, assistant('updated')], usage(20));
 }
 
 test('a rewind drops the records above the cut', () => {
@@ -468,7 +468,7 @@ test('the next append after a rewind continues from the cut', () => {
   store.rewind(3);
   const again = user('try once more');
   store.appendMessage(again);
-  store.appendTurn([again, assistant('done')], usage(5));
+  store.appendStep([again, assistant('done')], usage(5));
   store.close();
 
   const restored = loadSession(work, null, root);
@@ -513,7 +513,7 @@ test('a file version changes neither the conversation nor the screen', () => {
   store.appendMessage(asked);
   store.appendView([{kind: 'task', text: 'fix the cart'}]);
   store.appendCode('src/cart.ts', 'f1e2d3');
-  store.appendTurn([asked, assistant('fixed')], usage(10));
+  store.appendStep([asked, assistant('fixed')], usage(10));
   store.appendMessage(user('and the readme'));
   store.close();
 
@@ -539,11 +539,11 @@ test('a rewind drops the file versions above the cut and keeps those below', () 
   const first = user('fix the cart');
   store.appendMessage(first);
   store.appendCode('src/cart.ts', 'aaaa');
-  store.appendTurn([first, assistant('fixed')], usage(10));
+  store.appendStep([first, assistant('fixed')], usage(10));
   const second = user('and the readme');
   store.appendMessage(second);
   store.appendCode('README.md', null);
-  store.appendTurn([second, assistant('updated')], usage(20));
+  store.appendStep([second, assistant('updated')], usage(20));
 
   store.rewind(3);
   store.close();
@@ -568,8 +568,8 @@ test('a compaction drops everything before it and leaves the summary', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
-  store.appendTurn([user('and the readme'), assistant('updated')], usage(20));
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendStep([user('and the readme'), assistant('updated')], usage(20));
   store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
   store.close();
 
@@ -583,11 +583,11 @@ test('what is said after a compaction follows the summary', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
   store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
   const next = user('and the readme');
   store.appendMessage(next);
-  store.appendTurn([next, assistant('updated')], usage(20));
+  store.appendStep([next, assistant('updated')], usage(20));
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
@@ -630,10 +630,10 @@ test('a rewind after a compaction can land before the summary', () => {
 
   const first = user('fix the cart');
   store.appendMessage(first);
-  store.appendTurn([first, assistant('fixed')], usage(10));
+  store.appendStep([first, assistant('fixed')], usage(10));
   const second = user('and the total');
   store.appendMessage(second);
-  store.appendTurn([second, assistant('counted')], usage(20));
+  store.appendStep([second, assistant('counted')], usage(20));
   store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
   store.appendMessage(user('and the readme'));
 
@@ -652,12 +652,12 @@ test('the last usage is not read across a compaction', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(15));
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(15));
   store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
 
   assert.equal(lastUsageOf(store.records()), null);
 
-  store.appendTurn([user('and the readme'), assistant('updated')], usage(28));
+  store.appendStep([user('and the readme'), assistant('updated')], usage(28));
   store.close();
 
   assert.deepEqual(lastUsageOf(store.records()), usage(28));
@@ -669,9 +669,9 @@ test('a summary handed back to the next turn is not written twice', () => {
   const store = startSession(work, root);
   const summary = assistant('SUMMARY: we fixed the cart');
 
-  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
   store.appendCompact(summary, 2);
-  store.appendTurn([summary, user('next'), assistant('done')], usage(10));
+  store.appendStep([summary, user('next'), assistant('done')], usage(10));
   store.close();
 
   const written = records(store.dir);
@@ -697,13 +697,13 @@ test('an unknown record next to a compaction is still ignored', () => {
   const work = workspace();
   const store = startSession(work, root);
 
-  store.appendTurn([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
   store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
   fs.appendFileSync(
     path.join(store.dir, 'session.jsonl'),
     `${JSON.stringify({kind: 'something-new', at: '9f3a1c07', note: 'later'})}\n`,
   );
-  store.appendTurn([user('and the readme'), assistant('updated')], usage(20));
+  store.appendStep([user('and the readme'), assistant('updated')], usage(20));
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [

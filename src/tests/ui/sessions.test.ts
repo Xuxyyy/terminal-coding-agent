@@ -70,7 +70,7 @@ test('the picker skips a version 1 session', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-work-'));
   process.env.ACC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-home-'));
   const live = startSession(root);
-  live.appendTurn([{role: 'user', content: 'the new one'}], {
+  live.appendStep([{role: 'user', content: 'the new one'}], {
     prompt: 10,
     completion: 5,
     total: 15,
@@ -97,7 +97,7 @@ test('a session that never ran a turn is not offered', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-work-'));
   process.env.ACC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-home-'));
   const real = startSession(root);
-  real.appendTurn([{role: 'user', content: 'fix the cart'}], {
+  real.appendStep([{role: 'user', content: 'fix the cart'}], {
     prompt: 10,
     completion: 5,
     total: 15,

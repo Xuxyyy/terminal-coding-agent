@@ -99,10 +99,10 @@ test('a rewind survives quitting and reopening', () => {
   const store = startSession(work, root);
   const one = user('fix the cart');
   store.appendMessage(one);
-  store.appendTurn([one, assistant('fixed')], {prompt: 10, completion: 0, total: 10});
+  store.appendStep([one, assistant('fixed')], {prompt: 10, completion: 0, total: 10});
   const two = user('and the readme');
   store.appendMessage(two);
-  store.appendTurn([two, assistant('updated')], {prompt: 20, completion: 0, total: 20});
+  store.appendStep([two, assistant('updated')], {prompt: 20, completion: 0, total: 20});
 
   store.rewind(2);
   store.close();
@@ -129,7 +129,7 @@ function turn(
   store.appendMessage(asked);
   const answered = assistant(reply);
   session.messages.push(answered);
-  store.appendTurn([asked, answered], {prompt: total, completion: 0, total});
+  store.appendStep([asked, answered], {prompt: total, completion: 0, total});
 }
 
 function markerAt(store: ReturnType<typeof onDisk>['store']): unknown {
@@ -238,7 +238,7 @@ test('the note stays in the run and never reaches the log', () => {
   turn(session, store, 'and the readme', 'updated', 100);
   rewindSession(store, session, checkpointsOf(store.records())[1]!.at);
 
-  store.appendTurn(session.messages, {prompt: 60, completion: 0, total: 60});
+  store.appendStep(session.messages, {prompt: 60, completion: 0, total: 60});
 
   const saved = openSession(session.root, store.id, home);
   assert.deepEqual(

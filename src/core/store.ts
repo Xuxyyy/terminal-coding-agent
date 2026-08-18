@@ -48,7 +48,7 @@ export type SessionStore = {
   dir: string;
   seed(messages: Message[]): void;
   appendMessage(message: Message): string;
-  appendTurn(messages: Message[], usage: Usage): void;
+  appendStep(messages: Message[], usage: Usage): void;
   appendCompact(summary: Message, replaced: number): void;
   appendView(items: unknown[]): void;
   appendCode(path: string, before: string | null): void;
@@ -121,7 +121,7 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       writeMeta();
       return id;
     },
-    appendTurn(messages, usage) {
+    appendStep(messages, usage) {
       const fresh = messages.filter(
         (message) => message.role !== 'system' && !written.has(message),
       );

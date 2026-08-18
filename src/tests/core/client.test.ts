@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {StreamFailure, streamTurn} from '../../core/client.js';
+import {StreamFailure, streamStep} from '../../core/client.js';
 import {
   connectionError,
   fakeHost,
@@ -46,7 +46,7 @@ test('a turn collects the text, the tool calls and the usage', async () => {
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamTurn(choice, [], [], host, fast);
+  const turn = await streamStep(choice, [], [], host, fast);
 
   assert.equal(turn.content, 'looking');
   assert.equal(turn.finishReason, 'tool_calls');
@@ -66,7 +66,7 @@ test('a dropped connection before any output is retried', async () => {
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamTurn(choice, [], [], host, fast);
+  const turn = await streamStep(choice, [], [], host, fast);
 
   assert.equal(turn.content, 'hi');
   assert.equal(calls(), 3);
@@ -81,7 +81,7 @@ test('a stream that dies before its first chunk is retried', async () => {
   );
   const {host, events} = fakeHost();
 
-  const turn = await streamTurn(choice, [], [], host, fast);
+  const turn = await streamStep(choice, [], [], host, fast);
 
   assert.equal(turn.content, 'hi');
   assert.equal(calls(), 2);
@@ -96,7 +96,7 @@ test('a dropped connection after output is not retried', async () => {
   );
   const {host, events} = fakeHost();
 
-  const failure = await failureFrom(streamTurn(choice, [], [], host, fast));
+  const failure = await failureFrom(streamStep(choice, [], [], host, fast));
 
   assert.equal(failure.partial.content, 'half');
   assert.equal(calls(), 1);
@@ -111,7 +111,7 @@ test('a tool call that has started counts as output', async () => {
   );
   const {host} = fakeHost();
 
-  const failure = await failureFrom(streamTurn(choice, [], [], host, fast));
+  const failure = await failureFrom(streamStep(choice, [], [], host, fast));
 
   assert.equal(calls(), 1);
   assert.deepEqual(failure.partial.toolCalls, [
@@ -127,6 +127,6 @@ test('a bad request is not retried', async () => {
   );
   const {host} = fakeHost();
 
-  await assert.rejects(streamTurn(choice, [], [], host, fast), /status 400/);
+  await assert.rejects(streamStep(choice, [], [], host, fast), /status 400/);
   assert.equal(calls(), 1);
 });

@@ -104,7 +104,7 @@ test('a session is written after every turn', async () => {
   const {host} = fakeHost();
   const seen: number[] = [];
   const store = fakeStore({
-    appendTurn(messages) {
+    appendStep(messages) {
       seen.push(messages.length);
     },
   });
@@ -125,7 +125,7 @@ test('a failed write does not kill the run', async () => {
   };
   const store = fakeStore({
     appendMessage: fails,
-    appendTurn: fails,
+    appendStep: fails,
     appendView: fails,
     rewind: fails,
     close: fails,
@@ -161,7 +161,7 @@ test('an interrupted round is saved complete', async () => {
   };
   const saved: OpenAI.ChatCompletionMessageParam[][] = [];
   const store = fakeStore({
-    appendTurn(messages) {
+    appendStep(messages) {
       saved.push([...messages]);
     },
   });
@@ -194,7 +194,7 @@ test('an interrupted stream keeps what arrived', async () => {
   });
   const saved: OpenAI.ChatCompletionMessageParam[][] = [];
   const store = fakeStore({
-    appendTurn(messages) {
+    appendStep(messages) {
       saved.push([...messages]);
     },
   });

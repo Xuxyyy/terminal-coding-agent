@@ -2,7 +2,7 @@ import type OpenAI from 'openai';
 import {
   MAX_OUTPUT_TOKENS,
   StreamFailure,
-  streamTurn,
+  streamStep,
   type ModelChoice,
 } from './client.js';
 import type {Host, Usage} from './host.js';
@@ -83,7 +83,7 @@ export async function runAgent(
   const save = (usage: Usage): void => {
     if (!store) return;
     try {
-      store.appendTurn(session.messages, usage);
+      store.appendStep(session.messages, usage);
     } catch {
       if (warned) return;
       warned = true;
@@ -183,7 +183,7 @@ export async function runAgent(
         return;
       }
 
-      const result = await streamTurn(choice, session.messages, definitions, host);
+      const result = await streamStep(choice, session.messages, definitions, host);
       addUsage(total, result.usage);
       session.messages.push(assistantMessage(result.content, result.toolCalls));
       recordUsage(session, result.usage);

@@ -177,7 +177,7 @@ async function attemptTurn(
   return soFar();
 }
 
-export async function streamTurn(
+export async function streamStep(
   choice: ModelChoice,
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],

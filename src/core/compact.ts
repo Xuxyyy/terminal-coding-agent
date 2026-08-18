@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import {streamTurn, type ModelChoice} from './client.js';
+import {streamStep, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
 import {setMeasured, type Session} from './session.js';
 import type {SessionStore} from './store.js';
@@ -72,7 +72,7 @@ export async function compactSession(
       {role: 'user', content: compactionPrompt(attempt > 0)},
     ];
     try {
-      const result = await streamTurn(choice, asked, [], host);
+      const result = await streamStep(choice, asked, [], host);
       usage.prompt += result.usage.prompt;
       usage.completion += result.usage.completion;
       usage.total += result.usage.total;
