@@ -2,6 +2,7 @@ import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import type {DiffPayload, Host} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
+import type {Mode} from '../permission/mode.js';
 import type {Rules} from '../settings.js';
 
 export type ToolContext = {
@@ -9,6 +10,7 @@ export type ToolContext = {
   host: Host;
   allowed: Set<string>;
   rules: Rules;
+  mode: Mode;
   backup?: (path: string) => void;
 };
 
@@ -68,7 +70,7 @@ async function permitted(
 ): Promise<Permission> {
   if (!tool.request) return {args};
   const request = tool.request(args);
-  const outcome = decide(request, ctx.root, ctx.rules);
+  const outcome = decide(request, ctx.root, ctx.rules, ctx.mode);
   if (outcome.decision === 'allow') return approved(request, args, outcome.command);
   if (outcome.decision === 'deny') return {denied: outcome.reason, args};
   const key = approvalKey(request);

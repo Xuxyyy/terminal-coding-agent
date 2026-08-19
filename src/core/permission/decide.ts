@@ -4,9 +4,9 @@ import {
   classifyRead,
   classifyWrite,
   type Classification,
-  type Level,
 } from './classify.js';
 import {hardenCommand} from './harden.js';
+import {cutOf, DEFAULT_MODE, withinCut, type Mode} from './mode.js';
 import {ruleVerdict} from './rules.js';
 import {commandParts, splitStages} from './stages.js';
 
@@ -22,26 +22,33 @@ export type Outcome = {
   suppressible: boolean;
 };
 
-const ALLOWED_LEVELS: Level[] = ['observe', 'recoverable'];
 const UNCLASSIFIED_REASON = 'cannot be classified from its text';
 
-function outcomeFor(classification: Classification, fallback?: string): Outcome {
+function outcomeFor(
+  classification: Classification,
+  mode: Mode,
+  fallback?: string,
+): Outcome {
   const {level, reason} = classification;
-  if (level !== null && ALLOWED_LEVELS.includes(level)) {
+  if (withinCut(level, mode)) {
     return {decision: 'allow', reason, suppressible: true};
+  }
+  const explained = level === null ? (fallback ?? UNCLASSIFIED_REASON) : reason;
+  if (cutOf(mode).above === 'deny') {
+    return {decision: 'deny', reason: `${mode} mode: ${explained}`, suppressible: false};
   }
   return {
     decision: 'ask',
-    reason: level === null ? (fallback ?? UNCLASSIFIED_REASON) : reason,
+    reason: explained,
     suppressible: level !== 'escape',
   };
 }
 
-function fileOutcome(classification: Classification): Outcome {
+function fileOutcome(classification: Classification, mode: Mode): Outcome {
   if (classification.level === 'escape') {
     return {decision: 'deny', reason: classification.reason, suppressible: false};
   }
-  return outcomeFor(classification);
+  return outcomeFor(classification, mode);
 }
 
 const NO_RULES: Rules = {allow: [], ask: [], deny: []};
@@ -56,12 +63,13 @@ export function decide(
   request: Request,
   root: string,
   rules: Rules = NO_RULES,
+  mode: Mode = DEFAULT_MODE,
 ): Outcome {
   if (request.kind === 'write') {
-    return fileOutcome(classifyWrite(request.path, root));
+    return fileOutcome(classifyWrite(request.path, root), mode);
   }
   if (request.kind === 'read') {
-    return fileOutcome(classifyRead(request.path, root));
+    return fileOutcome(classifyRead(request.path, root), mode);
   }
   const command = hardenCommand(request.command);
   const verdict = ruleVerdict(command, rules);
@@ -69,8 +77,10 @@ export function decide(
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false, command};
   }
   const classification = classifyCommand(command, root);
-  if (classification.level === 'escape') {
-    return {...outcomeFor(classification, request.reason), command};
+  const refused =
+    cutOf(mode).above === 'deny' && !withinCut(classification.level, mode);
+  if (refused || classification.level === 'escape') {
+    return {...outcomeFor(classification, mode, request.reason), command};
   }
   if (verdict !== null) {
     return {
@@ -80,7 +90,7 @@ export function decide(
       command,
     };
   }
-  return {...outcomeFor(classification, request.reason), command};
+  return {...outcomeFor(classification, mode, request.reason), command};
 }
 
 export function approvalKey(request: Request): string {

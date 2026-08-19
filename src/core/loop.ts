@@ -226,6 +226,7 @@ export async function runAgent(
           host,
           allowed: session.allowed,
           rules: session.rules,
+          mode: session.mode,
           backup,
         });
         session.messages.push({

@@ -14,7 +14,7 @@ export type Unclassified = null;
 
 export type Classification = {level: Level | Unclassified; reason: string};
 
-const RANK: Record<Level, number> = {
+export const RANK: Record<Level, number> = {
   observe: 0,
   recoverable: 1,
   protected: 2,

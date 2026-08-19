@@ -27,7 +27,13 @@ function hostThatAnswers(...answers: ConfirmDecision[]) {
 }
 
 function context(root: string, host: Host): ToolContext {
-  return {root, host, allowed: new Set<string>(), rules: {allow: [], ask: [], deny: []}};
+  return {
+    root,
+    host,
+    allowed: new Set<string>(),
+    rules: {allow: [], ask: [], deny: []},
+    mode: 'auto-edits',
+  };
 }
 
 const registry = [grep];

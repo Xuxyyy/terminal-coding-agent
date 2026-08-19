@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {approvalKey, decide, type Outcome} from '../../../core/permission/decide.js';
+import {approvalKey, decide, type Outcome, type Request} from '../../../core/permission/decide.js';
+import type {Mode} from '../../../core/permission/mode.js';
 import {clearSession, createSession} from '../../../core/session.js';
 import type {Rules} from '../../../core/settings.js';
 
@@ -18,19 +19,20 @@ function rules(some: Partial<Rules>): Rules {
   return {allow: [], ask: [], deny: [], ...some};
 }
 
-function command(text: string, some?: Partial<Rules>): Outcome {
-  const request = {kind: 'command', command: text} as const;
-  return some ? decide(request, project, rules(some)) : decide(request, project);
+function asked(request: Request, some?: Partial<Rules>, mode?: Mode): Outcome {
+  return decide(request, project, some ? rules(some) : undefined, mode);
 }
 
-function write(target: string, some?: Partial<Rules>): Outcome {
-  const request = {kind: 'write', path: target} as const;
-  return some ? decide(request, project, rules(some)) : decide(request, project);
+function command(text: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+  return asked({kind: 'command', command: text}, some, mode);
 }
 
-function read(target: string, some?: Partial<Rules>): Outcome {
-  const request = {kind: 'read', path: target} as const;
-  return some ? decide(request, project, rules(some)) : decide(request, project);
+function write(target: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+  return asked({kind: 'write', path: target}, some, mode);
+}
+
+function read(target: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+  return asked({kind: 'read', path: target}, some, mode);
 }
 
 const QUIET = [
@@ -353,4 +355,96 @@ test('clearing the conversation keeps the rules', () => {
 
   assert.deepEqual(session.rules, rules({allow: ['npm run *']}));
   assert.equal(session.allowed.size, 0);
+});
+
+test('auto-edits decides exactly what the classifier alone decided', () => {
+  for (const text of [...QUIET, ...ADVERSARIAL]) {
+    assert.deepEqual(command(text, undefined, 'auto-edits'), command(text), text);
+  }
+  assert.deepEqual(write('src/a.ts', undefined, 'auto-edits'), write('src/a.ts'));
+  assert.deepEqual(read('src/a.ts', undefined, 'auto-edits'), read('src/a.ts'));
+});
+
+test('ask-edits asks about a write that auto-edits runs', () => {
+  const asking = write('src/a.ts', undefined, 'ask-edits');
+  assert.equal(asking.decision, 'ask');
+  assert.equal(asking.suppressible, true);
+  assert.equal(write('src/a.ts', undefined, 'auto-edits').decision, 'allow');
+
+  assert.equal(command('echo x > src/a.ts', undefined, 'ask-edits').decision, 'ask');
+  assert.equal(command('npm test', undefined, 'ask-edits').decision, 'ask');
+});
+
+test('ask-edits runs a read without a prompt', () => {
+  for (const text of ['ls -la', 'git status', 'rg TODO']) {
+    assert.equal(command(text, undefined, 'ask-edits').decision, 'allow', text);
+  }
+  assert.equal(read('src/a.ts', undefined, 'ask-edits').decision, 'allow');
+});
+
+test('read-only refuses a write inside the project instead of asking', () => {
+  const refused = write('src/a.ts', undefined, 'read-only');
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /read-only mode/);
+
+  assert.equal(command('echo x > src/a.ts', undefined, 'read-only').decision, 'deny');
+  assert.equal(command('rm build.log', undefined, 'read-only').decision, 'deny');
+});
+
+test('read-only runs a read', () => {
+  for (const text of QUIET.filter((quiet) => !quiet.startsWith('npm'))) {
+    assert.equal(command(text, undefined, 'read-only').decision, 'allow', text);
+  }
+  assert.equal(read('src/a.ts', undefined, 'read-only').decision, 'allow');
+  assert.equal(read('.git/config', undefined, 'read-only').decision, 'allow');
+});
+
+test('read-only refuses npm test, which is the accepted cost', () => {
+  for (const text of ['npm test', 'npm run build']) {
+    const refused = command(text, undefined, 'read-only');
+    assert.equal(refused.decision, 'deny', text);
+    assert.equal(refused.suppressible, false, text);
+  }
+});
+
+test('read-only refuses a command it cannot classify', () => {
+  const refused = command('python3 build.py', undefined, 'read-only');
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /cannot be classified from its text/);
+});
+
+test('an escape is never remembered in any mode', () => {
+  for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0', 'cat ~/.ssh/id_rsa']) {
+    assert.equal(command(text, undefined, 'auto-edits').decision, 'ask', text);
+    assert.equal(command(text, undefined, 'ask-edits').decision, 'ask', text);
+    assert.equal(command(text, undefined, 'read-only').decision, 'deny', text);
+    for (const mode of ['auto-edits', 'ask-edits', 'read-only'] as Mode[]) {
+      assert.equal(command(text, undefined, mode).suppressible, false, `${mode} ${text}`);
+    }
+  }
+});
+
+test('no allow rule can rescue what read-only refuses', () => {
+  const everything = {allow: ['*']};
+  for (const text of ['npm test', 'rm build.log', 'python3 build.py']) {
+    const refused = command(text, everything, 'read-only');
+    assert.equal(refused.decision, 'deny', text);
+    assert.doesNotMatch(refused.reason, /settings\.json/, text);
+  }
+  assert.equal(write('src/a.ts', everything, 'read-only').decision, 'deny');
+});
+
+test('a deny rule still refuses in every mode', () => {
+  for (const mode of ['auto-edits', 'ask-edits', 'read-only'] as Mode[]) {
+    const refused = command('ls', {deny: ['ls*']}, mode);
+    assert.equal(refused.decision, 'deny', mode);
+    assert.equal(refused.suppressible, false, mode);
+    assert.match(refused.reason, /settings\.json/, mode);
+  }
+});
+
+test('a new session starts in auto-edits', () => {
+  assert.equal(createSession(project, 'system', 100).mode, 'auto-edits');
 });
