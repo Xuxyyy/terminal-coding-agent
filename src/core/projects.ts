@@ -47,31 +47,6 @@ export function projectDir(workspace: string, home: string = accHome()): string 
   return path.join(home, 'projects', `${name}-${hash.slice(0, 8)}`);
 }
 
-export function readProject(
-  workspace: string,
-  home: string = accHome(),
-): Record<string, unknown> {
-  const found = readJson<unknown>(
-    path.join(projectDir(workspace, home), 'project.json'),
-  );
-  const usable =
-    typeof found === 'object' && found !== null && !Array.isArray(found);
-  return usable ? (found as Record<string, unknown>) : {};
-}
-
-export function writeProject(
-  workspace: string,
-  values: Record<string, unknown>,
-  home: string = accHome(),
-): void {
-  const dir = projectDir(workspace, home);
-  makeDir(dir);
-  writeJson(path.join(dir, 'project.json'), {
-    ...readProject(workspace, home),
-    ...values,
-  });
-}
-
 export function sessionsDir(workspace: string, home: string = accHome()): string {
   return path.join(projectDir(workspace, home), 'sessions');
 }

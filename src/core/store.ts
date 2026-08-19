@@ -21,7 +21,6 @@ import {
   SESSION_VERSION,
   sessionsDir,
   writeJson,
-  writeProject,
 } from './projects.js';
 
 export type SessionMeta = {
@@ -85,7 +84,7 @@ export function startSession(
 
   makeDir(dir);
   makeDir(project);
-  writeProject(workspace, {path: workspace}, home);
+  writeJson(path.join(project, 'project.json'), {path: workspace});
 
   const meta: SessionMeta = {
     version: SESSION_VERSION,

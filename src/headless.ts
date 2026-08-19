@@ -3,7 +3,7 @@ import type {ConfirmDecision, Host} from './core/host.js';
 import {runAgent} from './core/loop.js';
 import {systemPrompt} from './core/prompt.js';
 import {addTask, createSession} from './core/session.js';
-import {loadSettings, modeFor, settingsFiles} from './core/settings.js';
+import {loadSettings, modeOf, settingsFiles} from './core/settings.js';
 import {formatArgs, resultStatus} from './ui/events.js';
 
 const task = process.argv.slice(2).join(' ');
@@ -58,6 +58,6 @@ const host: Host = {
 
 const choice = createClient();
 loadSettings(settingsFiles(root));
-const session = createSession(root, systemPrompt(root, modeFor(root)), choice.contextWindow);
+const session = createSession(root, systemPrompt(root, modeOf()), choice.contextWindow);
 addTask(session, task);
 await runAgent(session, choice, host);

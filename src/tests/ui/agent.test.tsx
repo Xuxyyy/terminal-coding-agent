@@ -4,9 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {render} from 'ink';
-import {listSessions, projectDir, sessionsDir} from '../../core/projects.js';
+import {listSessions, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
-import {loadSettings, modeFor, settingsFiles} from '../../core/settings.js';
+import {loadSettings, modeOf, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import {PERMISSION_LABELS} from '../../ui/permission.js';
@@ -1055,16 +1055,15 @@ test('the header never claims read-only will ask', () => {
   assert.match(headerIn('auto-edits').ready!.permission.label, /asks/);
 });
 
-function permissionAgent(): {agent: Ref; unmount: () => void; root: string} {
+function permissionAgent(): {agent: Ref; unmount: () => void} {
   const root = workspace();
   loadSettings([]);
   const {choice} = fakeModel(() => answer('done'));
-  const {agent, unmount} = mount(root, choice);
-  return {agent, unmount, root};
+  return mount(root, choice);
 }
 
 test('/permission opens the picker, and a pick moves the whole session', async () => {
-  const {agent, unmount, root} = permissionAgent();
+  const {agent, unmount} = permissionAgent();
   assert.equal(agent.current!.mode, 'auto-edits');
 
   agent.current!.permission();
@@ -1079,12 +1078,16 @@ test('/permission opens the picker, and a pick moves the whole session', async (
   const notice = agent.current!.committed.at(-1) as NoticeItem;
   assert.equal(notice.kind, 'notice');
   assert.match(notice.text, /read-only/);
-  assert.equal(modeFor(root), 'read-only');
+  assert.equal(modeOf(), 'read-only');
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(process.env.ACC_HOME!, 'settings.json'), 'utf8')),
+    {permission_mode: 'read-only'},
+  );
   unmount();
 });
 
 test('cancelling the picker changes neither the mode nor the file', async () => {
-  const {agent, unmount, root} = permissionAgent();
+  const {agent, unmount} = permissionAgent();
   const home = process.env.ACC_HOME!;
   const before = agent.current!.committed;
 
@@ -1096,11 +1099,8 @@ test('cancelling the picker changes neither the mode nor the file', async () => 
   assert.equal(agent.current!.phase.kind, 'idle');
   assert.equal(agent.current!.mode, 'auto-edits');
   assert.deepEqual(agent.current!.committed, before);
-  assert.equal(modeFor(root), 'auto-edits');
-  assert.equal(
-    fs.existsSync(path.join(projectDir(root, home), 'project.json')),
-    false,
-  );
+  assert.equal(modeOf(), 'auto-edits');
+  assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
 });
 

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
-import {accHome, readProject, writeProject} from './projects.js';
+import {accHome, makeDir} from './projects.js';
 
 export type Rules = {allow: string[]; ask: string[]; deny: string[]};
 
@@ -135,11 +135,14 @@ export function modeOf(): Mode {
   return cachedMode;
 }
 
-export function modeFor(workspace: string): Mode {
-  const remembered = readProject(workspace)[MODE_KEY];
-  return isMode(remembered) ? remembered : modeOf();
-}
-
-export function rememberMode(workspace: string, mode: Mode): void {
-  writeProject(workspace, {[MODE_KEY]: mode});
+export function rememberMode(mode: Mode): void {
+  const file = userSettingsFile();
+  const existing = fs.existsSync(file)
+    ? parseObject(fs.readFileSync(file, 'utf8'), file)
+    : {};
+  makeDir(path.dirname(file));
+  fs.writeFileSync(file, `${JSON.stringify({...existing, [MODE_KEY]: mode}, null, 2)}\n`, {
+    mode: 0o600,
+  });
+  cachedMode = mode;
 }

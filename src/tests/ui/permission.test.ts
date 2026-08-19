@@ -3,6 +3,7 @@ import test from 'node:test';
 import {MODES, type Mode} from '../../core/permission/mode.js';
 import {
   CURRENT_MARK,
+  NOT_REMEMBERED,
   PERMISSION_LABELS,
   permissionAt,
   permissionLine,
@@ -56,5 +57,13 @@ test('the notice names the mode that was picked', () => {
     const notice = permissionNotice(mode);
     assert.ok(notice.includes(mode), notice);
     assert.ok(notice.includes(PERMISSION_LABELS[mode]), notice);
+    assert.equal(notice.includes(NOT_REMEMBERED), false, notice);
   }
+});
+
+test('the notice says so when the pick could not be saved', () => {
+  const notice = permissionNotice('read-only', false);
+
+  assert.ok(notice.includes('read-only'), notice);
+  assert.ok(notice.endsWith(NOT_REMEMBERED), notice);
 });

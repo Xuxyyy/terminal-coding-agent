@@ -40,6 +40,9 @@ export function permissionLine(
   return `${line}…`;
 }
 
-export function permissionNotice(mode: Mode): string {
-  return `permission mode: ${mode} — ${PERMISSION_LABELS[mode]}`;
+export const NOT_REMEMBERED = ' (this session only: the settings file could not be written)';
+
+export function permissionNotice(mode: Mode, remembered = true): string {
+  const notice = `permission mode: ${mode} — ${PERMISSION_LABELS[mode]}`;
+  return remembered ? notice : `${notice}${NOT_REMEMBERED}`;
 }

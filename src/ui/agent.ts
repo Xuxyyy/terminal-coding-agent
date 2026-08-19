@@ -15,7 +15,7 @@ import {
   setMode,
   type Session,
 } from '../core/session.js';
-import {modeFor, rememberMode} from '../core/settings.js';
+import {modeOf, rememberMode} from '../core/settings.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -56,7 +56,7 @@ export type Agent = {
 };
 
 function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
-  const mode = modeFor(workspaceRoot);
+  const mode = modeOf();
   return {
     workspace: workspaceRoot,
     model: {id: choice.model, label: choice.label},
@@ -83,7 +83,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   if (sessionRef.current === null) {
     sessionRef.current = createSession(
       workspaceRoot,
-      systemPrompt(workspaceRoot, modeFor(workspaceRoot)),
+      systemPrompt(workspaceRoot, modeOf()),
       choice.contextWindow,
     );
   }
@@ -366,10 +366,13 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (phase.kind !== 'permission') return;
     setPhase({kind: 'idle'});
     setMode(session, mode);
+    let remembered = true;
     try {
-      rememberMode(workspaceRoot, mode);
-    } catch {}
-    commit([{kind: 'notice', text: permissionNotice(mode)}]);
+      rememberMode(mode);
+    } catch {
+      remembered = false;
+    }
+    commit([{kind: 'notice', text: permissionNotice(mode, remembered)}]);
   };
 
   const shutdown = () => {

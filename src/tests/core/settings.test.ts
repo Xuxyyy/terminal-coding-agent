@@ -3,10 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import {projectDir} from '../../core/projects.js';
 import {
   loadSettings,
-  modeFor,
   modeOf,
   rememberMode,
   parseSettings,
@@ -245,63 +243,72 @@ test('other unknown top-level keys are still ignored in every file', () => {
   });
 });
 
-function workspace(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-work-'));
-}
-
-function projectFile(root: string, home: string, text: string): void {
-  const dir = projectDir(root, home);
-  fs.mkdirSync(dir, {recursive: true});
-  fs.writeFileSync(path.join(dir, 'project.json'), text);
-}
-
-test('a remembered mode wins over the user settings file', () => {
+test('remembering a mode writes it into the user settings file', () => {
   withHome((home) => {
-    loadSettings(settingsIn(home, {permission_mode: 'ask-edits'}));
-    const root = workspace();
+    const files = settingsIn(home, {permission_mode: 'auto-edits'});
+    loadSettings(files);
 
-    rememberMode(root, 'read-only');
+    rememberMode('read-only');
 
-    assert.equal(modeFor(root), 'read-only');
+    assert.equal(modeOf(), 'read-only');
+    assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
+      permission_mode: 'read-only',
+    });
+  });
+});
+
+test('a remembered mode is what the next run reads', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {});
+    loadSettings(files);
+
+    rememberMode('ask-edits');
+    loadSettings(files);
+
     assert.equal(modeOf(), 'ask-edits');
   });
 });
 
-test('with nothing remembered the settings file decides, then auto-edits', () => {
+test('remembering a mode keeps every other setting', () => {
   withHome((home) => {
-    const root = workspace();
-    loadSettings(settingsIn(home, {permission_mode: 'read-only'}));
-    assert.equal(modeFor(root), 'read-only');
-
-    loadSettings(settingsIn(home, {}));
-    assert.equal(modeFor(root), 'auto-edits');
-  });
-});
-
-test('an unusable project file is ignored, not an error', () => {
-  withHome((home) => {
-    loadSettings(settingsIn(home, {permission_mode: 'ask-edits'}));
-    for (const text of ['{bad', '[]', '"read-only"', '{"permission_mode": "yolo"}']) {
-      const root = workspace();
-      projectFile(root, home, text);
-      assert.equal(modeFor(root), 'ask-edits', text);
-    }
-  });
-});
-
-test('remembering a mode writes nothing outside the project folder', () => {
-  withHome((home) => {
-    const files = settingsIn(home, {permission_mode: 'ask-edits'});
+    const files = settingsIn(home, {
+      model: 'deepseek-v4-flash',
+      permissions: {allow: ['bash(npm run *)']},
+    });
     loadSettings(files);
-    const before = fs.readFileSync(files[0]);
-    const root = workspace();
 
-    rememberMode(root, 'read-only');
+    rememberMode('read-only');
+    const rules = loadSettings(files);
 
-    assert.deepEqual(fs.readFileSync(files[0]), before);
-    assert.deepEqual(fs.readdirSync(home).sort(), ['projects', 'settings.json']);
-    assert.deepEqual(fs.readdirSync(path.join(home, 'projects')), [
-      path.basename(projectDir(root, home)),
-    ]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
+      model: 'deepseek-v4-flash',
+      permissions: {allow: ['bash(npm run *)']},
+      permission_mode: 'read-only',
+    });
+    assert.deepEqual(rules.allow, ['npm run *']);
+  });
+});
+
+test('remembering a mode with no settings file yet writes one', () => {
+  withHome((home) => {
+    loadSettings([]);
+    const file = path.join(home, 'settings.json');
+
+    rememberMode('read-only');
+
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {
+      permission_mode: 'read-only',
+    });
+    assert.deepEqual(fs.readdirSync(home), ['settings.json']);
+  });
+});
+
+test('a settings file that stopped parsing is refused, not erased', () => {
+  withHome((home) => {
+    const file = path.join(home, 'settings.json');
+    fs.writeFileSync(file, '{bad');
+
+    assert.throws(() => rememberMode('read-only'), SettingsError);
+    assert.equal(fs.readFileSync(file, 'utf8'), '{bad');
   });
 });
