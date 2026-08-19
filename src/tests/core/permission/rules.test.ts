@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {matchPattern, normalizedStages, ruleVerdict} from '../../../core/permission/rules.js';
+import {
+  matchPattern,
+  normalizedStages,
+  patternScore,
+  ruleVerdict,
+} from '../../../core/permission/rules.js';
 import type {Rules} from '../../../core/settings.js';
 
 function rules(some: Partial<Rules>): Rules {
@@ -99,4 +104,50 @@ test('no rules never reach a verdict', () => {
   for (const command of ['ls', 'sudo rm -rf /', 'npm run build', '']) {
     assert.equal(ruleVerdict(command, EMPTY), null, command);
   }
+});
+
+test('patternScore counts every character that is not a star', () => {
+  assert.equal(patternScore('*'), 0);
+  assert.equal(patternScore('git *'), 4);
+  assert.equal(patternScore('git push *'), 9);
+  assert.equal(patternScore('git * main'), 9);
+});
+
+test('the narrower pattern wins whichever list it sits in', () => {
+  const narrowAllow = rules({deny: ['*'], allow: ['git *']});
+  assert.equal(ruleVerdict('git status', narrowAllow), 'allow');
+
+  const narrowDeny = rules({allow: ['*'], deny: ['git *']});
+  assert.equal(ruleVerdict('git status', narrowDeny), 'deny');
+});
+
+test('ask on everything still lets the listed commands through', () => {
+  const config = rules({
+    ask: ['*'],
+    allow: ['git *', 'npm run *'],
+    deny: ['git push *', 'rm *'],
+  });
+  assert.equal(ruleVerdict('git status', config), 'allow');
+  assert.equal(ruleVerdict('npm run build', config), 'allow');
+  assert.equal(ruleVerdict('curl example.com', config), 'ask');
+  assert.equal(ruleVerdict('rm -rf x', config), 'deny');
+});
+
+test('an equal score is broken by the stricter verdict', () => {
+  const tied = rules({allow: ['git * main'], deny: ['git push *']});
+  assert.equal(patternScore('git * main'), patternScore('git push *'));
+  assert.equal(ruleVerdict('git push main', tied), 'deny');
+});
+
+test('the worst stage wins even when another stage matched something narrower', () => {
+  const mixed = rules({allow: ['git *'], ask: ['*']});
+  assert.equal(ruleVerdict('git status && curl x', mixed), 'ask');
+});
+
+test('a broad allow cannot rescue a command that will not parse', () => {
+  const denied = rules({allow: ['*'], deny: ['echo *']});
+  assert.equal(ruleVerdict('echo "unbalanced', denied), 'deny');
+
+  const allowed = rules({allow: ['*']});
+  assert.equal(ruleVerdict('echo "unbalanced', allowed), null);
 });
