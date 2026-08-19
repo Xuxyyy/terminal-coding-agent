@@ -52,6 +52,7 @@ export type Phase =
   | {kind: 'confirming'; request: ConfirmRequest}
   | {kind: 'picking'}
   | {kind: 'rewinding'}
+  | {kind: 'permission'}
   | {kind: 'rewind-confirm'; id: string; title: string; files: RewindFile[]}
   | {kind: 'closed'};
 

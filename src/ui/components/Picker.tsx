@@ -24,7 +24,7 @@ export function Picker<Row extends {id: string}>({
   hint: string;
   empty: string;
   renderRow: (row: Row, active: boolean, width: number) => string;
-  onPick: (id: string) => void;
+  onPick: (id: Row['id']) => void;
   onCancel: () => void;
   initial?: number;
 }) {

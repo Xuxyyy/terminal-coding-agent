@@ -4,11 +4,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {render} from 'ink';
-import {listSessions, sessionsDir} from '../../core/projects.js';
+import {listSessions, projectDir, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
-import {loadSettings, settingsFiles} from '../../core/settings.js';
+import {loadSettings, modeFor, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
-import {PERMISSION_LABELS, useAgent, type Agent} from '../../ui/agent.js';
+import {useAgent, type Agent} from '../../ui/agent.js';
+import {PERMISSION_LABELS} from '../../ui/permission.js';
 import type {
   ContextItem,
   HeaderItem,
@@ -1052,4 +1053,84 @@ test('the header never claims read-only will ask', () => {
   assert.doesNotMatch(reading.ready!.permission.label, /asks/);
   assert.match(reading.ready!.permission.label, /nothing will be written/);
   assert.match(headerIn('auto-edits').ready!.permission.label, /asks/);
+});
+
+function permissionAgent(): {agent: Ref; unmount: () => void; root: string} {
+  const root = workspace();
+  loadSettings([]);
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+  return {agent, unmount, root};
+}
+
+test('/permission opens the picker, and a pick moves the whole session', async () => {
+  const {agent, unmount, root} = permissionAgent();
+  assert.equal(agent.current!.mode, 'auto-edits');
+
+  agent.current!.permission();
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'permission');
+
+  agent.current!.setPermission('read-only');
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.equal(agent.current!.mode, 'read-only');
+  const notice = agent.current!.committed.at(-1) as NoticeItem;
+  assert.equal(notice.kind, 'notice');
+  assert.match(notice.text, /read-only/);
+  assert.equal(modeFor(root), 'read-only');
+  unmount();
+});
+
+test('cancelling the picker changes neither the mode nor the file', async () => {
+  const {agent, unmount, root} = permissionAgent();
+  const home = process.env.ACC_HOME!;
+  const before = agent.current!.committed;
+
+  agent.current!.permission();
+  await tick();
+  agent.current!.cancelPick();
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.equal(agent.current!.mode, 'auto-edits');
+  assert.deepEqual(agent.current!.committed, before);
+  assert.equal(modeFor(root), 'auto-edits');
+  assert.equal(
+    fs.existsSync(path.join(projectDir(root, home), 'project.json')),
+    false,
+  );
+  unmount();
+});
+
+test('/permission while the agent is busy does nothing', async () => {
+  const root = workspace();
+  loadSettings([]);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const {choice} = fakeModel(() => ({
+    async *[Symbol.asyncIterator]() {
+      await held;
+      yield textChunk('done');
+      yield finishChunk('stop');
+      yield usageChunk(10, 5);
+    },
+  }));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'busy');
+
+  agent.current!.permission();
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'busy');
+  release();
+  await settle(agent);
+  assert.equal(agent.current!.mode, 'auto-edits');
+  unmount();
 });

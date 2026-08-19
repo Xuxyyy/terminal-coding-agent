@@ -5,14 +5,22 @@ import {commandMatches, completeCommand} from '../../ui/components/CommandInput.
 test('the menu offers only the commands this version has', () => {
   assert.deepEqual(
     commandMatches('/').map((command) => command.value),
-    ['/context', '/compact', '/clear', '/resume', '/rewind'],
+    ['/context', '/compact', '/clear', '/resume', '/rewind', '/permission'],
   );
 });
 
 test('a dropped command is not suggested', () => {
-  assert.deepEqual(commandMatches('/per'), []);
+  assert.deepEqual(commandMatches('/mode'), []);
   assert.deepEqual(commandMatches('/model'), []);
-  assert.equal(completeCommand('/per'), '/per');
+  assert.equal(completeCommand('/mode'), '/mode');
+});
+
+test('/permission completes from the first few letters', () => {
+  assert.deepEqual(
+    commandMatches('/perm').map((command) => command.value),
+    ['/permission'],
+  );
+  assert.equal(completeCommand('/perm'), '/permission');
 });
 
 test('completeCommand picks the highlighted match, not always the first', () => {

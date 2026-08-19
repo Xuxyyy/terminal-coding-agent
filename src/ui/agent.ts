@@ -12,9 +12,10 @@ import {
   contextStatus,
   createSession,
   setMeasured,
+  setMode,
   type Session,
 } from '../core/session.js';
-import {modeFor} from '../core/settings.js';
+import {modeFor, rememberMode} from '../core/settings.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -25,17 +26,13 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
+import {PERMISSION_LABELS, permissionNotice} from './permission.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
-export const PERMISSION_LABELS: Record<Mode, string> = {
-  'read-only': 'read-only; nothing will be written',
-  'ask-edits': 'asks before every edit, and before anything git cannot undo',
-  'auto-edits': 'asks before anything git cannot undo',
-};
-
 export type Agent = {
   committed: Item[];
+  mode: Mode;
   streamText: string;
   phase: Phase;
   generation: number;
@@ -53,6 +50,8 @@ export type Agent = {
   applyRewind: (id: string) => void;
   context: () => void;
   compact: () => void;
+  permission: () => void;
+  setPermission: (mode: Mode) => void;
   shutdown: () => void;
 };
 
@@ -207,7 +206,13 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   };
 
   const cancelPick = () => {
-    if (phase.kind !== 'picking' && phase.kind !== 'rewinding') return;
+    if (
+      phase.kind !== 'picking' &&
+      phase.kind !== 'rewinding' &&
+      phase.kind !== 'permission'
+    ) {
+      return;
+    }
     setPhase({kind: 'idle'});
   };
 
@@ -352,6 +357,21 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       });
   };
 
+  const permission = () => {
+    if (phase.kind !== 'idle') return;
+    setPhase({kind: 'permission'});
+  };
+
+  const setPermission = (mode: Mode) => {
+    if (phase.kind !== 'permission') return;
+    setPhase({kind: 'idle'});
+    setMode(session, mode);
+    try {
+      rememberMode(workspaceRoot, mode);
+    } catch {}
+    commit([{kind: 'notice', text: permissionNotice(mode)}]);
+  };
+
   const shutdown = () => {
     controllerRef.current?.abort();
     try {
@@ -364,6 +384,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
 
   return {
     committed,
+    mode: session.mode,
     streamText,
     phase,
     generation,
@@ -381,6 +402,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     applyRewind,
     context,
     compact,
+    permission,
+    setPermission,
     shutdown,
   };
 }

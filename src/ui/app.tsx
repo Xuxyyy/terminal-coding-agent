@@ -12,6 +12,13 @@ import {Markdown} from './components/Markdown.js';
 import {Picker} from './components/Picker.js';
 import {RewindConfirm} from './components/RewindConfirm.js';
 import {SessionPicker} from './components/SessionPicker.js';
+import {
+  PERMISSION_HINT,
+  PERMISSION_TITLE,
+  permissionAt,
+  permissionLine,
+  permissionRows,
+} from './permission.js';
 import {NOTHING_TO_REWIND, rewindLine} from './rewind.js';
 import {sessionRows} from './sessions.js';
 import {HistoryList} from './components/history/HistoryList.js';
@@ -30,6 +37,7 @@ export function App({
   const {stdout} = useStdout();
   const {
     committed,
+    mode,
     streamText,
     phase,
     generation,
@@ -47,6 +55,8 @@ export function App({
     applyRewind,
     context,
     compact,
+    permission,
+    setPermission,
     shutdown,
   } = useAgent(workspaceRoot, choice);
   const [input, setInput] = useState('');
@@ -65,6 +75,7 @@ export function App({
     [phase.kind, workspaceRoot],
   );
   const rewindable = phase.kind === 'rewinding' ? checkpoints() : [];
+  const modes = phase.kind === 'permission' ? permissionRows(mode) : [];
 
   const submit = (value: string) => {
     const command = value.trim();
@@ -100,6 +111,11 @@ export function App({
     }
     if (command === '/compact') {
       compact();
+      setInput('');
+      return;
+    }
+    if (command === '/permission') {
+      permission();
       setInput('');
       return;
     }
@@ -171,6 +187,17 @@ export function App({
             onPick={rewind}
             onCancel={cancelPick}
             initial={rewindable.length - 1}
+          />
+        ) : phase.kind === 'permission' ? (
+          <Picker
+            title={PERMISSION_TITLE}
+            rows={modes}
+            hint={PERMISSION_HINT}
+            empty=""
+            renderRow={permissionLine}
+            onPick={setPermission}
+            onCancel={cancelPick}
+            initial={permissionAt(mode)}
           />
         ) : phase.kind === 'rewind-confirm' ? (
           <RewindConfirm

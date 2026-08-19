@@ -9,6 +9,7 @@ const COMMANDS = [
   {value: '/clear', description: 'clear the conversation'},
   {value: '/resume', description: 'reopen a past conversation'},
   {value: '/rewind', description: 'go back to before an earlier message'},
+  {value: '/permission', description: 'change what runs without asking'},
 ];
 
 export function commandMatches(input: string) {
