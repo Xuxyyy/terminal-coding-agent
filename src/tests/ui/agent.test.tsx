@@ -5,10 +5,13 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {render} from 'ink';
 import {listSessions, sessionsDir} from '../../core/projects.js';
+import type {Mode} from '../../core/permission/mode.js';
+import {loadSettings, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
-import {useAgent, type Agent} from '../../ui/agent.js';
+import {PERMISSION_LABELS, useAgent, type Agent} from '../../ui/agent.js';
 import type {
   ContextItem,
+  HeaderItem,
   Item,
   NoticeItem,
   TaskItem,
@@ -1017,4 +1020,36 @@ test('a turn after a rewind across a compaction writes each message once', async
   );
   assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
   assert.equal(occurrences(stored.messages, SUMMARY), 0);
+});
+
+function headerIn(mode: Mode): HeaderItem {
+  const root = workspace();
+  fs.writeFileSync(
+    path.join(process.env.ACC_HOME!, 'settings.json'),
+    JSON.stringify({permission_mode: mode}),
+  );
+  loadSettings(settingsFiles(root));
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+  const [item] = agent.current!.committed;
+  unmount();
+  loadSettings([]);
+  assert.equal(item!.kind, 'header');
+  return item as HeaderItem;
+}
+
+test('the header says which permission mode the session is in', () => {
+  for (const mode of ['read-only', 'ask-edits', 'auto-edits'] as Mode[]) {
+    const header = headerIn(mode);
+    assert.equal(header.ready!.permission.id, mode, mode);
+    assert.equal(header.ready!.permission.label, PERMISSION_LABELS[mode], mode);
+  }
+});
+
+test('the header never claims read-only will ask', () => {
+  const reading = headerIn('read-only');
+
+  assert.doesNotMatch(reading.ready!.permission.label, /asks/);
+  assert.match(reading.ready!.permission.label, /nothing will be written/);
+  assert.match(headerIn('auto-edits').ready!.permission.label, /asks/);
 });

@@ -3,6 +3,7 @@ import type {ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
+import type {Mode} from '../core/permission/mode.js';
 import {systemPrompt} from '../core/prompt.js';
 import {rewindPlan, rewindSession} from '../core/rewind.js';
 import {
@@ -27,7 +28,11 @@ import {
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
-export const PERMISSION_LABEL = 'asks before anything git cannot undo';
+export const PERMISSION_LABELS: Record<Mode, string> = {
+  'read-only': 'read-only; nothing will be written',
+  'ask-edits': 'asks before every edit, and before anything git cannot undo',
+  'auto-edits': 'asks before anything git cannot undo',
+};
 
 export type Agent = {
   committed: Item[];
@@ -52,10 +57,11 @@ export type Agent = {
 };
 
 function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
+  const mode = modeOf();
   return {
     workspace: workspaceRoot,
     model: {id: choice.model, label: choice.label},
-    permission: {id: 'default', label: PERMISSION_LABEL},
+    permission: {id: mode, label: PERMISSION_LABELS[mode]},
   };
 }
 
