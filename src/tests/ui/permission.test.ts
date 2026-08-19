@@ -9,7 +9,9 @@ import {
   permissionLine,
   permissionNotice,
   permissionRows,
+  withPermission,
 } from '../../ui/permission.js';
+import type {Item} from '../../ui/events.js';
 
 test('the rows list every mode, with the current one marked', () => {
   const rows = permissionRows('ask-edits');
@@ -66,4 +68,41 @@ test('the notice says so when the pick could not be saved', () => {
 
   assert.ok(notice.includes('read-only'), notice);
   assert.ok(notice.endsWith(NOT_REMEMBERED), notice);
+});
+
+test('the header line follows a switch instead of naming the old mode', () => {
+  const header: Item = {
+    kind: 'header',
+    workspaceRoot: '/tmp/work',
+    ready: {
+      workspace: '/tmp/work',
+      model: {id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash'},
+      permission: {id: 'auto-edits', label: PERMISSION_LABELS['auto-edits']},
+    },
+  };
+
+  const moved = withPermission(header, 'read-only');
+
+  assert.equal(moved.kind === 'header' && moved.ready!.permission.id, 'read-only');
+  assert.equal(
+    moved.kind === 'header' && moved.ready!.permission.label,
+    PERMISSION_LABELS['read-only'],
+  );
+  assert.equal(
+    moved.kind === 'header' && moved.ready!.model.label,
+    'DeepSeek v4 Flash',
+  );
+  assert.equal(header.ready!.permission.id, 'auto-edits');
+});
+
+test('every other item passes through a switch untouched', () => {
+  const items: Item[] = [
+    {kind: 'task', text: 'fix the cart'},
+    {kind: 'notice', text: 'context cleared'},
+    {kind: 'header', workspaceRoot: '/tmp/work'},
+  ];
+
+  for (const item of items) {
+    assert.equal(withPermission(item, 'read-only'), item);
+  }
 });

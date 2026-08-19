@@ -1,5 +1,6 @@
 import stringWidth from 'string-width';
 import {MODES, type Mode} from '../core/permission/mode.js';
+import type {Item} from './events.js';
 
 export type PermissionRow = {id: Mode; label: string; current: boolean};
 
@@ -45,4 +46,12 @@ export const NOT_REMEMBERED = ' (this session only: the settings file could not 
 export function permissionNotice(mode: Mode, remembered = true): string {
   const notice = `permission mode: ${mode} — ${PERMISSION_LABELS[mode]}`;
   return remembered ? notice : `${notice}${NOT_REMEMBERED}`;
+}
+
+export function withPermission(item: Item, mode: Mode): Item {
+  if (item.kind !== 'header' || !item.ready) return item;
+  return {
+    ...item,
+    ready: {...item.ready, permission: {id: mode, label: PERMISSION_LABELS[mode]}},
+  };
 }

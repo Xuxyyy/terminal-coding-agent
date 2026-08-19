@@ -26,7 +26,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
-import {PERMISSION_LABELS, permissionNotice} from './permission.js';
+import {PERMISSION_LABELS, permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
@@ -372,6 +372,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     } catch {
       remembered = false;
     }
+    setCommitted((prev) => prev.map((item) => withPermission(item, mode)));
     commit([{kind: 'notice', text: permissionNotice(mode, remembered)}]);
   };
 

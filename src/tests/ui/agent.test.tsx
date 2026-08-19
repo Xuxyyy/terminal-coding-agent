@@ -1079,6 +1079,9 @@ test('/permission opens the picker, and a pick moves the whole session', async (
   assert.equal(notice.kind, 'notice');
   assert.match(notice.text, /read-only/);
   assert.equal(modeOf(), 'read-only');
+  const header = agent.current!.committed[0] as HeaderItem;
+  assert.equal(header.kind, 'header');
+  assert.equal(header.ready!.permission.id, 'read-only');
   assert.deepEqual(
     JSON.parse(fs.readFileSync(path.join(process.env.ACC_HOME!, 'settings.json'), 'utf8')),
     {permission_mode: 'read-only'},
