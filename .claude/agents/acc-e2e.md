@@ -1,6 +1,6 @@
 ---
 name: acc-e2e
-description: Drives the real `acc` binary in a tmux terminal and judges what the screen and the session files show. Use for a regression run before a release or after changing the TUI, the turn loop, the permission gate, or the session store — and for a feature run, when something was just built and needs checking in the real app. Paid scenarios spend real API tokens and need the user's yes first.
+description: Drives the real `acc` binary in a tmux terminal and judges what the screen and the session files show. Use for a regression run before a release or after changing the TUI, the turn loop, the permission gate, or the session store — and for a feature run, when something was just built and needs checking in the real app. Paid scenarios spend real API tokens and need the user's yes first. Two rules bind you, the caller — have the user approve the drafted scenarios in a message of their own before any run, and paste the report this agent returns into your reply whole, all five sections, because the user sees nothing else of the run.
 tools: Bash, Read, Grep, Glob
 model: opus
 skills: tui-e2e
