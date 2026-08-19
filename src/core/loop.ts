@@ -17,7 +17,7 @@ import {
 } from './session.js';
 import type {SessionStore} from './store.js';
 import {captureBefore} from './history.js';
-import {runTool, toolDefinitions, tools as defaultTools} from './tools/index.js';
+import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveInWorkspace} from './tools/paths.js';
 import type {Tool} from './tools/registry.js';
 
@@ -63,7 +63,7 @@ export async function runAgent(
   session: Session,
   choice: ModelChoice,
   host: Host,
-  registry: Tool[] = defaultTools,
+  registry: Tool[] = toolsFor(session.mode),
   store?: SessionStore,
 ): Promise<void> {
   const definitions = toolDefinitions(registry);

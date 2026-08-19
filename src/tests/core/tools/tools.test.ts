@@ -10,6 +10,7 @@ import {editFile} from '../../../core/tools/edit.js';
 import {grep} from '../../../core/tools/grep.js';
 import {resolveInWorkspace} from '../../../core/tools/paths.js';
 import {readFile} from '../../../core/tools/read.js';
+import {toolsFor} from '../../../core/tools/index.js';
 import {runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
 import {writeFile} from '../../../core/tools/write.js';
 
@@ -617,4 +618,34 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
     ['path'],
   );
   assert.equal(definitions[1]?.function.name, 'bash');
+});
+
+test('read-only mode is offered no tool that writes', () => {
+  const names = toolsFor('read-only').map((tool) => tool.name);
+
+  assert.deepEqual(names, ['read_file', 'grep', 'bash']);
+});
+
+test('the other modes are offered every tool', () => {
+  const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash'];
+
+  assert.deepEqual(toolsFor('auto-edits').map((tool) => tool.name), full);
+  assert.deepEqual(toolsFor('ask-edits').map((tool) => tool.name), full);
+});
+
+test('the gate, not the tool list, is what read-only enforces', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('once');
+  const ctx: ToolContext = {...context(root, host), mode: 'read-only'};
+
+  const output = await runTool(
+    registry,
+    'write_file',
+    JSON.stringify({path: 'a.ts', content: 'x'}),
+    ctx,
+  );
+
+  assert.match(output.text, /^Error: read-only mode/);
+  assert.equal(asked.length, 0);
+  assert.equal(fs.existsSync(path.join(root, 'a.ts')), false);
 });

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import {DEFAULT_MODE, type Mode} from './permission/mode.js';
 
 const SKIP = new Set(['.git', 'node_modules', 'dist', 'build', '__pycache__', '.venv']);
 const MAX_ENTRIES = 120;
@@ -22,6 +23,23 @@ If the user greets you or asks something you can answer from what you already kn
 
 When a tool returns an error, read it and try a different approach; do not repeat the same call.
 Stop and answer the user once the task is done. Keep your final answer short and concrete: what you changed and how you verified it.`;
+
+const READ_ONLY_INSTRUCTIONS = `You are a coding agent working in a real repository on the user's machine.
+
+This session is read-only. You have no tool that changes a file, and the permission gate
+refuses every command that writes, deletes or leaves the project — running the tests
+included. Read and search as much as you need; nothing you do will be written.
+
+Work like a careful engineer:
+- Use grep to find where something lives, then read_file to see it. Do not read a
+  whole file to look around.
+- Use bash to read the repository: ls, cat, git log, git diff, rg.
+- Answer from what you actually read, and name the file and the line you read it in.
+
+If the user greets you or asks something you can answer from what you already know, reply directly without calling a tool.
+
+When a tool returns an error, read it and try a different approach; do not repeat the same call.
+Stop and answer the user once the task is done. Keep your final answer short and concrete.`;
 
 export function fileTree(root: string): string {
   const lines: string[] = [];
@@ -65,6 +83,7 @@ export function environmentBlock(root: string): string {
   ].join('\n');
 }
 
-export function systemPrompt(root: string): string {
-  return `${INSTRUCTIONS}\n\n${environmentBlock(root)}`;
+export function systemPrompt(root: string, mode: Mode = DEFAULT_MODE): string {
+  const instructions = mode === 'read-only' ? READ_ONLY_INSTRUCTIONS : INSTRUCTIONS;
+  return `${instructions}\n\n${environmentBlock(root)}`;
 }

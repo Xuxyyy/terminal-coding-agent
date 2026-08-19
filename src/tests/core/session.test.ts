@@ -14,6 +14,7 @@ import {
   THRESHOLD_AT,
   type Session,
 } from '../../core/session.js';
+import {systemPrompt} from '../../core/prompt.js';
 import {estimateMessages} from '../../core/tokens.js';
 
 test('clearing the session forgets approvals', () => {
@@ -237,4 +238,25 @@ test('an emptied result puts the session back under the line', () => {
 test('a low override moves the line down', () => {
   assert.equal(overThreshold(measured(150), {ACC_COMPACT_AT: '0.1'}), true);
   assert.equal(overThreshold(measured(99), {ACC_COMPACT_AT: '0.1'}), false);
+});
+
+test('a read-only session counts the tools it is actually offered', () => {
+  const reading = createSession('/tmp/work', 'rules', 100_000);
+  reading.mode = 'read-only';
+  const editing = createSession('/tmp/work', 'rules', 100_000);
+
+  assert.ok(
+    contextStatus(reading).tools < contextStatus(editing).tools,
+    'read-only should cost fewer tool tokens',
+  );
+  assert.ok(contextStatus(reading).tools > 0);
+});
+
+test('the read-only prompt never names a tool that cannot run', () => {
+  const reading = systemPrompt(process.cwd(), 'read-only');
+
+  assert.doesNotMatch(reading, /edit_file|write_file/);
+  assert.match(reading, /read_file/);
+  assert.match(reading, /read-only/);
+  assert.match(systemPrompt(process.cwd(), 'auto-edits'), /edit_file/);
 });

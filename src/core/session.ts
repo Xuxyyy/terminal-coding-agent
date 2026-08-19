@@ -3,7 +3,7 @@ import type {Usage} from './host.js';
 import type {Mode} from './permission/mode.js';
 import {modeOf, rulesOf, type Rules} from './settings.js';
 import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
-import {toolDefinitions, tools as defaultTools, type Tool} from './tools/index.js';
+import {toolDefinitions, toolsFor, type Tool} from './tools/index.js';
 
 export type ContextStatus = {
   used: number;
@@ -88,7 +88,7 @@ export function clearSession(session: Session): void {
 
 export function contextStatus(
   session: Session,
-  registry: Tool[] = defaultTools,
+  registry: Tool[] = toolsFor(session.mode),
 ): ContextStatus {
   const systemCost = estimateTokens(session.systemPrompt);
   const toolCost = estimateTools(toolDefinitions(registry));
@@ -112,7 +112,7 @@ export function contextStatus(
 
 export function projectedTokens(
   session: Session,
-  registry: Tool[] = defaultTools,
+  registry: Tool[] = toolsFor(session.mode),
 ): number {
   if (session.lastContextTokens === 0) return contextStatus(session, registry).used;
   const since = estimateMessages(session.messages) - session.measuredAt;
@@ -136,7 +136,7 @@ export function contextThreshold(
 export function overThreshold(
   session: Session,
   env: NodeJS.ProcessEnv = process.env,
-  registry: Tool[] = defaultTools,
+  registry: Tool[] = toolsFor(session.mode),
 ): boolean {
   return (
     projectedTokens(session, registry) >=

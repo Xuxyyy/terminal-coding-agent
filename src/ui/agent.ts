@@ -13,6 +13,7 @@ import {
   setMeasured,
   type Session,
 } from '../core/session.js';
+import {modeOf} from '../core/settings.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -77,7 +78,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   if (sessionRef.current === null) {
     sessionRef.current = createSession(
       workspaceRoot,
-      systemPrompt(workspaceRoot),
+      systemPrompt(workspaceRoot, modeOf()),
       choice.contextWindow,
     );
   }
