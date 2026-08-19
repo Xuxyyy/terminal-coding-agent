@@ -1,13 +1,13 @@
 import stringWidth from 'string-width';
 import {MODES, type Mode} from '../core/permission/mode.js';
-import type {Item} from './events.js';
+import type {Item, RowParts} from './events.js';
 
 export type PermissionRow = {id: Mode; label: string; current: boolean};
 
 export const PERMISSION_LABELS: Record<Mode, string> = {
-  'read-only': 'read-only; nothing will be written',
-  'ask-edits': 'asks before every edit, and before anything git cannot undo',
-  'auto-edits': 'asks before anything git cannot undo',
+  'read-only': 'nothing is written',
+  'ask-edits': 'asks before every edit',
+  'auto-edits': 'edits without asking',
 };
 
 export const PERMISSION_TITLE = 'Choose what runs without asking';
@@ -28,23 +28,31 @@ export function permissionAt(current: Mode): number {
   return MODES.indexOf(current);
 }
 
+function fit(text: string, width: number): string {
+  if (stringWidth(text) <= width) return text;
+  let cut = text;
+  while (stringWidth(cut) > width - 1) cut = cut.slice(0, -1);
+  return `${cut}…`;
+}
+
 export function permissionLine(
   row: PermissionRow,
   active: boolean,
   width: number,
-): string {
+): RowParts {
   const marker = active ? '❯ ' : '  ';
-  const name = `${row.id}${row.current ? CURRENT_MARK : ''}`;
-  let line = `${marker}${name} — ${row.label}`;
-  if (stringWidth(line) <= width) return line;
-  while (stringWidth(line) > width - 1) line = line.slice(0, -1);
-  return `${line}…`;
+  const head = `${marker}${row.id}${row.current ? CURRENT_MARK : ''}`;
+  const tail = ` — ${row.label}`;
+  const room = width - stringWidth(head);
+  if (room >= stringWidth(tail)) return {head, tail};
+  if (room <= 2) return {head: fit(head, width), tail: ''};
+  return {head, tail: fit(tail, room)};
 }
 
-export const NOT_REMEMBERED = ' (this session only: the settings file could not be written)';
+export const NOT_REMEMBERED = ' (not saved to settings.json)';
 
 export function permissionNotice(mode: Mode, remembered = true): string {
-  const notice = `permission mode: ${mode} — ${PERMISSION_LABELS[mode]}`;
+  const notice = `switched to ${mode}`;
   return remembered ? notice : `${notice}${NOT_REMEMBERED}`;
 }
 

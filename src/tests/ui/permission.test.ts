@@ -33,33 +33,39 @@ test('the picker opens on the mode the session is in', () => {
   }
 });
 
-test('a row reads as the mode and its sentence', () => {
+test('only the name is in the part the picker bolds', () => {
   const [reading] = permissionRows('read-only');
 
   const active = permissionLine(reading!, true, 80);
-  assert.ok(active.startsWith('❯ read-only'), active);
-  assert.ok(active.includes(CURRENT_MARK), active);
-  assert.ok(active.includes(PERMISSION_LABELS['read-only']), active);
+  assert.equal(active.head, `❯ read-only${CURRENT_MARK}`);
+  assert.equal(active.tail, ` — ${PERMISSION_LABELS['read-only']}`);
 
   const idle = permissionLine(permissionRows('auto-edits')[0]!, false, 80);
-  assert.ok(idle.startsWith('  read-only'), idle);
-  assert.equal(idle.includes(CURRENT_MARK), false);
+  assert.equal(idle.head, '  read-only');
+  assert.equal(idle.head.includes(CURRENT_MARK), false);
 });
 
 test('a row is cut to the width it is given', () => {
   for (const mode of MODES) {
-    const line = permissionLine(permissionRows(mode)[1]!, true, 30);
-    assert.ok(line.length <= 30, line);
-    assert.ok(line.endsWith('…'), line);
+    const {head, tail} = permissionLine(permissionRows(mode)[1]!, true, 24);
+    assert.ok(head.length + tail.length <= 24, `${head}${tail}`);
+    assert.ok(tail.endsWith('…'), tail);
   }
+});
+
+test('a row too narrow for a sentence keeps the name alone', () => {
+  const {head, tail} = permissionLine(permissionRows('ask-edits')[1]!, true, 12);
+
+  assert.equal(tail, '');
+  assert.ok(head.length <= 12, head);
+  assert.ok(head.startsWith('❯ ask-edits'), head);
 });
 
 test('the notice names the mode that was picked', () => {
   for (const mode of MODES as Mode[]) {
     const notice = permissionNotice(mode);
-    assert.ok(notice.includes(mode), notice);
-    assert.ok(notice.includes(PERMISSION_LABELS[mode]), notice);
-    assert.equal(notice.includes(NOT_REMEMBERED), false, notice);
+    assert.equal(notice, `switched to ${mode}`);
+    assert.equal(notice.includes(PERMISSION_LABELS[mode]), false, notice);
   }
 });
 

@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
+import type {RowParts} from '../events.js';
 import {theme} from '../theme.js';
 
 const VISIBLE = 5;
@@ -23,7 +24,7 @@ export function Picker<Row extends {id: string}>({
   rows: Row[];
   hint: string;
   empty: string;
-  renderRow: (row: Row, active: boolean, width: number) => string;
+  renderRow: (row: Row, active: boolean, width: number) => string | RowParts;
   onPick: (id: Row['id']) => void;
   onCancel: () => void;
   initial?: number;
@@ -65,14 +66,17 @@ export function Picker<Row extends {id: string}>({
       <Text bold color={theme.foreground}>{title}</Text>
       {shown.map((row, index) => {
         const active = start + index === selected;
+        const rendered = renderRow(row, active, width);
+        const {head, tail} =
+          typeof rendered === 'string' ? {head: rendered, tail: ''} : rendered;
         return (
           <Text
             key={row.id}
-            bold={active}
             color={active ? theme.foreground : theme.muted}
             backgroundColor={active ? theme.surface : undefined}
           >
-            {renderRow(row, active, width)}
+            <Text bold={active}>{head}</Text>
+            {tail}
           </Text>
         );
       })}
