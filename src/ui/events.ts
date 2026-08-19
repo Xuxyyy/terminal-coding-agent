@@ -14,12 +14,10 @@ export type {
   Usage,
 } from '../core/host.js';
 
-export type PermissionInfo = {id: string; label: string};
-
 export type ReadyInfo = {
   workspace: string;
   model: {id: string; label: string};
-  permission: PermissionInfo;
+  permission: {id: string};
 };
 
 export type HeaderItem = {

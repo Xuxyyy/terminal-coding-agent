@@ -17,7 +17,7 @@ export function Welcome({
       </Text>
       <Text color={theme.muted}>workspace: {workspaceRoot}</Text>
       {ready ? (
-        <Text color={theme.muted}>permissions: {ready.permission.label}</Text>
+        <Text color={theme.muted}>permissions: {ready.permission.id}</Text>
       ) : null}
       {ready ? <ModelDivider label={ready.model.label} /> : null}
     </Box>

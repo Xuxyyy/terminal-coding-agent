@@ -77,17 +77,13 @@ test('the header line follows a switch instead of naming the old mode', () => {
     ready: {
       workspace: '/tmp/work',
       model: {id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash'},
-      permission: {id: 'auto-edits', label: PERMISSION_LABELS['auto-edits']},
+      permission: {id: 'auto-edits'},
     },
   };
 
   const moved = withPermission(header, 'read-only');
 
   assert.equal(moved.kind === 'header' && moved.ready!.permission.id, 'read-only');
-  assert.equal(
-    moved.kind === 'header' && moved.ready!.permission.label,
-    PERMISSION_LABELS['read-only'],
-  );
   assert.equal(
     moved.kind === 'header' && moved.ready!.model.label,
     'DeepSeek v4 Flash',

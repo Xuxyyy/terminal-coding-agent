@@ -52,6 +52,6 @@ export function withPermission(item: Item, mode: Mode): Item {
   if (item.kind !== 'header' || !item.ready) return item;
   return {
     ...item,
-    ready: {...item.ready, permission: {id: mode, label: PERMISSION_LABELS[mode]}},
+    ready: {...item.ready, permission: {id: mode}},
   };
 }

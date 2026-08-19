@@ -137,7 +137,7 @@ tmux kill-session -t acc 2>/dev/null
 Run all of these before asking about the paid block.
 
 **F1 — launch.** The screen shows `workspace:` followed by `$W`, the line
-`permissions: asks before anything git cannot undo`, and a model name in the
+`permissions: auto-edits`, and a model name in the
 rule below it.
 
 **F2 — slash menu.** Send `/` only, no Enter. Four rows appear: `/context`,

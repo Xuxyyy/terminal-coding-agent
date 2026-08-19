@@ -9,7 +9,6 @@ import type {Mode} from '../../core/permission/mode.js';
 import {loadSettings, modeOf, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
-import {PERMISSION_LABELS} from '../../ui/permission.js';
 import type {
   ContextItem,
   HeaderItem,
@@ -1039,20 +1038,11 @@ function headerIn(mode: Mode): HeaderItem {
   return item as HeaderItem;
 }
 
-test('the header says which permission mode the session is in', () => {
+test('the header names the mode, and only the name', () => {
   for (const mode of ['read-only', 'ask-edits', 'auto-edits'] as Mode[]) {
     const header = headerIn(mode);
-    assert.equal(header.ready!.permission.id, mode, mode);
-    assert.equal(header.ready!.permission.label, PERMISSION_LABELS[mode], mode);
+    assert.deepEqual(header.ready!.permission, {id: mode}, mode);
   }
-});
-
-test('the header never claims read-only will ask', () => {
-  const reading = headerIn('read-only');
-
-  assert.doesNotMatch(reading.ready!.permission.label, /asks/);
-  assert.match(reading.ready!.permission.label, /nothing will be written/);
-  assert.match(headerIn('auto-edits').ready!.permission.label, /asks/);
 });
 
 function permissionAgent(): {agent: Ref; unmount: () => void} {

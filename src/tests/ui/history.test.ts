@@ -150,7 +150,7 @@ test('splitRows prints the header once it carries the ready details', () => {
       ready: {
         workspace: '/w',
         model: {id: 'm', label: 'Model'},
-        permission: {id: 'p', label: 'Permission'},
+        permission: {id: 'p'},
       },
     },
   ]);

@@ -26,7 +26,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
-import {PERMISSION_LABELS, permissionNotice, withPermission} from './permission.js';
+import {permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
@@ -60,7 +60,7 @@ function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   return {
     workspace: workspaceRoot,
     model: {id: choice.model, label: choice.label},
-    permission: {id: mode, label: PERMISSION_LABELS[mode]},
+    permission: {id: mode},
   };
 }
 
