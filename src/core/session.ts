@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
 import type {Mode} from './permission/mode.js';
+import {systemPrompt} from './prompt.js';
 import {modeOf, rulesOf, type Rules} from './settings.js';
 import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
 import {toolDefinitions, toolsFor, type Tool} from './tools/index.js';
@@ -77,6 +78,15 @@ export function restoreMessages(
   session.messages = [{role: 'system', content: session.systemPrompt}, ...messages];
   session.clearingExhausted = false;
   setMeasured(session, 0);
+}
+
+export function setMode(session: Session, mode: Mode): void {
+  session.mode = mode;
+  session.systemPrompt = systemPrompt(session.root, mode);
+  session.messages = [
+    {role: 'system', content: session.systemPrompt},
+    ...session.messages.slice(1),
+  ];
 }
 
 export function clearSession(session: Session): void {

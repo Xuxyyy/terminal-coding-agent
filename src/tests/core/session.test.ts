@@ -11,6 +11,7 @@ import {
   recordUsage,
   restoreMessages,
   setMeasured,
+  setMode,
   THRESHOLD_AT,
   type Session,
 } from '../../core/session.js';
@@ -259,4 +260,56 @@ test('the read-only prompt never names a tool that cannot run', () => {
   assert.match(reading, /read_file/);
   assert.match(reading, /read-only/);
   assert.match(systemPrompt(process.cwd(), 'auto-edits'), /edit_file/);
+});
+
+test('setMode moves the mode and the prompt together', () => {
+  const session = createSession('/tmp/work', 'rules', 100_000);
+  assert.equal(session.mode, 'auto-edits');
+
+  setMode(session, 'read-only');
+
+  assert.equal(session.mode, 'read-only');
+  assert.equal(session.systemPrompt, systemPrompt('/tmp/work', 'read-only'));
+});
+
+test('setMode rewrites the first message and nothing after it', () => {
+  const session = createSession('/tmp/work', 'rules', 100_000);
+  addTask(session, 'fix the cart');
+  session.messages.push({role: 'assistant', content: 'fixed it'});
+  const tail = session.messages.slice(1);
+
+  setMode(session, 'read-only');
+
+  const reading = session.messages[0]!.content as string;
+  assert.doesNotMatch(reading, /edit_file|write_file/);
+  assert.equal(reading, session.systemPrompt);
+  assert.deepEqual(session.messages.slice(1), tail);
+
+  setMode(session, 'auto-edits');
+
+  assert.match(session.messages[0]!.content as string, /edit_file/);
+  assert.deepEqual(session.messages.slice(1), tail);
+});
+
+test('the offered tools follow a switch with no call-site change', () => {
+  const session = createSession('/tmp/work', 'rules', 100_000);
+  const editing = contextStatus(session).tools;
+
+  setMode(session, 'read-only');
+  const reading = contextStatus(session).tools;
+
+  assert.ok(reading < editing, `expected fewer tool tokens, got ${reading}`);
+
+  setMode(session, 'auto-edits');
+
+  assert.equal(contextStatus(session).tools, editing);
+});
+
+test('a switch keeps the approvals the session already granted', () => {
+  const session = createSession('/tmp/work', 'rules', 100_000);
+  session.allowed.add('command:rm build.log');
+
+  setMode(session, 'read-only');
+
+  assert.equal(session.allowed.size, 1);
 });

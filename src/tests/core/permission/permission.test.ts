@@ -5,8 +5,12 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {approvalKey, decide, type Outcome, type Request} from '../../../core/permission/decide.js';
 import type {Mode} from '../../../core/permission/mode.js';
-import {clearSession, createSession} from '../../../core/session.js';
+import type {Host} from '../../../core/host.js';
+import {clearSession, createSession, setMode, type Session} from '../../../core/session.js';
 import type {Rules} from '../../../core/settings.js';
+import {tools} from '../../../core/tools/index.js';
+import {runTool, type Tool, type ToolContext} from '../../../core/tools/registry.js';
+import {z} from 'zod';
 
 const project = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-permission-')),
@@ -447,4 +451,73 @@ test('a deny rule still refuses in every mode', () => {
 
 test('a new session starts in auto-edits', () => {
   assert.equal(createSession(project, 'system', 100).mode, 'auto-edits');
+});
+
+const alwaysApproves: Host = {
+  signal: new AbortController().signal,
+  onEvent() {},
+  async confirm() {
+    return 'session';
+  },
+};
+
+function ctxOf(session: Session): ToolContext {
+  return {
+    root: session.root,
+    host: alwaysApproves,
+    allowed: session.allowed,
+    rules: session.rules,
+    mode: session.mode,
+  };
+}
+
+const fakeBash: Tool = {
+  name: 'bash',
+  description: 'fake',
+  schema: z.object({command: z.string()}),
+  request(args) {
+    return {kind: 'command', command: (args as {command: string}).command};
+  },
+  async run() {
+    return {text: '[exit 0]'};
+  },
+};
+
+function write_file(session: Session): Promise<{text: string}> {
+  return runTool(
+    tools,
+    'write_file',
+    JSON.stringify({path: 'src/a.ts', content: 'one\n'}),
+    ctxOf(session),
+  );
+}
+
+test('the gate follows a switch inside one session', async () => {
+  const session = createSession(project, 'system', 100);
+
+  const before = await write_file(session);
+  assert.doesNotMatch(before.text, /^Error/, before.text);
+
+  setMode(session, 'read-only');
+
+  const after = await write_file(session);
+  assert.match(after.text, /^Error/);
+  assert.match(after.text, /read-only mode/);
+});
+
+test('an approval granted before the switch does not survive it', async () => {
+  const session = createSession(project, 'system', 100);
+  const registry = [fakeBash];
+  const args = JSON.stringify({command: 'rm build.log'});
+
+  const approved = await runTool(registry, 'bash', args, ctxOf(session));
+  assert.equal(approved.text, '[exit 0]');
+  assert.equal(session.allowed.size, 1);
+
+  setMode(session, 'read-only');
+
+  const refused = await runTool(registry, 'bash', args, ctxOf(session));
+  assert.equal(session.allowed.size, 1);
+  assert.match(refused.text, /^Error/);
+  assert.match(refused.text, /read-only mode/);
 });
