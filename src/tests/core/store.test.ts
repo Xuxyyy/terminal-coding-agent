@@ -9,7 +9,9 @@ import {
   evictSessions,
   listSessions,
   projectDir,
+  readProject,
   SESSION_KEEP,
+  writeProject,
 } from '../../core/projects.js';
 import {checkpointsOf, lastUsageOf} from '../../core/records.js';
 import {
@@ -719,4 +721,31 @@ test('a folder with no sessions lists nothing', () => {
 
 test('resuming a folder with no sessions says so', () => {
   assert.throws(() => loadSession(workspace(), null, home()), /no session/);
+});
+
+test('starting a session merges into the project file instead of erasing it', () => {
+  const root = home();
+  const work = workspace();
+  writeProject(work, {permission_mode: 'read-only'}, root);
+
+  startSession(work, root).close();
+
+  assert.deepEqual(readProject(work, root), {
+    permission_mode: 'read-only',
+    path: work,
+  });
+});
+
+test('an unreadable project file reads as empty and is replaced', () => {
+  const root = home();
+  const work = workspace();
+  const project = projectDir(work, root);
+  fs.mkdirSync(project, {recursive: true});
+  fs.writeFileSync(path.join(project, 'project.json'), '{bad');
+
+  assert.deepEqual(readProject(work, root), {});
+
+  startSession(work, root).close();
+
+  assert.deepEqual(readProject(work, root), {path: work});
 });

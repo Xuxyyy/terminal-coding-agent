@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
-import {accHome} from './projects.js';
+import {accHome, readProject, writeProject} from './projects.js';
 
 export type Rules = {allow: string[]; ask: string[]; deny: string[]};
 
@@ -133,4 +133,13 @@ export function rulesOf(): Rules {
 
 export function modeOf(): Mode {
   return cachedMode;
+}
+
+export function modeFor(workspace: string): Mode {
+  const remembered = readProject(workspace)[MODE_KEY];
+  return isMode(remembered) ? remembered : modeOf();
+}
+
+export function rememberMode(workspace: string, mode: Mode): void {
+  writeProject(workspace, {[MODE_KEY]: mode});
 }

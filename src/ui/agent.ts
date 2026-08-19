@@ -14,7 +14,7 @@ import {
   setMeasured,
   type Session,
 } from '../core/session.js';
-import {modeOf} from '../core/settings.js';
+import {modeFor} from '../core/settings.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -57,7 +57,7 @@ export type Agent = {
 };
 
 function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
-  const mode = modeOf();
+  const mode = modeFor(workspaceRoot);
   return {
     workspace: workspaceRoot,
     model: {id: choice.model, label: choice.label},
@@ -84,7 +84,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   if (sessionRef.current === null) {
     sessionRef.current = createSession(
       workspaceRoot,
-      systemPrompt(workspaceRoot, modeOf()),
+      systemPrompt(workspaceRoot, modeFor(workspaceRoot)),
       choice.contextWindow,
     );
   }
