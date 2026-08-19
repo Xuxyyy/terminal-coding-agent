@@ -1,7 +1,7 @@
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
-import {DEFAULT_MODE, type Mode} from './permission/mode.js';
-import {rulesOf, type Rules} from './settings.js';
+import type {Mode} from './permission/mode.js';
+import {modeOf, rulesOf, type Rules} from './settings.js';
 import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
 import {toolDefinitions, tools as defaultTools, type Tool} from './tools/index.js';
 
@@ -40,7 +40,7 @@ export function createSession(
     messages: [{role: 'system', content: systemPrompt}],
     allowed: new Set<string>(),
     rules: rulesOf(),
-    mode: DEFAULT_MODE,
+    mode: modeOf(),
     usage: {prompt: 0, completion: 0, total: 0},
     lastContextTokens: 0,
     measuredAt: 0,

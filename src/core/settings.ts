@@ -1,11 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome} from './projects.js';
 
 export type Rules = {allow: string[]; ask: string[]; deny: string[]};
 
 const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
 const RULE_PATTERN = /^bash\((.*)\)$/;
+const MODE_KEY = 'permission_mode';
 
 export class SettingsError extends Error {}
 
@@ -13,18 +15,23 @@ function emptyRules(): Rules {
   return {allow: [], ask: [], deny: []};
 }
 
+export function userSettingsFile(): string {
+  return path.join(accHome(), 'settings.json');
+}
+
 export function settingsFiles(root: string): string[] {
-  return [
-    path.join(accHome(), 'settings.json'),
-    path.join(root, '.acc', 'settings.json'),
-  ];
+  return [userSettingsFile(), path.join(root, '.acc', 'settings.json')];
+}
+
+function isUserSettings(file: string): boolean {
+  return path.resolve(file) === path.resolve(userSettingsFile());
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function parseSettings(text: string, file: string): Rules {
+function parseObject(text: string, file: string): Record<string, unknown> {
   let root: unknown;
   try {
     root = JSON.parse(text);
@@ -34,6 +41,28 @@ export function parseSettings(text: string, file: string): Rules {
   if (!isObject(root)) {
     throw new SettingsError(`${file} must hold a JSON object`);
   }
+  return root;
+}
+
+export function parseMode(text: string, file: string, user: boolean): Mode | null {
+  const value = parseObject(text, file)[MODE_KEY];
+  if (value === undefined) return null;
+  if (!user) {
+    throw new SettingsError(
+      `${file}: "${MODE_KEY}" is only read from ${userSettingsFile()}; ` +
+        'remove it from this file',
+    );
+  }
+  if (!isMode(value)) {
+    throw new SettingsError(
+      `${file}: "${MODE_KEY}" is ${JSON.stringify(value)}; use ${MODES.join(', ')}`,
+    );
+  }
+  return value;
+}
+
+export function parseSettings(text: string, file: string): Rules {
+  const root = parseObject(text, file);
   const rules = emptyRules();
   const permissions = root.permissions;
   if (permissions === undefined) return rules;
@@ -74,11 +103,13 @@ export function parseSettings(text: string, file: string): Rules {
 }
 
 let cached: Rules = emptyRules();
+let cachedMode: Mode = DEFAULT_MODE;
 
 export function loadSettings(
   files: string[] = settingsFiles(process.cwd()),
 ): Rules {
   const merged = emptyRules();
+  let mode: Mode = DEFAULT_MODE;
   for (const file of files) {
     if (!fs.existsSync(file)) continue;
     let text: string;
@@ -89,11 +120,17 @@ export function loadSettings(
     }
     const rules = parseSettings(text, file);
     for (const list of LISTS) merged[list].push(...rules[list]);
+    mode = parseMode(text, file, isUserSettings(file)) ?? mode;
   }
   cached = merged;
+  cachedMode = mode;
   return merged;
 }
 
 export function rulesOf(): Rules {
   return cached;
+}
+
+export function modeOf(): Mode {
+  return cachedMode;
 }

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {
   loadSettings,
+  modeOf,
   parseSettings,
   rulesOf,
   SettingsError,
@@ -27,8 +28,9 @@ function thrown(value: unknown): SettingsError {
   throw new Error(`expected ${JSON.stringify(value)} to be rejected`);
 }
 
-test('rulesOf is empty before the settings are loaded', () => {
+test('rulesOf is empty and modeOf is auto-edits before the settings are loaded', () => {
   assert.deepEqual(rulesOf(), {allow: [], ask: [], deny: []});
+  assert.equal(modeOf(), 'auto-edits');
 });
 
 test('parseSettings reads the three lists with the tag stripped', () => {
@@ -144,4 +146,98 @@ test('settingsFiles looks in the acc home and then the workspace', () => {
     if (previous === undefined) delete process.env.ACC_HOME;
     else process.env.ACC_HOME = previous;
   }
+});
+
+
+function settingsIn(home: string, user: unknown, project?: unknown): string[] {
+  const files = [path.join(home, 'settings.json')];
+  fs.writeFileSync(files[0], JSON.stringify(user));
+  if (project !== undefined) {
+    const directory = path.join(home, 'project', '.acc');
+    fs.mkdirSync(directory, {recursive: true});
+    files.push(path.join(directory, 'settings.json'));
+    fs.writeFileSync(files[1], JSON.stringify(project));
+  }
+  return files;
+}
+
+function withHome(run: (home: string) => void): void {
+  const previous = process.env.ACC_HOME;
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-mode-'));
+  process.env.ACC_HOME = home;
+  try {
+    run(home);
+  } finally {
+    if (previous === undefined) delete process.env.ACC_HOME;
+    else process.env.ACC_HOME = previous;
+  }
+}
+
+function refused(files: string[]): SettingsError {
+  try {
+    loadSettings(files);
+  } catch (error) {
+    assert.ok(error instanceof SettingsError);
+    return error;
+  }
+  throw new Error(`expected ${files.join(', ')} to be rejected`);
+}
+
+test('the permission mode is read from the user file', () => {
+  for (const mode of ['read-only', 'ask-edits', 'auto-edits']) {
+    withHome((home) => {
+      loadSettings(settingsIn(home, {permission_mode: mode}));
+      assert.equal(modeOf(), mode);
+    });
+  }
+});
+
+test('the permission mode is read beside the rules, not instead of them', () => {
+  withHome((home) => {
+    const rules = loadSettings(
+      settingsIn(home, {
+        permission_mode: 'read-only',
+        permissions: {allow: ['bash(ls *)']},
+      }),
+    );
+    assert.deepEqual(rules.allow, ['ls *']);
+    assert.equal(modeOf(), 'read-only');
+  });
+});
+
+test('the permission mode in a project file refuses to start', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {}, {permission_mode: 'read-only'});
+    const message = refused(files).message;
+    assert.ok(message.includes(files[1]), message);
+    assert.ok(message.includes('permission_mode'), message);
+    assert.ok(message.includes(files[0]), message);
+  });
+});
+
+test('an unknown permission mode refuses to start and lists the valid names', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {permission_mode: 'approve_for_me'});
+    const message = refused(files).message;
+    assert.ok(message.includes(files[0]), message);
+    for (const name of ['read-only', 'ask-edits', 'auto-edits']) {
+      assert.ok(message.includes(name), message);
+    }
+  });
+});
+
+test('no permission mode anywhere leaves auto-edits', () => {
+  withHome((home) => {
+    loadSettings(settingsIn(home, {permissions: {allow: ['bash(ls *)']}}, {}));
+    assert.equal(modeOf(), 'auto-edits');
+  });
+});
+
+test('other unknown top-level keys are still ignored in every file', () => {
+  withHome((home) => {
+    loadSettings(
+      settingsIn(home, {model: 'deepseek-v4-flash'}, {transcripts: true, hats: 3}),
+    );
+    assert.equal(modeOf(), 'auto-edits');
+  });
 });
