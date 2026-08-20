@@ -5,7 +5,6 @@ import type {Item, RowParts} from './events.js';
 export type PermissionRow = {id: Mode; label: string; current: boolean};
 
 export const PERMISSION_LABELS: Record<Mode, string> = {
-  'read-only': 'nothing is written',
   'ask-edits': 'asks before every edit',
   'auto-edits': 'edits without asking',
 };

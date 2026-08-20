@@ -8,10 +8,8 @@ import {writeFile} from './write.js';
 
 export const tools: Tool[] = [readFile, grep, editFile, writeFile, bash];
 
-const READ_ONLY_TOOLS: Tool[] = [readFile, grep, bash];
-
 export function toolsFor(mode: Mode): Tool[] {
-  return mode === 'read-only' ? READ_ONLY_TOOLS : tools;
+  return tools;
 }
 
 export {toolDefinitions, runTool} from './registry.js';

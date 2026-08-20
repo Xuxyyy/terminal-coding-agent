@@ -200,7 +200,7 @@ function refused(files: string[]): SettingsError {
 }
 
 test('the permission mode is read from the user file', () => {
-  for (const mode of ['read-only', 'ask-edits', 'auto-edits']) {
+  for (const mode of ['ask-edits', 'auto-edits']) {
     withHome((home) => {
       loadSettings(settingsIn(home, {permission_mode: mode}));
       assert.equal(modeOf(), mode);
@@ -212,18 +212,18 @@ test('the permission mode is read beside the rules, not instead of them', () => 
   withHome((home) => {
     const rules = loadSettings(
       settingsIn(home, {
-        permission_mode: 'read-only',
+        permission_mode: 'ask-edits',
         permissions: {allow: ['bash(ls *)']},
       }),
     );
     assert.deepEqual(rules.allow, bash('ls *'));
-    assert.equal(modeOf(), 'read-only');
+    assert.equal(modeOf(), 'ask-edits');
   });
 });
 
 test('the permission mode in a project file refuses to start', () => {
   withHome((home) => {
-    const files = settingsIn(home, {}, {permission_mode: 'read-only'});
+    const files = settingsIn(home, {}, {permission_mode: 'ask-edits'});
     const message = refused(files).message;
     assert.ok(message.includes(files[1]), message);
     assert.ok(message.includes('permission_mode'), message);
@@ -236,7 +236,7 @@ test('an unknown permission mode refuses to start and lists the valid names', ()
     const files = settingsIn(home, {permission_mode: 'approve_for_me'});
     const message = refused(files).message;
     assert.ok(message.includes(files[0]), message);
-    for (const name of ['read-only', 'ask-edits', 'auto-edits']) {
+    for (const name of ['ask-edits', 'auto-edits']) {
       assert.ok(message.includes(name), message);
     }
   });
@@ -263,11 +263,11 @@ test('remembering a mode writes it into the user settings file', () => {
     const files = settingsIn(home, {permission_mode: 'auto-edits'});
     loadSettings(files);
 
-    rememberMode('read-only');
+    rememberMode('ask-edits');
 
-    assert.equal(modeOf(), 'read-only');
+    assert.equal(modeOf(), 'ask-edits');
     assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
-      permission_mode: 'read-only',
+      permission_mode: 'ask-edits',
     });
   });
 });
@@ -292,13 +292,13 @@ test('remembering a mode keeps every other setting', () => {
     });
     loadSettings(files);
 
-    rememberMode('read-only');
+    rememberMode('ask-edits');
     const rules = loadSettings(files);
 
     assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
       model: 'deepseek-v4-flash',
       permissions: {allow: ['bash(npm run *)']},
-      permission_mode: 'read-only',
+      permission_mode: 'ask-edits',
     });
     assert.deepEqual(rules.allow, bash('npm run *'));
   });
@@ -309,10 +309,10 @@ test('remembering a mode with no settings file yet writes one', () => {
     loadSettings([]);
     const file = path.join(home, 'settings.json');
 
-    rememberMode('read-only');
+    rememberMode('ask-edits');
 
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {
-      permission_mode: 'read-only',
+      permission_mode: 'ask-edits',
     });
     assert.deepEqual(fs.readdirSync(home), ['settings.json']);
   });
@@ -323,7 +323,7 @@ test('a settings file that stopped parsing is refused, not erased', () => {
     const file = path.join(home, 'settings.json');
     fs.writeFileSync(file, '{bad');
 
-    assert.throws(() => rememberMode('read-only'), SettingsError);
+    assert.throws(() => rememberMode('ask-edits'), SettingsError);
     assert.equal(fs.readFileSync(file, 'utf8'), '{bad');
   });
 });

@@ -34,27 +34,28 @@ test('the picker opens on the mode the session is in', () => {
 });
 
 test('only the name is in the part the picker bolds', () => {
-  const [reading] = permissionRows('read-only');
+  const [asking] = permissionRows('ask-edits');
 
-  const active = permissionLine(reading!, true, 80);
-  assert.equal(active.head, `❯ read-only${CURRENT_MARK}`);
-  assert.equal(active.tail, ` — ${PERMISSION_LABELS['read-only']}`);
+  const active = permissionLine(asking!, true, 80);
+  assert.equal(active.head, `❯ ask-edits${CURRENT_MARK}`);
+  assert.equal(active.tail, ` — ${PERMISSION_LABELS['ask-edits']}`);
 
   const idle = permissionLine(permissionRows('auto-edits')[0]!, false, 80);
-  assert.equal(idle.head, '  read-only');
+  assert.equal(idle.head, '  ask-edits');
   assert.equal(idle.head.includes(CURRENT_MARK), false);
 });
 
 test('a row is cut to the width it is given', () => {
   for (const mode of MODES) {
-    const {head, tail} = permissionLine(permissionRows(mode)[1]!, true, 24);
+    const other = permissionRows(mode).find((row) => !row.current)!;
+    const {head, tail} = permissionLine(other, true, 24);
     assert.ok(head.length + tail.length <= 24, `${head}${tail}`);
     assert.ok(tail.endsWith('…'), tail);
   }
 });
 
 test('a row too narrow for a sentence keeps the name alone', () => {
-  const {head, tail} = permissionLine(permissionRows('ask-edits')[1]!, true, 12);
+  const {head, tail} = permissionLine(permissionRows('auto-edits')[0]!, true, 12);
 
   assert.equal(tail, '');
   assert.ok(head.length <= 12, head);
@@ -70,9 +71,9 @@ test('the notice names the mode that was picked', () => {
 });
 
 test('the notice says so when the pick could not be saved', () => {
-  const notice = permissionNotice('read-only', false);
+  const notice = permissionNotice('ask-edits', false);
 
-  assert.ok(notice.includes('read-only'), notice);
+  assert.ok(notice.includes('ask-edits'), notice);
   assert.ok(notice.endsWith(NOT_REMEMBERED), notice);
 });
 
@@ -87,9 +88,9 @@ test('the header line follows a switch instead of naming the old mode', () => {
     },
   };
 
-  const moved = withPermission(header, 'read-only');
+  const moved = withPermission(header, 'ask-edits');
 
-  assert.equal(moved.kind === 'header' && moved.ready!.permission.id, 'read-only');
+  assert.equal(moved.kind === 'header' && moved.ready!.permission.id, 'ask-edits');
   assert.equal(
     moved.kind === 'header' && moved.ready!.model.label,
     'DeepSeek v4 Flash',
@@ -105,6 +106,6 @@ test('every other item passes through a switch untouched', () => {
   ];
 
   for (const item of items) {
-    assert.equal(withPermission(item, 'read-only'), item);
+    assert.equal(withPermission(item, 'ask-edits'), item);
   }
 });

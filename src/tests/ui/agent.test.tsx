@@ -1039,7 +1039,7 @@ function headerIn(mode: Mode): HeaderItem {
 }
 
 test('the header names the mode, and only the name', () => {
-  for (const mode of ['read-only', 'ask-edits', 'auto-edits'] as Mode[]) {
+  for (const mode of ['ask-edits', 'auto-edits'] as Mode[]) {
     const header = headerIn(mode);
     assert.deepEqual(header.ready!.permission, {id: mode}, mode);
   }
@@ -1060,21 +1060,21 @@ test('/permission opens the picker, and a pick moves the whole session', async (
   await tick();
   assert.equal(agent.current!.phase.kind, 'permission');
 
-  agent.current!.setPermission('read-only');
+  agent.current!.setPermission('ask-edits');
   await tick();
 
   assert.equal(agent.current!.phase.kind, 'idle');
-  assert.equal(agent.current!.mode, 'read-only');
+  assert.equal(agent.current!.mode, 'ask-edits');
   const notice = agent.current!.committed.at(-1) as NoticeItem;
   assert.equal(notice.kind, 'notice');
-  assert.match(notice.text, /read-only/);
-  assert.equal(modeOf(), 'read-only');
+  assert.match(notice.text, /ask-edits/);
+  assert.equal(modeOf(), 'ask-edits');
   const header = agent.current!.committed[0] as HeaderItem;
   assert.equal(header.kind, 'header');
-  assert.equal(header.ready!.permission.id, 'read-only');
+  assert.equal(header.ready!.permission.id, 'ask-edits');
   assert.deepEqual(
     JSON.parse(fs.readFileSync(path.join(process.env.ACC_HOME!, 'settings.json'), 'utf8')),
-    {permission_mode: 'read-only'},
+    {permission_mode: 'ask-edits'},
   );
   unmount();
 });
