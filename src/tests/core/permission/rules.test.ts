@@ -8,9 +8,11 @@ import {
   matchPattern,
   normalizedStages,
   patternScore,
+  pathVerdict,
   relativeTo,
   ruleVerdict,
 } from '../../../core/permission/rules.js';
+import {realPath} from '../../../core/permission/protected.js';
 import type {Rule, Rules, Tag} from '../../../core/settings.js';
 
 const TAGGED = /^(bash|edit)\((.*)\)$/;
@@ -239,4 +241,49 @@ test('a path outside the root relativizes to null and matches no pattern', () =>
   for (const pattern of ['*', '**', 'src/**']) {
     assert.equal(matchPath(pattern, '../escape.ts'), pattern !== 'src/**', pattern);
   }
+});
+
+const outside = fs.realpathSync(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-rules-outside-')),
+);
+
+test('an absolute pattern reaches a path outside the root', () => {
+  const target = path.join(outside, 'a.ts');
+  assert.equal(relativeTo(target, root), null);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${outside}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${target})`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({allow: [`edit(${outside}/**)`]})), 'allow');
+});
+
+test('a relative pattern still means inside the project and nothing more', () => {
+  const target = path.join(outside, 'a.ts');
+  for (const pattern of ['**', '*', 'a.ts', `..${path.sep}**`]) {
+    assert.equal(pathVerdict(target, root, rules({deny: [`edit(${pattern})`]})), null, pattern);
+  }
+  assert.equal(pathVerdict('src/a.ts', root, rules({deny: ['edit(**)']})), 'deny');
+});
+
+test('a tilde pattern is expanded before an outside path is matched', () => {
+  const previous = process.env.HOME;
+  process.env.HOME = outside;
+  try {
+    const target = path.join(outside, '.ssh/id_rsa');
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(~/.ssh/**)']})), 'deny');
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(~/.aws/**)']})), null);
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(.ssh/**)']})), null);
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
+});
+
+test('a symlinked outside path matches a pattern written either way', () => {
+  const real = path.join(outside, 'real');
+  const link = path.join(outside, 'link');
+  fs.mkdirSync(real, {recursive: true});
+  fs.symlinkSync(real, link);
+  const target = path.join(link, 'a.ts');
+  assert.notEqual(realPath(target), target);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${real}/**)`]})), 'deny');
 });

@@ -27,9 +27,17 @@ export function matchPath(pattern: string, relative: string): boolean {
   return new RegExp(`^${source}$`, 's').test(relative);
 }
 
-export function relativeTo(target: string, root: string): string | null {
+export function candidatePath(target: string, root: string): string {
   const expanded = expandUser(target);
-  const candidate = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
+  return path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
+}
+
+export function absolutePattern(pattern: string): boolean {
+  return pattern.startsWith('/') || pattern.startsWith('~/') || pattern === '~';
+}
+
+export function relativeTo(target: string, root: string): string | null {
+  const candidate = candidatePath(target, root);
   if (!insideRoot(candidate, root)) return null;
   return path.relative(realPath(root), realPath(candidate)).split(path.sep).join('/');
 }
@@ -104,10 +112,20 @@ export function pathVerdict(
   rules: Rules,
 ): RuleVerdict | null {
   const relative = relativeTo(target, root);
-  if (relative === null) return null;
+  if (relative !== null) {
+    return bestVerdict(
+      rules,
+      (rule) => rule.tag === 'edit' && matchPath(rule.pattern, relative),
+    );
+  }
+  const candidate = candidatePath(target, root);
+  const forms = [candidate, realPath(candidate)];
   return bestVerdict(
     rules,
-    (rule) => rule.tag === 'edit' && matchPath(rule.pattern, relative),
+    (rule) =>
+      rule.tag === 'edit' &&
+      absolutePattern(rule.pattern) &&
+      forms.some((form) => matchPath(expandUser(rule.pattern), form)),
   );
 }
 

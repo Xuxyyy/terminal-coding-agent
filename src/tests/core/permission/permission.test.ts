@@ -565,6 +565,32 @@ test('no allow rule can rescue a write that leaves the project', () => {
   }
 });
 
+test('a deny rule naming an outside path absolutely refuses a write', () => {
+  const target = path.join(outside, 'a.ts');
+  const refused = write(target, {deny: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /settings\.json/);
+});
+
+test('no relative deny rule reaches a write that leaves the project', () => {
+  const target = path.join(outside, 'a.ts');
+  for (const config of [{deny: ['edit(**)']}, {deny: ['edit(*)']}]) {
+    const asking = write(target, config);
+    assert.equal(asking.decision, 'ask', target);
+    assert.equal(asking.suppressible, false, target);
+    assert.doesNotMatch(asking.reason, /settings\.json/, target);
+  }
+});
+
+test('an absolute allow rule still cannot rescue a write that leaves the project', () => {
+  const target = path.join(outside, 'a.ts');
+  const refused = write(target, {allow: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'ask');
+  assert.equal(refused.suppressible, false);
+  assert.doesNotMatch(refused.reason, /settings\.json/);
+});
+
 test('an allow rule does reach a protected path', () => {
   assert.equal(write('.git/config').decision, 'ask');
 
