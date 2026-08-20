@@ -56,7 +56,7 @@ function fileOutcome(
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false};
   }
   if (classification.level === 'escape') {
-    return {decision: 'deny', reason: classification.reason, suppressible: false};
+    return {decision: 'ask', reason: classification.reason, suppressible: false};
   }
   if (verdict !== null) {
     return {decision: verdict, reason: RULE_REASON[verdict], suppressible: true};

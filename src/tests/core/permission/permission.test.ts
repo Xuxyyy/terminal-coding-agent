@@ -238,25 +238,26 @@ test('adversarial commands ask and never offer to be remembered', () => {
   }
 });
 
-test('a write outside the project is denied and cannot be remembered', () => {
+test('a write outside the project asks and cannot be remembered', () => {
   const outcome = write('../outside.txt');
 
-  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
   assert.equal(outcome.reason, "'../outside.txt' is outside the project");
 
-  assert.equal(write(path.join(outside, 'secret.txt')).decision, 'deny');
-  assert.equal(write('~/.ssh/id_rsa').decision, 'deny');
+  assert.equal(write(path.join(outside, 'secret.txt')).decision, 'ask');
+  assert.equal(write('~/.ssh/id_rsa').decision, 'ask');
 });
 
-test('a file tool denies what bash only asks about', () => {
-  const denied = write('../outside.txt');
-  const asked = command('rm ../outside.txt');
+test('a file tool and bash answer the same for a path outside the project', () => {
+  const file = write('../outside.txt');
+  const bash = command('rm ../outside.txt');
 
-  assert.equal(denied.decision, 'deny');
-  assert.equal(asked.decision, 'ask');
-  assert.equal(asked.suppressible, false);
-  assert.equal(denied.reason, asked.reason);
+  assert.equal(file.decision, bash.decision);
+  assert.equal(file.suppressible, bash.suppressible);
+  assert.equal(file.reason, bash.reason);
+  assert.equal(file.decision, 'ask');
+  assert.equal(file.suppressible, false);
 });
 
 test('a read inside the project runs without asking', () => {
@@ -273,15 +274,15 @@ test('a read of a protected path is still only a read', () => {
   }
 });
 
-test('a read outside the project is denied and names the path', () => {
+test('a read outside the project asks and names the path', () => {
   const outcome = read('~/.ssh/id_rsa');
 
-  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
   assert.equal(outcome.reason, "reads '~/.ssh/id_rsa' outside the project");
 
-  assert.equal(read('../outside.txt').decision, 'deny');
-  assert.equal(read(path.join(outside, 'secret.txt')).decision, 'deny');
+  assert.equal(read('../outside.txt').decision, 'ask');
+  assert.equal(read(path.join(outside, 'secret.txt')).decision, 'ask');
 });
 
 test('a read approval has a key of its own', () => {
@@ -359,9 +360,11 @@ test('empty rules reproduce the outcomes of the classifier alone', () => {
 
 test('a rule never decides a write or a read', () => {
   assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
-  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'deny');
+  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'ask');
+  assert.equal(write('../outside.txt', {allow: ['*']}).suppressible, false);
   assert.equal(read('src/a.ts', {deny: ['src/*']}).decision, 'allow');
-  assert.equal(read('../outside.txt', {allow: ['*']}).decision, 'deny');
+  assert.equal(read('../outside.txt', {allow: ['*']}).decision, 'ask');
+  assert.equal(read('../outside.txt', {allow: ['*']}).suppressible, false);
 });
 
 test('clearing the conversation keeps the rules', () => {
@@ -556,7 +559,7 @@ test('no allow rule can rescue a write that leaves the project', () => {
   const target = path.join(outside, 'a.ts');
   for (const config of [{allow: ['edit(**)']}, {allow: ['edit(*)']}]) {
     const refused = write(target, config);
-    assert.equal(refused.decision, 'deny', target);
+    assert.equal(refused.decision, 'ask', target);
     assert.equal(refused.suppressible, false, target);
     assert.doesNotMatch(refused.reason, /settings\.json/, target);
   }
