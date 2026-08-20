@@ -358,7 +358,11 @@ test('empty rules reproduce the outcomes of the classifier alone', () => {
   }
 });
 
-test('a rule never decides a write or a read', () => {
+test('only a deny rule decides a read', () => {
+  assert.equal(read('src/a.ts', {deny: ['edit(src/**)']}).decision, 'deny');
+  assert.equal(read('.git/config', {deny: ['edit(**)']}).decision, 'deny');
+  assert.equal(read('src/a.ts', {ask: ['edit(src/**)']}).decision, 'allow');
+  assert.equal(read('src/a.ts', {allow: ['edit(src/**)']}).decision, 'allow');
   assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
   assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'ask');
   assert.equal(write('../outside.txt', {allow: ['*']}).suppressible, false);
@@ -591,17 +595,33 @@ test('an absolute allow rule still cannot rescue a write that leaves the project
   assert.doesNotMatch(refused.reason, /settings\.json/);
 });
 
+test('a deny rule naming an outside path absolutely refuses a read', () => {
+  const target = path.join(outside, 'id_rsa');
+  const refused = read(target, {deny: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /settings\.json/);
+});
+
+test('no allow or ask rule changes a read that leaves the project', () => {
+  const target = path.join(outside, 'id_rsa');
+  for (const config of [
+    {allow: [`edit(${outside}/**)`]},
+    {ask: [`edit(${outside}/**)`]},
+  ]) {
+    const asking = read(target, config);
+    assert.equal(asking.decision, 'ask');
+    assert.equal(asking.suppressible, false);
+    assert.doesNotMatch(asking.reason, /settings\.json/);
+  }
+});
+
 test('an allow rule does reach a protected path', () => {
   assert.equal(write('.git/config').decision, 'ask');
 
   const allowed = write('.git/config', {allow: ['edit(**)']});
   assert.equal(allowed.decision, 'allow');
   assert.match(allowed.reason, /settings\.json/);
-});
-
-test('an edit rule never governs a read', () => {
-  assert.equal(read('src/a.ts', {deny: ['edit(**)']}).decision, 'allow');
-  assert.equal(read('.git/config', {deny: ['edit(**)']}).decision, 'allow');
 });
 
 test('an edit rule leaves a bash redirect to the bash rules', () => {

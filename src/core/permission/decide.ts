@@ -80,7 +80,12 @@ export function decide(
     );
   }
   if (request.kind === 'read') {
-    return fileOutcome(classifyRead(request.path, root), mode, null);
+    const verdict = pathVerdict(request.path, root, rules);
+    return fileOutcome(
+      classifyRead(request.path, root),
+      mode,
+      verdict === 'deny' ? 'deny' : null,
+    );
   }
   const command = hardenCommand(request.command);
   const verdict = ruleVerdict(command, rules);
