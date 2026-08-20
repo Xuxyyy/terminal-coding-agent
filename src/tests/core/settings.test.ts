@@ -11,9 +11,14 @@ import {
   rulesOf,
   SettingsError,
   settingsFiles,
+  type Rule,
 } from '../../core/settings.js';
 
 const FILE = '/tmp/settings.json';
+
+function bash(...patterns: string[]): Rule[] {
+  return patterns.map((pattern) => ({tag: 'bash', pattern}));
+}
 
 function parse(value: unknown): ReturnType<typeof parseSettings> {
   return parseSettings(JSON.stringify(value), FILE);
@@ -34,19 +39,22 @@ test('rulesOf is empty and modeOf is auto-edits before the settings are loaded',
   assert.equal(modeOf(), 'auto-edits');
 });
 
-test('parseSettings reads the three lists with the tag stripped', () => {
+test('parseSettings reads the three lists with the tag kept', () => {
   assert.deepEqual(
     parse({
       permissions: {
         deny: ['bash(curl *)'],
         ask: ['bash(npm run deploy*)'],
-        allow: ['bash(npm run *)', 'bash(python3 scripts/*)'],
+        allow: ['bash(npm run *)', 'edit(plans/**)'],
       },
     }),
     {
-      allow: ['npm run *', 'python3 scripts/*'],
-      ask: ['npm run deploy*'],
-      deny: ['curl *'],
+      allow: [
+        {tag: 'bash', pattern: 'npm run *'},
+        {tag: 'edit', pattern: 'plans/**'},
+      ],
+      ask: bash('npm run deploy*'),
+      deny: bash('curl *'),
     },
   );
 });
@@ -66,7 +74,7 @@ test('parseSettings ignores top-level keys it does not implement', () => {
       transcripts: true,
       permissions: {allow: ['bash(ls *)']},
     }),
-    {allow: ['ls *'], ask: [], deny: []},
+    {allow: bash('ls *'), ask: [], deny: []},
   );
 });
 
@@ -81,12 +89,19 @@ test('parseSettings names the file when the JSON is broken', () => {
   assert.match(error.message, /settings\.json/);
 });
 
-test('parseSettings rejects any tag but bash and names it', () => {
-  for (const rule of ['write(x)', 'Bash(x)', 'npm run *', 'edit(src/a.ts)']) {
+test('parseSettings rejects an unknown tag and lists both valid ones', () => {
+  for (const rule of ['read(src/**)', 'Bash(x)', 'npm run *']) {
     const error = thrown({permissions: {allow: [rule]}});
-    assert.match(error.message, /bash/, rule);
+    assert.match(error.message, /bash\(<pattern>\)/, rule);
+    assert.match(error.message, /edit\(<pattern>\)/, rule);
     assert.match(error.message, /settings\.json/, rule);
   }
+});
+
+test('parseSettings refuses a write rule and says edit covers both tools', () => {
+  const error = thrown({permissions: {allow: ['write(src/**)']}});
+  assert.match(error.message, /edit\(<pattern>\) covers both edit_file and write_file/);
+  assert.match(error.message, /settings\.json/);
 });
 
 test('parseSettings rejects a rule that is not a string', () => {
@@ -120,9 +135,9 @@ test('loadSettings concatenates the files in order and skips a missing one', () 
   const rules = loadSettings([home, path.join(directory, 'missing.json'), workspace]);
 
   assert.deepEqual(rules, {
-    allow: ['ls *', 'npm run *'],
+    allow: bash('ls *', 'npm run *'),
     ask: [],
-    deny: ['curl *'],
+    deny: bash('curl *'),
   });
   assert.deepEqual(rulesOf(), rules);
 });
@@ -201,7 +216,7 @@ test('the permission mode is read beside the rules, not instead of them', () => 
         permissions: {allow: ['bash(ls *)']},
       }),
     );
-    assert.deepEqual(rules.allow, ['ls *']);
+    assert.deepEqual(rules.allow, bash('ls *'));
     assert.equal(modeOf(), 'read-only');
   });
 });
@@ -285,7 +300,7 @@ test('remembering a mode keeps every other setting', () => {
       permissions: {allow: ['bash(npm run *)']},
       permission_mode: 'read-only',
     });
-    assert.deepEqual(rules.allow, ['npm run *']);
+    assert.deepEqual(rules.allow, bash('npm run *'));
   });
 });
 

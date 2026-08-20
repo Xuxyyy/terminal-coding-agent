@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type {Rules} from '../settings.js';
+import type {Rule, Rules} from '../settings.js';
 import {expandUser, insideRoot, realPath} from './protected.js';
 import {commandParts, splitStages} from './stages.js';
 
@@ -48,8 +48,8 @@ export function normalizedStages(command: string): string[] | null {
   return normalized;
 }
 
-function matchesAny(patterns: string[], text: string): boolean {
-  return patterns.some((pattern) => matchPattern(pattern, text));
+function matchesAny(list: Rule[], text: string): boolean {
+  return list.some((rule) => rule.tag === 'bash' && matchPattern(rule.pattern, text));
 }
 
 export function patternScore(pattern: string): number {
@@ -69,18 +69,18 @@ function worstRank(verdict: RuleVerdict | null): number {
   return WORST[verdict ?? 'none'];
 }
 
-export function stageVerdict(stage: string, rules: Rules): RuleVerdict | null {
-  const lists: [RuleVerdict, string[]][] = [
+function bestVerdict(rules: Rules, matches: (rule: Rule) => boolean): RuleVerdict | null {
+  const lists: [RuleVerdict, Rule[]][] = [
     ['deny', rules.deny],
     ['ask', rules.ask],
     ['allow', rules.allow],
   ];
   let best: RuleVerdict | null = null;
   let bestScore = -1;
-  for (const [verdict, patterns] of lists) {
-    for (const pattern of patterns) {
-      if (!matchPattern(pattern, stage)) continue;
-      const score = patternScore(pattern);
+  for (const [verdict, list] of lists) {
+    for (const rule of list) {
+      if (!matches(rule)) continue;
+      const score = patternScore(rule.pattern);
       if (score < bestScore) continue;
       if (score > bestScore || best === null || TIE_BREAK[verdict] > TIE_BREAK[best]) {
         best = verdict;
@@ -89,6 +89,26 @@ export function stageVerdict(stage: string, rules: Rules): RuleVerdict | null {
     }
   }
   return best;
+}
+
+export function stageVerdict(stage: string, rules: Rules): RuleVerdict | null {
+  return bestVerdict(
+    rules,
+    (rule) => rule.tag === 'bash' && matchPattern(rule.pattern, stage),
+  );
+}
+
+export function pathVerdict(
+  target: string,
+  root: string,
+  rules: Rules,
+): RuleVerdict | null {
+  const relative = relativeTo(target, root);
+  if (relative === null) return null;
+  return bestVerdict(
+    rules,
+    (rule) => rule.tag === 'edit' && matchPath(rule.pattern, relative),
+  );
 }
 
 export function ruleVerdict(command: string, rules: Rules): RuleVerdict | null {

@@ -11,10 +11,22 @@ import {
   relativeTo,
   ruleVerdict,
 } from '../../../core/permission/rules.js';
-import type {Rules} from '../../../core/settings.js';
+import type {Rule, Rules, Tag} from '../../../core/settings.js';
 
-function rules(some: Partial<Rules>): Rules {
-  return {allow: [], ask: [], deny: [], ...some};
+const TAGGED = /^(bash|edit)\((.*)\)$/;
+
+function ruleOf(text: string): Rule {
+  const match = TAGGED.exec(text);
+  return match ? {tag: match[1] as Tag, pattern: match[2]} : {tag: 'bash', pattern: text};
+}
+
+function rules(some: Partial<Record<keyof Rules, string[]>>): Rules {
+  const lists = {allow: [], ask: [], deny: [], ...some};
+  return {
+    allow: lists.allow.map(ruleOf),
+    ask: lists.ask.map(ruleOf),
+    deny: lists.deny.map(ruleOf),
+  };
 }
 
 const EMPTY = rules({});

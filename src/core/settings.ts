@@ -3,10 +3,15 @@ import * as path from 'node:path';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome, makeDir} from './projects.js';
 
-export type Rules = {allow: string[]; ask: string[]; deny: string[]};
+export type Tag = 'bash' | 'edit';
+
+export type Rule = {tag: Tag; pattern: string};
+
+export type Rules = {allow: Rule[]; ask: Rule[]; deny: Rule[]};
 
 const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
-const RULE_PATTERN = /^bash\((.*)\)$/;
+const RULE_PATTERN = /^(bash|edit)\((.*)\)$/;
+const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
 
 export class SettingsError extends Error {}
@@ -91,12 +96,15 @@ export function parseSettings(text: string, file: string): Rules {
       }
       const match = RULE_PATTERN.exec(rule);
       if (!match) {
+        const covered = WRITE_PATTERN.test(rule)
+          ? '; edit(<pattern>) covers both edit_file and write_file'
+          : '';
         throw new SettingsError(
           `${file}: the rule ${JSON.stringify(rule)} in "permissions.${list}" must ` +
-            'be written bash(<pattern>); bash is the only supported tag',
+            `be written bash(<pattern>) or edit(<pattern>)${covered}`,
         );
       }
-      rules[list].push(match[1]);
+      rules[list].push({tag: match[1] as Tag, pattern: match[2]});
     }
   }
   return rules;
