@@ -2,23 +2,17 @@ import {RANK, type Level} from './classify.js';
 
 export type Mode = 'ask-edits' | 'auto-edits';
 
-export type Cut = {allowUpTo: Level; above: 'ask' | 'deny'};
-
 export const MODES: Mode[] = ['ask-edits', 'auto-edits'];
 
 export const DEFAULT_MODE: Mode = 'auto-edits';
 
-const CUTS: Record<Mode, Cut> = {
-  'ask-edits': {allowUpTo: 'observe', above: 'ask'},
-  'auto-edits': {allowUpTo: 'recoverable', above: 'ask'},
+const CUTS: Record<Mode, Level> = {
+  'ask-edits': 'observe',
+  'auto-edits': 'recoverable',
 };
 
-export function cutOf(mode: Mode): Cut {
-  return CUTS[mode];
-}
-
 export function withinCut(level: Level | null, mode: Mode): boolean {
-  return level !== null && RANK[level] <= RANK[CUTS[mode].allowUpTo];
+  return level !== null && RANK[level] <= RANK[CUTS[mode]];
 }
 
 export function isMode(value: unknown): value is Mode {

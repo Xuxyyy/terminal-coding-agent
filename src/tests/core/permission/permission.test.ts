@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {approvalKey, decide, type Outcome, type Request} from '../../../core/permission/decide.js';
-import type {Mode} from '../../../core/permission/mode.js';
+import {MODES, type Mode} from '../../../core/permission/mode.js';
 import type {Host} from '../../../core/host.js';
 import {clearSession, createSession, setMode, type Session} from '../../../core/session.js';
 import type {Rule, Rules, Tag} from '../../../core/settings.js';
@@ -416,6 +416,20 @@ test('a deny rule still refuses in every mode', () => {
     assert.equal(refused.decision, 'deny', mode);
     assert.equal(refused.suppressible, false, mode);
     assert.match(refused.reason, /settings\.json/, mode);
+  }
+});
+
+test('no mode returns deny on its own', () => {
+  for (const mode of MODES) {
+    assert.equal(write('.git/config', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('rm build.log', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('python3 build.py', undefined, mode).decision, 'ask', mode);
+
+    for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0']) {
+      const escape = command(text, undefined, mode);
+      assert.equal(escape.decision, 'ask', `${mode} ${text}`);
+      assert.equal(escape.suppressible, false, `${mode} ${text}`);
+    }
   }
 });
 
