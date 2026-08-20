@@ -43,7 +43,8 @@ components. No import points the other way.
 One doc per subsystem, in `docs/`. Each opens with what it covers and when to
 read it. They record *why*; the code is the truth about *what*.
 
-- `docs/agent-loop.md` — read before changing the turn loop or adding a tool.
+- `docs/agent-loop.md` — read before changing the turn loop.
+- `docs/tools.md` — read before adding a tool or changing what one returns.
 - `docs/permissions.md` — read before touching `src/core/permission/`.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
 - `docs/features.md` — what ships today; read before planning what is next.
