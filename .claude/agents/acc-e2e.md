@@ -189,8 +189,9 @@ runs and its output is shown.
 **P5 — session approval is remembered.** In the same session submit
 `use bash to run: ls notes.txt` and answer `a`. Then submit
 `use bash to run: ls code.ts`. The second must run **with no box at all**. This
-is the check `src/headless.ts` can never make, because it auto-approves
-silently — it is the reason this agent exists.
+is the check no unit test can make: a passing assertion proves what the code
+returned, never that a box stayed off the screen — it is the reason this agent
+exists.
 
 **P6 — a guardrail is never remembered.** Submit `use bash to run: rm -rf .git`.
 The box must appear **without** the `allow for this session` row:
