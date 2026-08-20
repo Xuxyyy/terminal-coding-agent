@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
-import {resolveInWorkspace} from './paths.js';
+import {resolveTarget} from './paths.js';
 
 const DEFAULT_LIMIT = 400;
 const MAX_LINE_LENGTH = 500;
@@ -55,7 +55,7 @@ export const readFile: Tool = {
   },
   async run(args, ctx) {
     const parsed = schema.parse(args);
-    const target = resolveInWorkspace(ctx.root, parsed.path);
+    const target = resolveTarget(ctx.root, parsed.path);
     const stat = fs.statSync(target);
     if (stat.isDirectory()) {
       throw new Error(`${parsed.path} is a directory, not a file`);

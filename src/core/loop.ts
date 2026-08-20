@@ -18,7 +18,7 @@ import {
 import type {SessionStore} from './store.js';
 import {captureBefore} from './history.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
-import {displayPath, resolveInWorkspace} from './tools/paths.js';
+import {displayPath, resolveTarget} from './tools/paths.js';
 import type {Tool} from './tools/registry.js';
 
 export const MAX_STEPS = 20;
@@ -74,7 +74,7 @@ export async function runAgent(
 
   const backup = store
     ? (asked: string): void => {
-        const target = resolveInWorkspace(session.root, asked);
+        const target = resolveTarget(session.root, asked);
         const before = captureBefore(store.dir, target);
         store.appendCode(displayPath(session.root, target), before);
       }

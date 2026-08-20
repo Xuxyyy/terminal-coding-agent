@@ -1,9 +1,8 @@
 import {spawn} from 'node:child_process';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
-import {resolveInWorkspace} from './paths.js';
+import {displayPath, resolveTarget} from './paths.js';
 
 const TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_CHARS = 32_000;
@@ -172,12 +171,12 @@ export const grep: Tool = {
   async run(rawArguments, ctx) {
     const args = schema.parse(rawArguments);
     const where = args.path ?? '.';
-    const resolved = resolveInWorkspace(ctx.root, where);
+    const resolved = resolveTarget(ctx.root, where);
     if (!fs.existsSync(resolved)) {
       throw new Error(`path not found: ${where}`);
     }
-    const relative = path.relative(path.resolve(ctx.root), resolved);
-    const run = await ripgrep(argv(args, relative || '.'), ctx.root, ctx.host.signal);
+    const searchPath = displayPath(ctx.root, resolved);
+    const run = await ripgrep(argv(args, searchPath), ctx.root, ctx.host.signal);
     if (run.code === 124) {
       return {text: `search timed out after ${TIMEOUT_MS / 1000}s; narrow it with glob or path`};
     }

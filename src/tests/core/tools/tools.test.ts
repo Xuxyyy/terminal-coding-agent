@@ -8,7 +8,8 @@ import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js'
 import {bash} from '../../../core/tools/bash.js';
 import {editFile} from '../../../core/tools/edit.js';
 import {grep} from '../../../core/tools/grep.js';
-import {resolveInWorkspace} from '../../../core/tools/paths.js';
+import {decide} from '../../../core/permission/decide.js';
+import {displayPath, resolveTarget} from '../../../core/tools/paths.js';
 import {readFile} from '../../../core/tools/read.js';
 import {toolsFor} from '../../../core/tools/index.js';
 import {runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
@@ -145,23 +146,46 @@ test('edit_file replaces a unique match and returns a diff', async () => {
   assert.equal(output.diff?.path, 'a.ts');
 });
 
-test('a path outside the workspace is denied without a prompt', async () => {
-  const root = workspace();
+test('a path outside the workspace asks once and then reads', async () => {
+  const root = fs.realpathSync(workspace());
+  const outside = fs.realpathSync(workspace());
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'hello\n');
+  const away = path.join('..', path.basename(outside), 'secret.txt');
   const {host, asked} = hostThatAnswers('once');
   const output = await runTool(
     registry,
     'read_file',
-    JSON.stringify({path: '../../etc/passwd'}),
+    JSON.stringify({path: away}),
     context(root, host),
   );
 
-  assert.equal(output.text, "Error: reads '../../etc/passwd' outside the project");
-  assert.equal(asked.length, 0);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].suppressible, false);
+  assert.match(asked[0].reason, /outside the project/);
+  assert.match(output.text, /hello/);
+  assert.doesNotMatch(output.text, /outside the (project|workspace)/);
 });
 
-test('a home path is refused by the gate, not by a missing file', async () => {
+test('a path outside the workspace stays unread when the prompt is denied', async () => {
+  const root = fs.realpathSync(workspace());
+  const outside = fs.realpathSync(workspace());
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'hello\n');
+  const {host, asked} = hostThatAnswers('deny');
+  const output = await runTool(
+    registry,
+    'read_file',
+    JSON.stringify({path: path.join(outside, 'secret.txt')}),
+    context(root, host),
+  );
+
+  assert.equal(asked.length, 1);
+  assert.equal(output.text, 'Error: user denied this command; try another approach');
+  assert.doesNotMatch(output.text, /hello/);
+});
+
+test('a home path is asked about, not refused as a missing file', async () => {
   const root = workspace();
-  const {host, asked} = hostThatAnswers('once');
+  const {host, asked} = hostThatAnswers('deny');
   const output = await runTool(
     registry,
     'read_file',
@@ -169,54 +193,72 @@ test('a home path is refused by the gate, not by a missing file', async () => {
     context(root, host),
   );
 
-  assert.equal(output.text, "Error: reads '~/.ssh/id_rsa' outside the project");
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].reason, "reads '~/.ssh/id_rsa' outside the project");
+  assert.equal(asked[0].suppressible, false);
   assert.doesNotMatch(output.text, /ENOENT/);
-  assert.equal(asked.length, 0);
 });
 
 test('read_file and grep answer the same for the same path', async () => {
-  const root = workspace();
+  const root = fs.realpathSync(workspace());
+  const outside = fs.realpathSync(workspace());
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'hello\n');
+  const away = path.join(outside, 'secret.txt');
   const {host, asked} = hostThatAnswers('once');
   const ctx = context(root, host);
 
-  const read = await runTool(registry, 'read_file', JSON.stringify({path: '../secret'}), ctx);
+  const read = await runTool(registry, 'read_file', JSON.stringify({path: away}), ctx);
   const searched = await runTool(
     registry,
     'grep',
-    JSON.stringify({pattern: 'x', path: '../secret'}),
+    JSON.stringify({pattern: 'hello', path: away}),
     ctx,
   );
 
-  assert.equal(read.text, "Error: reads '../secret' outside the project");
-  assert.equal(searched.text, read.text);
-  assert.equal(asked.length, 0);
+  assert.equal(asked.length, 2);
+  assert.equal(asked[0].reason, asked[1].reason);
+  assert.equal(asked[0].suppressible, asked[1].suppressible);
+  assert.match(read.text, /hello/);
+  assert.match(searched.text, /secret\.txt/);
 });
 
-test('a link out of the workspace still throws in the resolver', () => {
+test('a link out of the workspace is an escape the gate asks about', () => {
   const root = fs.realpathSync(workspace());
   const outside = fs.realpathSync(workspace());
   fs.writeFileSync(path.join(outside, 'secret.txt'), 'x\n');
   fs.symlinkSync(outside, path.join(root, 'link'));
 
-  assert.throws(
-    () => resolveInWorkspace(root, 'link/secret.txt'),
-    /escapes the workspace through a link/,
-  );
+  const outcome = decide({kind: 'read', path: 'link/secret.txt'}, root);
+
+  assert.equal(outcome.decision, 'ask');
+  assert.equal(outcome.suppressible, false);
+  assert.equal(resolveTarget(root, 'link/secret.txt'), path.join(root, 'link', 'secret.txt'));
 });
 
-test('an absolute path outside the workspace is denied without a prompt', async () => {
-  const root = workspace();
+test('an absolute path outside the workspace asks once and then writes', async () => {
+  const root = fs.realpathSync(workspace());
+  const outside = fs.realpathSync(workspace());
+  const target = path.join(outside, 'written.txt');
   const {host, asked} = hostThatAnswers('once');
   const output = await runTool(
     registry,
     'write_file',
-    JSON.stringify({path: '/etc/passwd', content: 'x'}),
+    JSON.stringify({path: target, content: 'x'}),
     context(root, host),
   );
 
-  assert.equal(output.text, "Error: '/etc/passwd' is outside the project");
-  assert.equal(asked.length, 0);
-  assert.ok(!fs.existsSync(path.join(root, 'etc')));
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].suppressible, false);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'x');
+  assert.match(output.text, /Wrote 1 chars/);
+});
+
+test('displayPath names an outside target by its absolute path', () => {
+  const root = fs.realpathSync(workspace());
+
+  assert.equal(displayPath(root, '/etc/passwd'), '/etc/passwd');
+  assert.equal(displayPath(root, path.join(root, 'a.ts')), 'a.ts');
+  assert.equal(displayPath(root, root), '.');
 });
 
 test('write_file reports the size and a diff against the old contents', async () => {

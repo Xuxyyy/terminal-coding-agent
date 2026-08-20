@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
 import {diffPayload} from './diff.js';
-import {displayPath, resolveInWorkspace} from './paths.js';
+import {displayPath, resolveTarget} from './paths.js';
 
 const schema = z.object({
   path: z.string().describe('File to change, relative to the workspace root.'),
@@ -35,7 +35,7 @@ export const editFile: Tool = {
   },
   async run(args, ctx) {
     const parsed = schema.parse(args);
-    const target = resolveInWorkspace(ctx.root, parsed.path);
+    const target = resolveTarget(ctx.root, parsed.path);
     const shown = displayPath(ctx.root, target);
     if (!fs.existsSync(target)) {
       throw new Error(`no such file: ${shown}`);
