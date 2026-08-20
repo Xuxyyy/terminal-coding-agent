@@ -1,4 +1,6 @@
+import * as path from 'node:path';
 import type {Rules} from '../settings.js';
+import {expandUser, insideRoot, realPath} from './protected.js';
 import {commandParts, splitStages} from './stages.js';
 
 export type RuleVerdict = 'deny' | 'ask' | 'allow';
@@ -9,6 +11,27 @@ export function matchPattern(pattern: string, text: string): boolean {
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('.*');
   return new RegExp(`^${source}$`, 's').test(text);
+}
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function matchPath(pattern: string, relative: string): boolean {
+  if (pattern === '*' || pattern === '**') return true;
+  const expanded = pattern.endsWith('/') ? `${pattern}**` : pattern;
+  const source = expanded
+    .split('**')
+    .map((part) => part.split('*').map(escapeRegex).join('[^/]*'))
+    .join('.*');
+  return new RegExp(`^${source}$`, 's').test(relative);
+}
+
+export function relativeTo(target: string, root: string): string | null {
+  const expanded = expandUser(target);
+  const candidate = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
+  if (!insideRoot(candidate, root)) return null;
+  return path.relative(realPath(root), realPath(candidate)).split(path.sep).join('/');
 }
 
 export function normalizedStages(command: string): string[] | null {

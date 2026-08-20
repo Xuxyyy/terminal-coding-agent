@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import test from 'node:test';
 import {
+  matchPath,
   matchPattern,
   normalizedStages,
   patternScore,
+  relativeTo,
   ruleVerdict,
 } from '../../../core/permission/rules.js';
 import type {Rules} from '../../../core/settings.js';
@@ -150,4 +155,76 @@ test('a broad allow cannot rescue a command that will not parse', () => {
 
   const allowed = rules({allow: ['*']});
   assert.equal(ruleVerdict('echo "unbalanced', allowed), null);
+});
+
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-paths-')));
+
+test('a star in a path pattern stops at a slash', () => {
+  assert.equal(matchPath('docs/*.mdx', 'docs/a.mdx'), true);
+  assert.equal(matchPath('docs/*.mdx', 'docs/deep/a.mdx'), false);
+  assert.equal(matchPath('docs/*.mdx', 'docs/a.md'), false);
+  assert.equal(matchPath('src/*', 'src/a.ts'), true);
+  assert.equal(matchPath('src/*', 'src/core/a.ts'), false);
+});
+
+test('a double star crosses slashes and does not match the bare directory', () => {
+  assert.equal(matchPath('docs/**', 'docs/a.mdx'), true);
+  assert.equal(matchPath('docs/**', 'docs/deep/a.mdx'), true);
+  assert.equal(matchPath('docs/**', 'docs'), false);
+  assert.equal(matchPath('docs/**', 'docsy/a.mdx'), false);
+});
+
+test('a lone star matches every path, tree included', () => {
+  assert.equal(matchPath('*', 'README.md'), true);
+  assert.equal(matchPath('*', 'src/core/loop.ts'), true);
+  assert.equal(matchPath('**', 'src/core/loop.ts'), true);
+});
+
+test('a trailing slash means the directory and everything under it', () => {
+  for (const target of ['src/a.ts', 'src/core/loop.ts']) {
+    assert.equal(matchPath('src/', target), matchPath('src/**', target), target);
+    assert.equal(matchPath('src/', target), true, target);
+  }
+  assert.equal(matchPath('src', 'src/a.ts'), false);
+});
+
+test('every other metacharacter is literal in a path pattern', () => {
+  assert.equal(matchPath('docs/a.md', 'docs/aXmd'), false);
+  assert.equal(matchPath('docs/[a-z].md', 'docs/a.md'), false);
+  assert.equal(matchPath('docs/[a-z].md', 'docs/[a-z].md'), true);
+});
+
+test('an empty pattern and a dot match nothing a write can name', () => {
+  assert.equal(matchPath('', 'src/a.ts'), false);
+  assert.equal(matchPath('.', 'src/a.ts'), false);
+  assert.equal(matchPath('.', ''), false);
+  assert.equal(matchPath('', ''), true);
+});
+
+test('a relative, an absolute and a tilde path relativize to the same string', () => {
+  const previous = process.env.HOME;
+  process.env.HOME = root;
+  try {
+    assert.equal(relativeTo('src/a.ts', root), 'src/a.ts');
+    assert.equal(relativeTo(path.join(root, 'src/a.ts'), root), 'src/a.ts');
+    assert.equal(relativeTo('~/src/a.ts', root), 'src/a.ts');
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
+});
+
+test('a path is normalized before it is matched', () => {
+  assert.equal(relativeTo('plans/../src/a.ts', root), 'src/a.ts');
+  assert.equal(matchPath('src/**', relativeTo('plans/../src/a.ts', root) as string), true);
+  assert.equal(relativeTo(root, root), '');
+});
+
+test('a path outside the root relativizes to null and matches no pattern', () => {
+  for (const target of ['../escape.ts', '/etc/passwd', path.join(root, '..', 'x.ts')]) {
+    assert.equal(relativeTo(target, root), null, target);
+  }
+  for (const pattern of ['*', '**', 'src/**']) {
+    assert.equal(matchPath(pattern, '../escape.ts'), pattern !== 'src/**', pattern);
+  }
 });
