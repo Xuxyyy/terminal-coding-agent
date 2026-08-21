@@ -227,12 +227,12 @@ test('a compacted conversation still carries what the user asked for', () => {
   assert.deepEqual(callLines(output), []);
 });
 
-test('the pending command and the reason it was flagged are the last thing the judge reads', () => {
+test('the pending command and the reason it is not automatic are the last thing the judge reads', () => {
   const output = judgeMessages(ASKED, [], REMOVING, FLAGGED);
 
   assert.equal(
     lastOf(output),
-    "The agent now wants to run: rm build.log\nThe classifier flagged it: deletes 'build.log'",
+    "The action to judge — run: rm build.log\nWhy it is not automatic: deletes 'build.log'",
   );
 });
 
@@ -246,8 +246,8 @@ test('a pending write names the file it would change', () => {
 
   assert.equal(
     lastOf(output),
-    'The agent now wants to write the file: .git/config\n' +
-      'The classifier flagged it: writes to a protected path',
+    'The action to judge — write the file: .git/config\n' +
+      'Why it is not automatic: writes to a protected path',
   );
 });
 
@@ -263,7 +263,7 @@ test('the hardened command is what the judge reads, not the one the agent sent',
 
   assert.equal(
     lastOf(output).split('\n')[0],
-    'The agent now wants to run: git diff --no-ext-diff',
+    'The action to judge — run: git diff --no-ext-diff',
   );
 });
 
@@ -275,7 +275,7 @@ test('an earlier refusal is listed under the pending action', () => {
 
   assert.equal(
     lastOf(output),
-    "The agent now wants to run: rm build.log\nThe classifier flagged it: deletes 'build.log'\n" +
+    "The action to judge — run: rm build.log\nWhy it is not automatic: deletes 'build.log'\n" +
       '\nthe user has already refused:\n- do not touch the git config\n- do not push',
   );
 });
