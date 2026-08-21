@@ -200,7 +200,7 @@ function refused(files: string[]): SettingsError {
 }
 
 test('the permission mode is read from the user file', () => {
-  for (const mode of ['ask-edits', 'auto-edits']) {
+  for (const mode of ['ask-edits', 'auto-edits', 'auto']) {
     withHome((home) => {
       loadSettings(settingsIn(home, {permission_mode: mode}));
       assert.equal(modeOf(), mode);
@@ -236,7 +236,7 @@ test('an unknown permission mode refuses to start and lists the valid names', ()
     const files = settingsIn(home, {permission_mode: 'approve_for_me'});
     const message = refused(files).message;
     assert.ok(message.includes(files[0]), message);
-    for (const name of ['ask-edits', 'auto-edits']) {
+    for (const name of ['ask-edits', 'auto-edits', 'auto']) {
       assert.ok(message.includes(name), message);
     }
   });

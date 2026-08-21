@@ -7,6 +7,7 @@ export type PermissionRow = {id: Mode; label: string; current: boolean};
 export const PERMISSION_LABELS: Record<Mode, string> = {
   'ask-edits': 'asks before every edit',
   'auto-edits': 'edits without asking',
+  auto: 'a model decides what would be asked',
 };
 
 export const PERMISSION_TITLE = 'Choose what runs without asking';

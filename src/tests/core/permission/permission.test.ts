@@ -71,6 +71,8 @@ const QUIET = [
   'npm run build',
 ];
 
+const ESCAPES = ['sudo ls', 'git push', 'dd of=/dev/disk0', 'cat ~/.ssh/id_rsa'];
+
 const ADVERSARIAL = [
   'ls && rm -rf ~/notes',
   'echo x > ../outside.txt',
@@ -428,16 +430,88 @@ test('a deny rule still refuses in every mode', () => {
 
 test('no mode returns deny on its own', () => {
   for (const mode of MODES) {
-    assert.equal(write('.git/config', undefined, mode).decision, 'ask', mode);
-    assert.equal(command('rm build.log', undefined, mode).decision, 'ask', mode);
-    assert.equal(command('python3 build.py', undefined, mode).decision, 'ask', mode);
+    assert.notEqual(write('.git/config', undefined, mode).decision, 'deny', mode);
+    assert.notEqual(command('rm build.log', undefined, mode).decision, 'deny', mode);
+    assert.notEqual(
+      command('python3 build.py', undefined, mode).decision,
+      'deny',
+      mode,
+    );
 
     for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0']) {
       const escape = command(text, undefined, mode);
-      assert.equal(escape.decision, 'ask', `${mode} ${text}`);
+      assert.notEqual(escape.decision, 'deny', `${mode} ${text}`);
       assert.equal(escape.suppressible, false, `${mode} ${text}`);
     }
   }
+});
+
+test('auto sends every classifier ask to the judge', () => {
+  const above: [string, Outcome][] = [
+    ['.git/config write', write('.git/config', undefined, 'auto')],
+    ['rm build.log', command('rm build.log', undefined, 'auto')],
+    ['python3 build.py', command('python3 build.py', undefined, 'auto')],
+    ...ESCAPES.map(
+      (text): [string, Outcome] => [text, command(text, undefined, 'auto')],
+    ),
+  ];
+
+  for (const [what, outcome] of above) {
+    assert.equal(outcome.decision, 'judge', what);
+  }
+
+  for (const mode of ['ask-edits', 'auto-edits'] as Mode[]) {
+    assert.equal(write('.git/config', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('rm build.log', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('python3 build.py', undefined, mode).decision, 'ask', mode);
+    for (const text of ESCAPES) {
+      assert.equal(command(text, undefined, mode).decision, 'ask', `${mode} ${text}`);
+    }
+  }
+});
+
+test('auto allows exactly what auto-edits allows', () => {
+  for (const text of QUIET) {
+    assert.deepEqual(
+      command(text, undefined, 'auto'),
+      command(text, undefined, 'auto-edits'),
+      text,
+    );
+  }
+  for (const target of ['src/a.ts', 'notes/todo.md']) {
+    assert.deepEqual(
+      write(target, undefined, 'auto'),
+      write(target, undefined, 'auto-edits'),
+      target,
+    );
+    assert.deepEqual(
+      read(target, undefined, 'auto'),
+      read(target, undefined, 'auto-edits'),
+      target,
+    );
+  }
+  assert.equal(write('src/a.ts', undefined, 'auto').decision, 'allow');
+  assert.equal(command('echo hi > src/a.ts', undefined, 'auto').decision, 'allow');
+});
+
+test('a rule verdict is never judged in auto', () => {
+  const denied = command('ls', {deny: ['ls*']}, 'auto');
+  assert.equal(denied.decision, 'deny');
+  assert.equal(denied.suppressible, false);
+
+  const questioned = command('rm build.log', {ask: ['rm *']}, 'auto');
+  assert.equal(questioned.decision, 'ask');
+  assert.match(questioned.reason, /settings\.json/);
+
+  const permitted = command('rm build.log', {allow: ['rm *']}, 'auto');
+  assert.equal(permitted.decision, 'allow');
+  assert.match(permitted.reason, /settings\.json/);
+
+  const deniedWrite = write('.git/config', {deny: ['edit(.git/**)']}, 'auto');
+  assert.equal(deniedWrite.decision, 'deny');
+
+  const allowedWrite = write('.git/config', {allow: ['edit(.git/**)']}, 'auto');
+  assert.equal(allowedWrite.decision, 'allow');
 });
 
 test('a new session starts in auto-edits', () => {

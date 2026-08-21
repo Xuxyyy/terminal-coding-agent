@@ -6,7 +6,7 @@ import {
   type Classification,
 } from './classify.js';
 import {hardenCommand} from './harden.js';
-import {DEFAULT_MODE, withinCut, type Mode} from './mode.js';
+import {aboveCut, DEFAULT_MODE, withinCut, type Mode} from './mode.js';
 import {pathVerdict, ruleVerdict, type RuleVerdict} from './rules.js';
 import {commandParts, splitStages} from './stages.js';
 
@@ -16,7 +16,7 @@ export type Request =
   | {kind: 'read'; path: string};
 
 export type Outcome = {
-  decision: 'allow' | 'ask' | 'deny';
+  decision: 'allow' | 'ask' | 'deny' | 'judge';
   reason: string;
   command?: string;
   suppressible: boolean;
@@ -35,7 +35,7 @@ function outcomeFor(
   }
   const explained = level === null ? (fallback ?? UNCLASSIFIED_REASON) : reason;
   return {
-    decision: 'ask',
+    decision: aboveCut(mode),
     reason: explained,
     suppressible: level !== 'escape',
   };
@@ -56,7 +56,7 @@ function fileOutcome(
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false};
   }
   if (classification.level === 'escape') {
-    return {decision: 'ask', reason: classification.reason, suppressible: false};
+    return outcomeFor(classification, mode);
   }
   if (verdict !== null) {
     return {decision: verdict, reason: RULE_REASON[verdict], suppressible: true};
