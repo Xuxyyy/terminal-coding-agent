@@ -126,6 +126,7 @@ export function judgeVerdict(text: string): 'allow' | 'ask' {
 }
 
 export const JUDGE_TIMEOUT = 20_000;
+export const JUDGE_MAX_TOKENS = 512;
 
 export async function askJudge(
   choice: ModelChoice,
@@ -134,7 +135,7 @@ export async function askJudge(
 ): Promise<'allow' | 'ask'> {
   try {
     const reply = await choice.client.chat.completions.create(
-      {model: choice.model, messages, stream: false, max_tokens: 8},
+      {model: choice.model, messages, stream: false, max_tokens: JUDGE_MAX_TOKENS},
       {signal: AbortSignal.any([signal, AbortSignal.timeout(JUDGE_TIMEOUT)])},
     );
     return judgeVerdict(reply.choices[0]?.message?.content ?? '');

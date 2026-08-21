@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type OpenAI from 'openai';
+import type {ModelChoice} from '../../../core/client.js';
 import {judgeModelFor} from '../../../core/client.js';
 import {SUMMARY_PREFIX} from '../../../core/compact.js';
 import type {Request} from '../../../core/permission/decide.js';
 import {
   ARG_LIMIT,
+  askJudge,
   CALLS_CLOSE,
   CALLS_OPEN,
+  JUDGE_MAX_TOKENS,
   JUDGE_RUBRIC,
   judgeMessages,
   judgeVerdict,
@@ -323,4 +326,66 @@ test('every model is judged by the cheaper model of its own provider', () => {
 test('an unknown model id is judged by itself', () => {
   assert.equal(judgeModelFor('gpt-9'), 'gpt-9');
   assert.equal(judgeModelFor(''), '');
+});
+
+type Sent = {model: string; messages: Message[]; max_tokens: number; stream: boolean};
+
+function fakeJudge(reply: string | Error): {choice: ModelChoice; sent: () => Sent} {
+  let seen: Sent | null = null;
+  const create = async (request: Sent) => {
+    seen = request;
+    if (reply instanceof Error) throw reply;
+    return {choices: [{message: {content: reply}}]};
+  };
+  const choice = {
+    client: {chat: {completions: {create}}},
+    model: 'deepseek-v4-flash',
+    label: 'flash',
+    contextWindow: 128_000,
+  } as unknown as ModelChoice;
+  return {
+    choice,
+    sent: () => {
+      assert.ok(seen, 'the judge never called the model');
+      return seen;
+    },
+  };
+}
+
+const NEVER_ABORTED = new AbortController().signal;
+
+test('the judge is given room to answer, and asks for one whole reply', async () => {
+  const judge = fakeJudge('ALLOW');
+
+  await askJudge(judge.choice, judgeMessages(ASKED, [], REMOVING, FLAGGED), NEVER_ABORTED);
+
+  assert.equal(judge.sent().max_tokens, JUDGE_MAX_TOKENS);
+  assert.equal(judge.sent().stream, false);
+  assert.equal(judge.sent().model, 'deepseek-v4-flash');
+});
+
+test('the ceiling leaves room for a model that reasons before it speaks', () => {
+  assert.ok(
+    JUDGE_MAX_TOKENS >= 256,
+    `a reasoning model spends the budget before writing a word: ${JUDGE_MAX_TOKENS}`,
+  );
+});
+
+test('the judge reads the model reply, and anything short of it asks the user', async () => {
+  const cases: [string | Error, 'allow' | 'ask'][] = [
+    ['ALLOW', 'allow'],
+    ['', 'ask'],
+    ['REFUSE', 'ask'],
+    [new Error('the api is down'), 'ask'],
+  ];
+
+  for (const [reply, expected] of cases) {
+    const judge = fakeJudge(reply);
+    const verdict = await askJudge(
+      judge.choice,
+      judgeMessages(ASKED, [], REMOVING, FLAGGED),
+      NEVER_ABORTED,
+    );
+    assert.equal(verdict, expected, String(reply));
+  }
 });
