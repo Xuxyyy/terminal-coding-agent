@@ -5,6 +5,11 @@ import {approvalKey, decide, type Request} from '../permission/decide.js';
 import type {Mode} from '../permission/mode.js';
 import type {Rules} from '../settings.js';
 
+export type Judge = (
+  request: Request,
+  reason: string,
+) => Promise<'allow' | 'ask'>;
+
 export type ToolContext = {
   root: string;
   host: Host;
@@ -12,6 +17,8 @@ export type ToolContext = {
   rules: Rules;
   mode: Mode;
   backup?: (path: string) => void;
+  judge?: Judge;
+  denied?: string[];
 };
 
 export type ToolOutput = {text: string; diff?: DiffPayload | null};
@@ -75,12 +82,19 @@ async function permitted(
   if (outcome.decision === 'deny') return {denied: outcome.reason, args};
   const key = approvalKey(request);
   if (ctx.allowed.has(key)) return approved(request, args, outcome.command);
+  if (outcome.decision === 'judge' && ctx.judge) {
+    const verdict = await ctx
+      .judge(judged(request, outcome.command), outcome.reason)
+      .catch(() => 'ask' as const);
+    if (verdict === 'allow') return approved(request, args, outcome.command);
+  }
   const decision = await ctx.host.confirm({
     command: outcome.command ?? `${tool.name} ${describe(request)}`,
     reason: outcome.reason,
     suppressible: outcome.suppressible,
   });
   if (decision === 'deny') {
+    ctx.denied?.push(outcome.command ?? describe(request));
     return {denied: 'user denied this command; try another approach', args};
   }
   if (decision === 'session' && outcome.suppressible) ctx.allowed.add(key);
@@ -89,6 +103,10 @@ async function permitted(
 
 function describe(request: Request): string {
   return request.kind === 'command' ? request.command : request.path;
+}
+
+function judged(request: Request, command?: string): Request {
+  return request.kind === 'command' && command ? {...request, command} : request;
 }
 
 export async function runTool(

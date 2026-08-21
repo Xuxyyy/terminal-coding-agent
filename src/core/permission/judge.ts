@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import type {ModelChoice} from '../client.js';
 import type {Request} from './decide.js';
 
 export const JUDGE_RUBRIC = [
@@ -113,4 +114,22 @@ export function judgeMessages(
 
 export function judgeVerdict(text: string): 'allow' | 'ask' {
   return text.trim().toUpperCase() === 'ALLOW' ? 'allow' : 'ask';
+}
+
+export const JUDGE_TIMEOUT = 20_000;
+
+export async function askJudge(
+  choice: ModelChoice,
+  messages: OpenAI.ChatCompletionMessageParam[],
+  signal: AbortSignal,
+): Promise<'allow' | 'ask'> {
+  try {
+    const reply = await choice.client.chat.completions.create(
+      {model: choice.model, messages, stream: false, max_tokens: 8},
+      {signal: AbortSignal.any([signal, AbortSignal.timeout(JUDGE_TIMEOUT)])},
+    );
+    return judgeVerdict(reply.choices[0]?.message?.content ?? '');
+  } catch {
+    return 'ask';
+  }
 }
