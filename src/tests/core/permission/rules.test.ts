@@ -277,13 +277,28 @@ test('a tilde pattern is expanded before an outside path is matched', () => {
   }
 });
 
+const real = path.join(outside, 'real');
+const link = path.join(outside, 'link');
+fs.mkdirSync(real, {recursive: true});
+fs.symlinkSync(real, link);
+
 test('a symlinked outside path matches a pattern written either way', () => {
-  const real = path.join(outside, 'real');
-  const link = path.join(outside, 'link');
-  fs.mkdirSync(real, {recursive: true});
-  fs.symlinkSync(real, link);
   const target = path.join(link, 'a.ts');
   assert.notEqual(realPath(target), target);
   assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/**)`]})), 'deny');
   assert.equal(pathVerdict(target, root, rules({deny: [`edit(${real}/**)`]})), 'deny');
+});
+
+test('a pattern is resolved too, so the short name catches the resolved target', () => {
+  const target = path.join(real, 'a.ts');
+  assert.equal(realPath(target), target);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${real}/**)`]})), 'deny');
+});
+
+test('resolving a pattern keeps a glob that names nothing on disk', () => {
+  const missing = path.join(link, 'gone');
+  const target = path.join(missing, 'deep/a.ts');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${missing}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/*/deep/**)`]})), 'deny');
 });

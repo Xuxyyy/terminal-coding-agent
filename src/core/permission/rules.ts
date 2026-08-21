@@ -36,6 +36,11 @@ export function absolutePattern(pattern: string): boolean {
   return pattern.startsWith('/') || pattern.startsWith('~/') || pattern === '~';
 }
 
+function pathForms(value: string): string[] {
+  const real = realPath(value);
+  return real === value ? [value] : [value, real];
+}
+
 export function relativeTo(target: string, root: string): string | null {
   const candidate = candidatePath(target, root);
   if (!insideRoot(candidate, root)) return null;
@@ -118,14 +123,15 @@ export function pathVerdict(
       (rule) => rule.tag === 'edit' && matchPath(rule.pattern, relative),
     );
   }
-  const candidate = candidatePath(target, root);
-  const forms = [candidate, realPath(candidate)];
+  const forms = pathForms(candidatePath(target, root));
   return bestVerdict(
     rules,
     (rule) =>
       rule.tag === 'edit' &&
       absolutePattern(rule.pattern) &&
-      forms.some((form) => matchPath(expandUser(rule.pattern), form)),
+      pathForms(expandUser(rule.pattern)).some((pattern) =>
+        forms.some((form) => matchPath(pattern, form)),
+      ),
   );
 }
 
