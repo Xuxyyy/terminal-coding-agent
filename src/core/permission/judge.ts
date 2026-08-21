@@ -86,22 +86,37 @@ function recentCalls(messages: OpenAI.ChatCompletionMessageParam[]): string[] {
   return lines.slice(-MAX_CALLS);
 }
 
-function pending(request: Request, reason: string, command?: string): string {
+function pending(
+  root: string,
+  request: Request,
+  reason: string,
+  command?: string,
+): string {
   const action =
     request.kind === 'command'
       ? `run: ${command ?? request.command}`
       : `${request.kind} the file: ${request.path}`;
-  return `The action to judge — ${action}\nWhy it is not automatic: ${reason}`;
+  return [
+    `The project root is: ${root}`,
+    `The action to judge — ${action}`,
+    `Why it is not automatic: ${reason}`,
+  ].join('\n');
 }
 
+export type JudgeInput = {
+  asked: string[];
+  messages: OpenAI.ChatCompletionMessageParam[];
+  root: string;
+  request: Request;
+  reason: string;
+  denied?: string[];
+  command?: string;
+};
+
 export function judgeMessages(
-  asked: string[],
-  messages: OpenAI.ChatCompletionMessageParam[],
-  request: Request,
-  reason: string,
-  denied: string[] = [],
-  command?: string,
+  input: JudgeInput,
 ): OpenAI.ChatCompletionMessageParam[] {
+  const {asked, messages, root, request, reason, denied = [], command} = input;
   const built: OpenAI.ChatCompletionMessageParam[] = [
     {role: 'system', content: JUDGE_RUBRIC},
   ];
@@ -113,7 +128,7 @@ export function judgeMessages(
     role: 'user',
     content: [CALLS_OPEN, ...calls, CALLS_CLOSE].join('\n'),
   });
-  const last = [pending(request, reason, command)];
+  const last = [pending(root, request, reason, command)];
   if (denied.length > 0) {
     last.push('', 'the user has already refused:', ...denied.map((text) => `- ${text}`));
   }

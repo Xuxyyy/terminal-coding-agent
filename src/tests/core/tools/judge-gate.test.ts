@@ -255,7 +255,14 @@ test('the judge input is rebuilt from the session on every call', async () => {
     denied: session.denied,
     async judge(request, reason) {
       built.push(
-        judgeMessages(session.asked, session.messages, request, reason, session.denied)
+        judgeMessages({
+          asked: session.asked,
+          messages: session.messages,
+          root: session.root,
+          request,
+          reason,
+          denied: session.denied,
+        })
           .map((message) => String(message.content))
           .join('\n'),
       );

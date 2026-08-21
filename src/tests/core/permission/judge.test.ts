@@ -23,6 +23,7 @@ type Message = OpenAI.ChatCompletionMessageParam;
 const REMOVING: Request = {kind: 'command', command: 'rm build.log'};
 const FLAGGED = "deletes 'build.log'";
 const ASKED = ['delete the stale build log'];
+const ROOT = '/tmp/acc-project';
 
 function assistant(
   content: string | null,
@@ -41,7 +42,13 @@ function assistant(
 }
 
 function built(messages: Message[], asked: string[] = ASKED): Message[] {
-  return judgeMessages(asked, messages, REMOVING, FLAGGED);
+  return judgeMessages({
+    asked,
+    messages,
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+  });
 }
 
 function whole(output: Message[]): string {
@@ -70,12 +77,13 @@ test('the rubric is the only system message the judge reads', () => {
 });
 
 test('each asked entry becomes one user message, verbatim and in order', () => {
-  const output = judgeMessages(
-    ['first, read the log', 'now delete it'],
-    [],
-    REMOVING,
-    FLAGGED,
-  );
+  const output = judgeMessages({
+    asked: ['first, read the log', 'now delete it'],
+    messages: [],
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+  });
 
   assert.deepEqual(output.slice(1, 3), [
     {role: 'user', content: 'first, read the log'},
@@ -217,12 +225,13 @@ test('a compacted conversation still carries what the user asked for', () => {
     {role: 'assistant', content: `${SUMMARY_PREFIX}the agent did things`},
   ];
 
-  const output = judgeMessages(
-    ['clean up the build output', 'then delete the log'],
+  const output = judgeMessages({
+    asked: ['clean up the build output', 'then delete the log'],
     messages,
-    REMOVING,
-    FLAGGED,
-  );
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+  });
 
   assert.ok(whole(output).includes('clean up the build output'));
   assert.ok(whole(output).includes('then delete the log'));
@@ -231,65 +240,118 @@ test('a compacted conversation still carries what the user asked for', () => {
 });
 
 test('the pending command and the reason it is not automatic are the last thing the judge reads', () => {
-  const output = judgeMessages(ASKED, [], REMOVING, FLAGGED);
+  const output = judgeMessages({
+    asked: ASKED,
+    messages: [],
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+  });
 
   assert.equal(
     lastOf(output),
-    "The action to judge — run: rm build.log\nWhy it is not automatic: deletes 'build.log'",
+    `The project root is: ${ROOT}\n` +
+      'The action to judge — run: rm build.log\n' +
+      "Why it is not automatic: deletes 'build.log'",
   );
 });
 
 test('a pending write names the file it would change', () => {
-  const output = judgeMessages(
-    ASKED,
-    [],
-    {kind: 'write', path: '.git/config'},
-    'writes to a protected path',
-  );
+  const output = judgeMessages({
+    asked: ASKED,
+    messages: [],
+    root: ROOT,
+    request: {kind: 'write', path: '.git/config'},
+    reason: 'writes to a protected path',
+  });
 
   assert.equal(
     lastOf(output),
-    'The action to judge — write the file: .git/config\n' +
+    `The project root is: ${ROOT}\n` +
+      'The action to judge — write the file: .git/config\n' +
       'Why it is not automatic: writes to a protected path',
   );
 });
 
 test('the hardened command is what the judge reads, not the one the agent sent', () => {
-  const output = judgeMessages(
-    ASKED,
-    [],
-    {kind: 'command', command: 'git diff'},
-    'a read',
-    [],
-    'git diff --no-ext-diff',
-  );
+  const output = judgeMessages({
+    asked: ASKED,
+    messages: [],
+    root: ROOT,
+    request: {kind: 'command', command: 'git diff'},
+    reason: 'a read',
+    command: 'git diff --no-ext-diff',
+  });
 
   assert.equal(
-    lastOf(output).split('\n')[0],
+    lastOf(output).split('\n')[1],
     'The action to judge — run: git diff --no-ext-diff',
   );
 });
 
 test('an earlier refusal is listed under the pending action', () => {
-  const output = judgeMessages(ASKED, [], REMOVING, FLAGGED, [
-    'do not touch the git config',
-    'do not push',
-  ]);
+  const output = judgeMessages({
+    asked: ASKED,
+    messages: [],
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+    denied: ['do not touch the git config', 'do not push'],
+  });
 
   assert.equal(
     lastOf(output),
-    "The action to judge — run: rm build.log\nWhy it is not automatic: deletes 'build.log'\n" +
+    `The project root is: ${ROOT}\n` +
+      'The action to judge — run: rm build.log\n' +
+      "Why it is not automatic: deletes 'build.log'\n" +
       '\nthe user has already refused:\n- do not touch the git config\n- do not push',
   );
 });
 
 test('with nothing refused the last message says nothing about a refusal', () => {
+  const input = {
+    asked: ASKED,
+    messages: [] as Message[],
+    root: ROOT,
+    request: REMOVING,
+    reason: FLAGGED,
+  };
+
   for (const output of [
-    judgeMessages(ASKED, [], REMOVING, FLAGGED),
-    judgeMessages(ASKED, [], REMOVING, FLAGGED, []),
+    judgeMessages(input),
+    judgeMessages({...input, denied: []}),
   ]) {
     assert.doesNotMatch(lastOf(output), /refus/i);
   }
+});
+
+test('the judge is told where the project is, in the message the app writes', () => {
+  const output = built([]);
+  const rootLine = `The project root is: ${ROOT}`;
+
+  assert.equal(lastOf(output).split('\n')[0], rootLine);
+  assert.equal(String(output[output.length - 2]!.content).includes(rootLine), false);
+  assert.equal(
+    whole(output.slice(0, -1)).includes('The project root is'),
+    false,
+    'the root belongs to the pending action alone',
+  );
+});
+
+test('the order the judge reads is rubric, what was asked, the untrusted calls, then the action', () => {
+  const messages: Message[] = [assistant(null, ['bash', {command: 'rm build.log'}])];
+
+  const output = built(messages, ['first, read the log', 'now delete it']);
+
+  assert.deepEqual(
+    output.map((message) => message.role),
+    ['system', 'user', 'user', 'user', 'user'],
+  );
+  assert.equal(output[0]!.content, JUDGE_RUBRIC);
+  assert.equal(output[1]!.content, 'first, read the log');
+  assert.equal(output[2]!.content, 'now delete it');
+  assert.deepEqual(callLines(output), ['bash rm build.log']);
+  assert.ok(lastOf(output).startsWith(`The project root is: ${ROOT}`));
 });
 
 test('only the single word allow is a verdict to allow', () => {
@@ -357,7 +419,7 @@ const NEVER_ABORTED = new AbortController().signal;
 test('the judge is given room to answer, and asks for one whole reply', async () => {
   const judge = fakeJudge('ALLOW');
 
-  await askJudge(judge.choice, judgeMessages(ASKED, [], REMOVING, FLAGGED), NEVER_ABORTED);
+  await askJudge(judge.choice, built([]), NEVER_ABORTED);
 
   assert.equal(judge.sent().max_tokens, JUDGE_MAX_TOKENS);
   assert.equal(judge.sent().stream, false);
@@ -383,7 +445,7 @@ test('the judge reads the model reply, and anything short of it asks the user', 
     const judge = fakeJudge(reply);
     const verdict = await askJudge(
       judge.choice,
-      judgeMessages(ASKED, [], REMOVING, FLAGGED),
+      built([]),
       NEVER_ABORTED,
     );
     assert.equal(verdict, expected, String(reply));

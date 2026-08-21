@@ -68,7 +68,14 @@ function judgeFor(session: Session, host: Host, model: string): Judge | undefine
     if (!choice) return 'ask';
     return askJudge(
       choice,
-      judgeMessages(session.asked, session.messages, request, reason, session.denied),
+      judgeMessages({
+        asked: session.asked,
+        messages: session.messages,
+        root: session.root,
+        request,
+        reason,
+        denied: session.denied,
+      }),
       host.signal,
     );
   };
