@@ -1,13 +1,38 @@
 {
   "name": "coding-cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
+  "description": "acc — a small terminal coding agent that reads, edits, and runs code in the current directory.",
+  "license": "MIT",
+  "author": "Xuxyyy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xuxyyy/coding-cli.git"
+  },
+  "homepage": "https://github.com/Xuxyyy/coding-cli#readme",
+  "bugs": {
+    "url": "https://github.com/Xuxyyy/coding-cli/issues"
+  },
+  "keywords": [
+    "cli",
+    "coding-agent",
+    "llm",
+    "terminal",
+    "ink",
+    "deepseek",
+    "kimi",
+    "glm"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
     "acc": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsc && node dist/cli.js",
     "start": "node dist/cli.js",
     "test": "tsc && node --test \"dist/**/*.test.js\""
