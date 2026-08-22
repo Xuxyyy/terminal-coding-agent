@@ -117,3 +117,7 @@ permanent:
 
 Rules are read before anything else decides, so a command you approved by hand
 stops asking on every restart. They can also make `acc` stricter than any mode.
+
+[Settings](/reference/settings) is the full reference: where the files live, the
+pattern syntax for `bash(...)` and `edit(...)`, and which rule wins when two
+match.

@@ -65,7 +65,8 @@ If the chosen model needs a key you have not set, `acc` stops at startup with
 names a model that does not exist, it stops with `Unknown model` and lists the
 six valid ids.
 
-The model in use is printed in the header when `acc` starts.
+The model in use is printed in the header when `acc` starts — see
+[Your first run](/start/first-run).
 
 ## Environment variables
 
@@ -73,7 +74,7 @@ The model in use is printed in the header when `acc` starts.
 |---|---|
 | `ACC_MODEL` | Forces one model id instead of letting `acc` choose. |
 | `ACC_HOME` | Moves the `acc` folder off `~/.acc` — sessions, settings, and `.env` all follow it. |
-| `ACC_COMPACT_AT` | The fraction of the context window at which `acc` starts shrinking the conversation. Defaults to `0.8`. |
+| `ACC_COMPACT_AT` | The fraction of the context window at which `acc` starts shrinking the conversation. Defaults to `0.8` — see [Context](/guide/context). |
 
 `ACC_COMPACT_AT` is only accepted when it reads as a number greater than 0 and
 no greater than 1. Anything else — a word, a negative, `1.5` — is ignored

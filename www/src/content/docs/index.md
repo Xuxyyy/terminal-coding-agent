@@ -45,4 +45,6 @@ on your `PATH`, and one API key.
 
 ## Where to go next
 
-Install it, pick a model, then run it on something small.
+- **[Install](/start/install)** — clone, build, link, and check it worked.
+- **[Models and keys](/start/models)** — pick a provider and set one key.
+- **[Your first run](/start/first-run)** — what the screen shows and how to read it.

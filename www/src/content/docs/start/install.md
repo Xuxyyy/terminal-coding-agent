@@ -18,7 +18,8 @@ npm registry yet, so there is no `npm install -g acc`.
   shell instead. That works, but it is slower and it ignores your `.gitignore`.
   Install ripgrep with `brew install ripgrep`, `apt install ripgrep`, or from
   [the ripgrep releases](https://github.com/BurntSushi/ripgrep/releases).
-- **An API key** for DeepSeek, GLM, or Kimi. One is enough.
+- **An API key** for DeepSeek, GLM, or Kimi. One is enough — see
+  [Models and keys](/start/models).
 
 ## Install
 
@@ -41,7 +42,8 @@ which acc
 ```
 
 That should print a path ending in `bin/acc`. Run `acc` inside a project folder
-and you should get the welcome header.
+and you should get the welcome header — [Your first run](/start/first-run)
+walks through what you see.
 
 `acc` takes **no command-line arguments and no flags** — not even `--help`.
 Anything you pass it is an error, because the folder you are standing in is the

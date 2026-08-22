@@ -63,6 +63,8 @@ came back. While a tool is still running the row reads `running…`, and
 - **Shell output starts with its exit code**, like `[exit 0]`. Long output is
   cut in the middle and the cut is marked.
 
+[Tools](/reference/tools) describes all five tools and their limits.
+
 ## When it asks
 
 Some actions stop and show an approval box:
@@ -84,10 +86,14 @@ means the same as `n`.
 Refusing does not end the task. The agent is told not to retry, and carries on
 with the rest of what you asked.
 
+[Permissions](/guide/permissions) explains what decides which actions stop, and
+how to change it.
+
 ## Stopping and leaving
 
 - **Esc** while the agent is working interrupts it — the model request and any
   running shell command both stop.
 - **`exit`**, **`quit`**, or **`q`** closes `acc`.
 
-Your conversation is saved as you go, so leaving is not losing it.
+Your conversation is saved as you go, so leaving is not losing it — see
+[Sessions](/guide/sessions) for how to reopen it.

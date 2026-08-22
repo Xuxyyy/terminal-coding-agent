@@ -30,7 +30,7 @@ free                  220,936
 ```
 
 The total is what your provider measured on the last turn; the parts are
-estimates and are marked `~`.
+estimates and are marked `~`. [Context](/guide/context) explains each part.
 
 ## `/compact`
 
@@ -44,7 +44,7 @@ compacted 34 messages, ~28,400 tokens freed
 ```
 
 If the summary fails, nothing changes and you get
-`nothing compacted: the summary failed`.
+`nothing compacted: the summary failed`. See [Context](/guide/context).
 
 ## `/clear`
 
@@ -72,6 +72,7 @@ Reopen a conversation
 ```
 
 If there is nothing to show, it says `No past conversations in this folder yet.`
+See [Sessions](/guide/sessions).
 
 ## `/rewind`
 
@@ -94,7 +95,8 @@ Afterwards a notice counts what happened, like
 
 Rows marked `— before the summary` are messages a `/compact` replaced; picking
 one brings that conversation back. If there is nothing to rewind to, it says
-`Nothing to rewind yet.`
+`Nothing to rewind yet.` [Sessions](/guide/sessions) covers what it can and
+cannot put back.
 
 ## `/permission`
 
@@ -113,6 +115,7 @@ Choose what runs without asking
 Choosing one prints `switched to auto` and saves it to
 `~/.acc/settings.json` for next time. If it could not be saved, the notice says
 so: `switched to auto (not saved to settings.json)`.
+[Permissions](/guide/permissions) explains what each mode allows.
 
 ## Keys and leaving
 

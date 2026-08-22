@@ -10,7 +10,8 @@ browser, and no way to reach a file outside the workspace.
 
 **Every path is resolved against the workspace root before the tool runs.** A
 path that lands outside it does not silently fail — it stops and asks you, every
-single time, and that prompt can never be remembered.
+single time, and that prompt can never be remembered. See
+[Permissions](/guide/permissions).
 
 ## `read_file`
 
@@ -124,4 +125,6 @@ started it and the error that ended it — and the cut is marked
 `[exit 130]` / `stopped by the user`.
 
 `bash` is the tool most likely to stop and ask you. Deletes, anything reaching
-outside the project, and anything `acc` cannot classify all need your approval.
+outside the project, and anything `acc` cannot classify all need your approval —
+see [Permissions](/guide/permissions), and [Settings](/reference/settings) for
+how to stop being asked about a command you trust.

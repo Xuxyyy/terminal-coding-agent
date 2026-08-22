@@ -88,10 +88,11 @@ got there. If it fails, nothing changes and you get
 
 Use it when you are about to start a big new task in a session that has been
 running a while. You can also go the other way and start clean with `/clear`,
-which throws the conversation away instead of summarizing it.
+which throws the conversation away instead of summarizing it — see
+[Commands](/reference/commands).
 
 `/rewind` still reaches past a summary — messages a summary replaced stay in the
-picker.
+picker. See [Sessions](/guide/sessions).
 
 ## `ACC_COMPACT_AT`
 

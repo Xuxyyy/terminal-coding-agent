@@ -74,9 +74,10 @@ conversation, the messages it replaced are still offered in the picker, marked
 
 - **Approvals.** Pressing `a` lasts for the run and no longer. A resumed session
   starts asking again. To make an approval permanent, write it as a rule in
-  `settings.json`.
+  [`settings.json`](/reference/settings).
 - **The permission mode.** `/resume` reopens a conversation, not a
-  configuration; a resumed session starts in whatever mode is current.
+  configuration; a resumed session starts in whatever mode is current — see
+  [Permissions](/guide/permissions).
 
 ## Cleaning up
 
