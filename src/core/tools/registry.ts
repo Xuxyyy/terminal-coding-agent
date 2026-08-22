@@ -64,6 +64,11 @@ function issues(error: z.ZodError): string {
     .join('; ');
 }
 
+export const DENIED =
+  'the user refused this command. do not retry it and do not look for ' +
+  'another way to do the same thing. carry on with the rest of the task ' +
+  'if there is one, then tell the user what you could not do.';
+
 type Permission = {denied?: string; args: unknown};
 
 function approved(request: Request, args: unknown, command?: string): Permission {
@@ -95,7 +100,7 @@ async function permitted(
   });
   if (decision === 'deny') {
     ctx.denied?.push(outcome.command ?? describe(request));
-    return {denied: 'user denied this command; try another approach', args};
+    return {denied: DENIED, args};
   }
   if (decision === 'session' && outcome.suppressible) ctx.allowed.add(key);
   return approved(request, args, outcome.command);

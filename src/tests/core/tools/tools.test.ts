@@ -12,7 +12,7 @@ import {decide} from '../../../core/permission/decide.js';
 import {displayPath, resolveTarget} from '../../../core/tools/paths.js';
 import {readFile} from '../../../core/tools/read.js';
 import {toolsFor} from '../../../core/tools/index.js';
-import {runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
+import {DENIED, runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
 import {writeFile} from '../../../core/tools/write.js';
 
 function workspace(): string {
@@ -179,7 +179,7 @@ test('a path outside the workspace stays unread when the prompt is denied', asyn
   );
 
   assert.equal(asked.length, 1);
-  assert.equal(output.text, 'Error: user denied this command; try another approach');
+  assert.equal(output.text, `Error: ${DENIED}`);
   assert.doesNotMatch(output.text, /hello/);
 });
 
@@ -419,10 +419,7 @@ test('declining a command does not execute it', async () => {
   assert.equal(asked[0]?.command, 'rm -rf /');
   assert.equal(asked[0]?.suppressible, false);
   assert.equal(ran.length, 0);
-  assert.equal(
-    output.text,
-    'Error: user denied this command; try another approach',
-  );
+  assert.equal(output.text, `Error: ${DENIED}`);
 });
 
 test('a change inside the project is reviewed once', async () => {
