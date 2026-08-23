@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/Xuxyyy/coding-cli.git"
   },
-  "homepage": "https://coding-cli-docs.pages.dev",
+  "homepage": "https://coding-cli-docs.vercel.app",
   "bugs": {
     "url": "https://github.com/Xuxyyy/coding-cli/issues"
   },
