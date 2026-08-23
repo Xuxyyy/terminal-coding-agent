@@ -3,6 +3,7 @@ import starlight from "@astrojs/starlight"
 import starlightLinksValidator from "starlight-links-validator"
 
 export default defineConfig({
+  site: "https://coding-cli-docs.pages.dev",
   devToolbar: { enabled: false },
   integrations: [
     starlight({
