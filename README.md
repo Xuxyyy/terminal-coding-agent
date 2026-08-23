@@ -29,7 +29,7 @@ the folder you start it from. It takes no path argument and no flags.
 
 One key is enough. Copy `.env.example` to `.env` and fill in DeepSeek, GLM, or
 Kimi; `acc` picks a model from whichever key it finds. The six model ids are on
-[Models and keys](https://coding-cli-docs.pages.dev/start/models/).
+[Models and keys](https://coding-cli-docs.vercel.app/start/models/).
 
 ## What it can do
 
@@ -62,9 +62,9 @@ into a new one, so a resumed run and its original stay a single session on disk.
 
 ## Docs
 
-- [Install](https://coding-cli-docs.pages.dev/start/install/)
-- [Your first run](https://coding-cli-docs.pages.dev/start/first-run/)
-- [Commands](https://coding-cli-docs.pages.dev/reference/commands/)
+- [Install](https://coding-cli-docs.vercel.app/start/install/)
+- [Your first run](https://coding-cli-docs.vercel.app/start/first-run/)
+- [Commands](https://coding-cli-docs.vercel.app/reference/commands/)
 
 ## License
 
