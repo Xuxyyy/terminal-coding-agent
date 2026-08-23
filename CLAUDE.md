@@ -65,6 +65,33 @@ because that is where the handoff tooling writes.
 **`docs/`, `plans/`, and `notes/` are untracked.** They are absent from a fresh
 clone or a `git worktree`; ask for them if they are missing.
 
+## The docs site
+
+`www/` is the site: ten Starlight pages, tracked, live at
+<https://coding-cli-docs.vercel.app>. Vercel rebuilds it on every push to `main`.
+The project's **Root Directory is `www`** — left empty, the build runs at the
+repo root, finds no Astro project, and fails.
+
+Verify anything under `www/` with `npm run build --prefix www`. `npm test` does
+not touch the site.
+
+The site URL is committed in **three** places: `site` in `www/astro.config.mjs`,
+the links in `README.md`, and `homepage` in `package.json`. Moving hosts means
+changing all three in one commit, or the deployed pages carry canonical URLs
+pointing somewhere they no longer live.
+
+Node is pinned twice on purpose. `engines.node` in `www/package.json` is what
+Vercel reads; `www/.node-version` is what a move back to Cloudflare would need.
+
+Search is Pagefind, and it is production-only — absent from `npm run dev` by
+design. Nothing configures it.
+
+`README.md` points at the site, it does not copy it. The model table, the tool
+list, and the settings syntax live on the site only, because two copies of a
+fact drift apart and the site is the one that gets updated. The README's own
+Architecture section is the exception: it exists nowhere else, because `docs/`
+is untracked.
+
 ## Sessions
 
 Every run writes to `~/.acc/projects/<name>-<hash>/sessions/<id>/`: `session.jsonl`
