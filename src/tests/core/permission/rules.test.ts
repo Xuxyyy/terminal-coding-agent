@@ -1,10 +1,34 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import test from 'node:test';
-import {matchPattern, normalizedStages, ruleVerdict} from '../../../core/permission/rules.js';
-import type {Rules} from '../../../core/settings.js';
+import {
+  matchPath,
+  matchPattern,
+  normalizedStages,
+  patternScore,
+  pathVerdict,
+  relativeTo,
+  ruleVerdict,
+} from '../../../core/permission/rules.js';
+import {realPath} from '../../../core/permission/protected.js';
+import type {Rule, Rules, Tag} from '../../../core/settings.js';
 
-function rules(some: Partial<Rules>): Rules {
-  return {allow: [], ask: [], deny: [], ...some};
+const TAGGED = /^(bash|edit)\((.*)\)$/;
+
+function ruleOf(text: string): Rule {
+  const match = TAGGED.exec(text);
+  return match ? {tag: match[1] as Tag, pattern: match[2]} : {tag: 'bash', pattern: text};
+}
+
+function rules(some: Partial<Record<keyof Rules, string[]>>): Rules {
+  const lists = {allow: [], ask: [], deny: [], ...some};
+  return {
+    allow: lists.allow.map(ruleOf),
+    ask: lists.ask.map(ruleOf),
+    deny: lists.deny.map(ruleOf),
+  };
 }
 
 const EMPTY = rules({});
@@ -99,4 +123,182 @@ test('no rules never reach a verdict', () => {
   for (const command of ['ls', 'sudo rm -rf /', 'npm run build', '']) {
     assert.equal(ruleVerdict(command, EMPTY), null, command);
   }
+});
+
+test('patternScore counts every character that is not a star', () => {
+  assert.equal(patternScore('*'), 0);
+  assert.equal(patternScore('git *'), 4);
+  assert.equal(patternScore('git push *'), 9);
+  assert.equal(patternScore('git * main'), 9);
+});
+
+test('the narrower pattern wins whichever list it sits in', () => {
+  const narrowAllow = rules({deny: ['*'], allow: ['git *']});
+  assert.equal(ruleVerdict('git status', narrowAllow), 'allow');
+
+  const narrowDeny = rules({allow: ['*'], deny: ['git *']});
+  assert.equal(ruleVerdict('git status', narrowDeny), 'deny');
+});
+
+test('ask on everything still lets the listed commands through', () => {
+  const config = rules({
+    ask: ['*'],
+    allow: ['git *', 'npm run *'],
+    deny: ['git push *', 'rm *'],
+  });
+  assert.equal(ruleVerdict('git status', config), 'allow');
+  assert.equal(ruleVerdict('npm run build', config), 'allow');
+  assert.equal(ruleVerdict('curl example.com', config), 'ask');
+  assert.equal(ruleVerdict('rm -rf x', config), 'deny');
+});
+
+test('an equal score is broken by the stricter verdict', () => {
+  const tied = rules({allow: ['git * main'], deny: ['git push *']});
+  assert.equal(patternScore('git * main'), patternScore('git push *'));
+  assert.equal(ruleVerdict('git push main', tied), 'deny');
+});
+
+test('the worst stage wins even when another stage matched something narrower', () => {
+  const mixed = rules({allow: ['git *'], ask: ['*']});
+  assert.equal(ruleVerdict('git status && curl x', mixed), 'ask');
+});
+
+test('a broad allow cannot rescue a command that will not parse', () => {
+  const denied = rules({allow: ['*'], deny: ['echo *']});
+  assert.equal(ruleVerdict('echo "unbalanced', denied), 'deny');
+
+  const allowed = rules({allow: ['*']});
+  assert.equal(ruleVerdict('echo "unbalanced', allowed), null);
+});
+
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-paths-')));
+
+test('a star in a path pattern stops at a slash', () => {
+  assert.equal(matchPath('docs/*.mdx', 'docs/a.mdx'), true);
+  assert.equal(matchPath('docs/*.mdx', 'docs/deep/a.mdx'), false);
+  assert.equal(matchPath('docs/*.mdx', 'docs/a.md'), false);
+  assert.equal(matchPath('src/*', 'src/a.ts'), true);
+  assert.equal(matchPath('src/*', 'src/core/a.ts'), false);
+});
+
+test('a double star crosses slashes and does not match the bare directory', () => {
+  assert.equal(matchPath('docs/**', 'docs/a.mdx'), true);
+  assert.equal(matchPath('docs/**', 'docs/deep/a.mdx'), true);
+  assert.equal(matchPath('docs/**', 'docs'), false);
+  assert.equal(matchPath('docs/**', 'docsy/a.mdx'), false);
+});
+
+test('a lone star matches every path, tree included', () => {
+  assert.equal(matchPath('*', 'README.md'), true);
+  assert.equal(matchPath('*', 'src/core/loop.ts'), true);
+  assert.equal(matchPath('**', 'src/core/loop.ts'), true);
+});
+
+test('a trailing slash means the directory and everything under it', () => {
+  for (const target of ['src/a.ts', 'src/core/loop.ts']) {
+    assert.equal(matchPath('src/', target), matchPath('src/**', target), target);
+    assert.equal(matchPath('src/', target), true, target);
+  }
+  assert.equal(matchPath('src', 'src/a.ts'), false);
+});
+
+test('every other metacharacter is literal in a path pattern', () => {
+  assert.equal(matchPath('docs/a.md', 'docs/aXmd'), false);
+  assert.equal(matchPath('docs/[a-z].md', 'docs/a.md'), false);
+  assert.equal(matchPath('docs/[a-z].md', 'docs/[a-z].md'), true);
+});
+
+test('an empty pattern and a dot match nothing a write can name', () => {
+  assert.equal(matchPath('', 'src/a.ts'), false);
+  assert.equal(matchPath('.', 'src/a.ts'), false);
+  assert.equal(matchPath('.', ''), false);
+  assert.equal(matchPath('', ''), true);
+});
+
+test('a relative, an absolute and a tilde path relativize to the same string', () => {
+  const previous = process.env.HOME;
+  process.env.HOME = root;
+  try {
+    assert.equal(relativeTo('src/a.ts', root), 'src/a.ts');
+    assert.equal(relativeTo(path.join(root, 'src/a.ts'), root), 'src/a.ts');
+    assert.equal(relativeTo('~/src/a.ts', root), 'src/a.ts');
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
+});
+
+test('a path is normalized before it is matched', () => {
+  assert.equal(relativeTo('plans/../src/a.ts', root), 'src/a.ts');
+  assert.equal(matchPath('src/**', relativeTo('plans/../src/a.ts', root) as string), true);
+  assert.equal(relativeTo(root, root), '');
+});
+
+test('a path outside the root relativizes to null and matches no pattern', () => {
+  for (const target of ['../escape.ts', '/etc/passwd', path.join(root, '..', 'x.ts')]) {
+    assert.equal(relativeTo(target, root), null, target);
+  }
+  for (const pattern of ['*', '**', 'src/**']) {
+    assert.equal(matchPath(pattern, '../escape.ts'), pattern !== 'src/**', pattern);
+  }
+});
+
+const outside = fs.realpathSync(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-rules-outside-')),
+);
+
+test('an absolute pattern reaches a path outside the root', () => {
+  const target = path.join(outside, 'a.ts');
+  assert.equal(relativeTo(target, root), null);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${outside}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${target})`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({allow: [`edit(${outside}/**)`]})), 'allow');
+});
+
+test('a relative pattern still means inside the project and nothing more', () => {
+  const target = path.join(outside, 'a.ts');
+  for (const pattern of ['**', '*', 'a.ts', `..${path.sep}**`]) {
+    assert.equal(pathVerdict(target, root, rules({deny: [`edit(${pattern})`]})), null, pattern);
+  }
+  assert.equal(pathVerdict('src/a.ts', root, rules({deny: ['edit(**)']})), 'deny');
+});
+
+test('a tilde pattern is expanded before an outside path is matched', () => {
+  const previous = process.env.HOME;
+  process.env.HOME = outside;
+  try {
+    const target = path.join(outside, '.ssh/id_rsa');
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(~/.ssh/**)']})), 'deny');
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(~/.aws/**)']})), null);
+    assert.equal(pathVerdict(target, root, rules({deny: ['edit(.ssh/**)']})), null);
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
+});
+
+const real = path.join(outside, 'real');
+const link = path.join(outside, 'link');
+fs.mkdirSync(real, {recursive: true});
+fs.symlinkSync(real, link);
+
+test('a symlinked outside path matches a pattern written either way', () => {
+  const target = path.join(link, 'a.ts');
+  assert.notEqual(realPath(target), target);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${real}/**)`]})), 'deny');
+});
+
+test('a pattern is resolved too, so the short name catches the resolved target', () => {
+  const target = path.join(real, 'a.ts');
+  assert.equal(realPath(target), target);
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${real}/**)`]})), 'deny');
+});
+
+test('resolving a pattern keeps a glob that names nothing on disk', () => {
+  const missing = path.join(link, 'gone');
+  const target = path.join(missing, 'deep/a.ts');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${missing}/**)`]})), 'deny');
+  assert.equal(pathVerdict(target, root, rules({deny: [`edit(${link}/*/deep/**)`]})), 'deny');
 });

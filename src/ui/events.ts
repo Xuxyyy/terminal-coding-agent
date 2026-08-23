@@ -32,6 +32,8 @@ export type ContextItem = {kind: 'context'} & Partial<ContextStatus> &
   Pick<ContextStatus, 'used' | 'budget'>;
 export type EventItem = {kind: 'event'; event: AgentEvent};
 
+export type RowParts = {head: string; tail: string};
+
 export type Item =
   | HeaderItem
   | TextItem

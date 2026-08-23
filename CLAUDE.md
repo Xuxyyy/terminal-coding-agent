@@ -11,9 +11,7 @@ builds. On a failure, re-run the one file for full output:
 
 Never launch `acc` inside this repo. It edits files in its workspace and the
 workspace is the current directory, so it would edit itself — point it at a
-throwaway folder. `src/headless.ts` runs the loop with no terminal and
-auto-approves every prompt: it can show a run works, never that a prompt did
-not appear.
+throwaway folder.
 
 ## Writing tests
 
@@ -43,7 +41,8 @@ components. No import points the other way.
 One doc per subsystem, in `docs/`. Each opens with what it covers and when to
 read it. They record *why*; the code is the truth about *what*.
 
-- `docs/agent-loop.md` — read before changing the turn loop or adding a tool.
+- `docs/agent-loop.md` — read before changing the turn loop.
+- `docs/tools.md` — read before adding a tool or changing what one returns.
 - `docs/permissions.md` — read before touching `src/core/permission/`.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
 - `docs/features.md` — what ships today; read before planning what is next.

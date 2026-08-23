@@ -6,8 +6,8 @@ import {
   type Classification,
 } from './classify.js';
 import {hardenCommand} from './harden.js';
-import {cutOf, DEFAULT_MODE, withinCut, type Mode} from './mode.js';
-import {ruleVerdict} from './rules.js';
+import {aboveCut, DEFAULT_MODE, withinCut, type Mode} from './mode.js';
+import {pathVerdict, ruleVerdict, type RuleVerdict} from './rules.js';
 import {commandParts, splitStages} from './stages.js';
 
 export type Request =
@@ -16,7 +16,7 @@ export type Request =
   | {kind: 'read'; path: string};
 
 export type Outcome = {
-  decision: 'allow' | 'ask' | 'deny';
+  decision: 'allow' | 'ask' | 'deny' | 'judge';
   reason: string;
   command?: string;
   suppressible: boolean;
@@ -34,30 +34,37 @@ function outcomeFor(
     return {decision: 'allow', reason, suppressible: true};
   }
   const explained = level === null ? (fallback ?? UNCLASSIFIED_REASON) : reason;
-  if (cutOf(mode).above === 'deny') {
-    return {decision: 'deny', reason: `${mode} mode: ${explained}`, suppressible: false};
-  }
   return {
-    decision: 'ask',
+    decision: aboveCut(mode),
     reason: explained,
     suppressible: level !== 'escape',
   };
 }
-
-function fileOutcome(classification: Classification, mode: Mode): Outcome {
-  if (classification.level === 'escape') {
-    return {decision: 'deny', reason: classification.reason, suppressible: false};
-  }
-  return outcomeFor(classification, mode);
-}
-
-const NO_RULES: Rules = {allow: [], ask: [], deny: []};
 
 const RULE_REASON = {
   deny: 'denied by a rule in settings.json',
   ask: 'a rule in settings.json asks about this',
   allow: 'allowed by a rule in settings.json',
 };
+
+function fileOutcome(
+  classification: Classification,
+  mode: Mode,
+  verdict: RuleVerdict | null,
+): Outcome {
+  if (verdict === 'deny') {
+    return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false};
+  }
+  if (classification.level === 'escape') {
+    return outcomeFor(classification, mode);
+  }
+  if (verdict !== null) {
+    return {decision: verdict, reason: RULE_REASON[verdict], suppressible: true};
+  }
+  return outcomeFor(classification, mode);
+}
+
+const NO_RULES: Rules = {allow: [], ask: [], deny: []};
 
 export function decide(
   request: Request,
@@ -66,10 +73,19 @@ export function decide(
   mode: Mode = DEFAULT_MODE,
 ): Outcome {
   if (request.kind === 'write') {
-    return fileOutcome(classifyWrite(request.path, root), mode);
+    return fileOutcome(
+      classifyWrite(request.path, root),
+      mode,
+      pathVerdict(request.path, root, rules),
+    );
   }
   if (request.kind === 'read') {
-    return fileOutcome(classifyRead(request.path, root), mode);
+    const verdict = pathVerdict(request.path, root, rules);
+    return fileOutcome(
+      classifyRead(request.path, root),
+      mode,
+      verdict === 'deny' ? 'deny' : null,
+    );
   }
   const command = hardenCommand(request.command);
   const verdict = ruleVerdict(command, rules);
@@ -77,9 +93,7 @@ export function decide(
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false, command};
   }
   const classification = classifyCommand(command, root);
-  const refused =
-    cutOf(mode).above === 'deny' && !withinCut(classification.level, mode);
-  if (refused || classification.level === 'escape') {
+  if (classification.level === 'escape') {
     return {...outcomeFor(classification, mode, request.reason), command};
   }
   if (verdict !== null) {

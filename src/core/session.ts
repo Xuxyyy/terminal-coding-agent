@@ -21,6 +21,8 @@ export type Session = {
   systemPrompt: string;
   messages: OpenAI.ChatCompletionMessageParam[];
   allowed: Set<string>;
+  asked: string[];
+  denied: string[];
   rules: Rules;
   mode: Mode;
   usage: Usage;
@@ -40,6 +42,8 @@ export function createSession(
     systemPrompt,
     messages: [{role: 'system', content: systemPrompt}],
     allowed: new Set<string>(),
+    asked: [],
+    denied: [],
     rules: rulesOf(),
     mode: modeOf(),
     usage: {prompt: 0, completion: 0, total: 0},
@@ -56,6 +60,7 @@ export function addTask(
 ): OpenAI.ChatCompletionMessageParam {
   const message: OpenAI.ChatCompletionMessageParam = {role: 'user', content: task};
   session.messages.push(message);
+  session.asked.push(task);
   return message;
 }
 
@@ -71,11 +76,25 @@ export function recordUsage(session: Session, usage: Usage): void {
   if (usage.total) setMeasured(session, usage.total);
 }
 
+function userText(message: OpenAI.ChatCompletionMessageParam): string | null {
+  if (message.role !== 'user') return null;
+  const {content} = message;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return null;
+  const text = content
+    .map((part) => (part.type === 'text' ? part.text : ''))
+    .join('');
+  return text || null;
+}
+
 export function restoreMessages(
   session: Session,
   messages: OpenAI.ChatCompletionMessageParam[],
 ): void {
   session.messages = [{role: 'system', content: session.systemPrompt}, ...messages];
+  session.asked = messages
+    .map(userText)
+    .filter((text): text is string => text !== null);
   session.clearingExhausted = false;
   setMeasured(session, 0);
 }
@@ -92,6 +111,8 @@ export function setMode(session: Session, mode: Mode): void {
 export function clearSession(session: Session): void {
   session.messages = [{role: 'system', content: session.systemPrompt}];
   session.allowed.clear();
+  session.asked = [];
+  session.denied = [];
   session.clearingExhausted = false;
   setMeasured(session, 0);
 }

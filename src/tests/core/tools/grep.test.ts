@@ -58,13 +58,14 @@ async function search(root: string, args: object, answers: ConfirmDecision[] = [
   return {text: output.text, asked};
 }
 
-test('a search outside the project is denied without a prompt', async () => {
+test('a search outside the project asks before it runs', async () => {
   const root = seeded();
 
-  const {text, asked} = await search(root, {pattern: 'x', path: '~/.ssh'});
+  const {asked} = await search(root, {pattern: 'x', path: '~/.ssh'}, ['deny']);
 
-  assert.equal(text, "Error: reads '~/.ssh' outside the project");
-  assert.deepEqual(asked, []);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].reason, "reads '~/.ssh' outside the project");
+  assert.equal(asked[0].suppressible, false);
 });
 
 test('a match returns the file paths and nothing else', async () => {
@@ -120,13 +121,17 @@ test('an invalid pattern is reported and does not throw', async () => {
   assert.match(text, /unclosed character class/);
 });
 
-test('a path outside the workspace is rejected', async () => {
-  const root = seeded();
+test('a path outside the workspace is searched once approved', async () => {
+  const root = fs.realpathSync(seeded());
+  const outside = fs.realpathSync(workspace());
+  write(outside, 'away.ts', 'const widget = 9;\n');
+  const away = path.join('..', path.basename(outside));
 
-  const {text, asked} = await search(root, {pattern: 'widget', path: '../../etc'});
+  const {text, asked} = await search(root, {pattern: 'widget', path: away});
 
-  assert.equal(text, "Error: reads '../../etc' outside the project");
-  assert.deepEqual(asked, []);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].suppressible, false);
+  assert.match(text, /away\.ts/);
 });
 
 test('a path that does not exist is an error, not no matches', async () => {

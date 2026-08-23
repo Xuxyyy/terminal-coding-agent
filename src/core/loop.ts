@@ -1,5 +1,7 @@
 import type OpenAI from 'openai';
 import {
+  createClient,
+  judgeModelFor,
   MAX_OUTPUT_TOKENS,
   StreamFailure,
   streamStep,
@@ -18,8 +20,9 @@ import {
 import type {SessionStore} from './store.js';
 import {captureBefore} from './history.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
-import {displayPath, resolveInWorkspace} from './tools/paths.js';
-import type {Tool} from './tools/registry.js';
+import {displayPath, resolveTarget} from './tools/paths.js';
+import type {Judge, Tool} from './tools/registry.js';
+import {askJudge, judgeMessages} from './permission/judge.js';
 
 export const MAX_STEPS = 20;
 
@@ -53,6 +56,31 @@ function assistantMessage(
 
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
 
+function judgeFor(session: Session, host: Host, model: string): Judge | undefined {
+  if (session.mode !== 'auto') return undefined;
+  let choice: ModelChoice | null = null;
+  try {
+    choice = createClient(judgeModelFor(model));
+  } catch {
+    choice = null;
+  }
+  return async (request, reason) => {
+    if (!choice) return 'ask';
+    return askJudge(
+      choice,
+      judgeMessages({
+        asked: session.asked,
+        messages: session.messages,
+        root: session.root,
+        request,
+        reason,
+        denied: session.denied,
+      }),
+      host.signal,
+    );
+  };
+}
+
 function addUsage(target: Usage, usage: Usage): void {
   target.prompt += usage.prompt;
   target.completion += usage.completion;
@@ -67,6 +95,7 @@ export async function runAgent(
   store?: SessionStore,
 ): Promise<void> {
   const definitions = toolDefinitions(registry);
+  const judge = judgeFor(session, host, choice.model);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
   let checkpoints = true;
@@ -74,7 +103,7 @@ export async function runAgent(
 
   const backup = store
     ? (asked: string): void => {
-        const target = resolveInWorkspace(session.root, asked);
+        const target = resolveTarget(session.root, asked);
         const before = captureBefore(store.dir, target);
         store.appendCode(displayPath(session.root, target), before);
       }
@@ -228,6 +257,8 @@ export async function runAgent(
           rules: session.rules,
           mode: session.mode,
           backup,
+          judge,
+          denied: session.denied,
         });
         session.messages.push({
           role: 'tool',

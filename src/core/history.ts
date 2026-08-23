@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {makeDir} from './projects.js';
 import type {SessionRecord} from './records.js';
-import {resolveInWorkspace} from './tools/paths.js';
+import {resolveTarget} from './tools/paths.js';
 
 const FILE_MODE = 0o600;
 
@@ -51,7 +51,7 @@ export function restoreFiles(
   const counts: RestoreCounts = {restored: 0, deleted: 0, skipped: 0};
   for (const [target, before] of plan) {
     try {
-      const resolved = resolveInWorkspace(root, target);
+      const resolved = resolveTarget(root, target);
       if (before === null) {
         fs.rmSync(resolved, {force: true});
         counts.deleted += 1;

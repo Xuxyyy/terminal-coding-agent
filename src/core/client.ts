@@ -48,6 +48,18 @@ export const MODELS: Record<string, ModelInfo> = {
   },
 };
 
+const JUDGE_MODELS: Record<string, string> = {
+  deepseek: 'deepseek-v4-flash',
+  kimi: 'kimi-k2.7-code',
+  glm: 'glm-4.7-flash',
+};
+
+export function judgeModelFor(model: string): string {
+  const info = MODELS[model];
+  if (!info) return model;
+  return JUDGE_MODELS[info.provider] ?? model;
+}
+
 export const MAX_OUTPUT_TOKENS = 32_000;
 
 export type ModelChoice = {

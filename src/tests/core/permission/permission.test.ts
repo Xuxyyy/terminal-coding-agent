@@ -4,10 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {approvalKey, decide, type Outcome, type Request} from '../../../core/permission/decide.js';
-import type {Mode} from '../../../core/permission/mode.js';
+import {MODES, type Mode} from '../../../core/permission/mode.js';
 import type {Host} from '../../../core/host.js';
 import {clearSession, createSession, setMode, type Session} from '../../../core/session.js';
-import type {Rules} from '../../../core/settings.js';
+import type {Rule, Rules, Tag} from '../../../core/settings.js';
 import {tools} from '../../../core/tools/index.js';
 import {runTool, type Tool, type ToolContext} from '../../../core/tools/registry.js';
 import {z} from 'zod';
@@ -19,23 +19,37 @@ const outside = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-outside-')),
 );
 
-function rules(some: Partial<Rules>): Rules {
-  return {allow: [], ask: [], deny: [], ...some};
+type RuleText = Partial<Record<keyof Rules, string[]>>;
+
+const TAGGED = /^(bash|edit)\((.*)\)$/;
+
+function ruleOf(text: string): Rule {
+  const match = TAGGED.exec(text);
+  return match ? {tag: match[1] as Tag, pattern: match[2]} : {tag: 'bash', pattern: text};
 }
 
-function asked(request: Request, some?: Partial<Rules>, mode?: Mode): Outcome {
+function rules(some: RuleText): Rules {
+  const lists = {allow: [], ask: [], deny: [], ...some};
+  return {
+    allow: lists.allow.map(ruleOf),
+    ask: lists.ask.map(ruleOf),
+    deny: lists.deny.map(ruleOf),
+  };
+}
+
+function asked(request: Request, some?: RuleText, mode?: Mode): Outcome {
   return decide(request, project, some ? rules(some) : undefined, mode);
 }
 
-function command(text: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+function command(text: string, some?: RuleText, mode?: Mode): Outcome {
   return asked({kind: 'command', command: text}, some, mode);
 }
 
-function write(target: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+function write(target: string, some?: RuleText, mode?: Mode): Outcome {
   return asked({kind: 'write', path: target}, some, mode);
 }
 
-function read(target: string, some?: Partial<Rules>, mode?: Mode): Outcome {
+function read(target: string, some?: RuleText, mode?: Mode): Outcome {
   return asked({kind: 'read', path: target}, some, mode);
 }
 
@@ -56,6 +70,8 @@ const QUIET = [
   'npm test',
   'npm run build',
 ];
+
+const ESCAPES = ['sudo ls', 'git push', 'dd of=/dev/disk0', 'cat ~/.ssh/id_rsa'];
 
 const ADVERSARIAL = [
   'ls && rm -rf ~/notes',
@@ -224,25 +240,26 @@ test('adversarial commands ask and never offer to be remembered', () => {
   }
 });
 
-test('a write outside the project is denied and cannot be remembered', () => {
+test('a write outside the project asks and cannot be remembered', () => {
   const outcome = write('../outside.txt');
 
-  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
   assert.equal(outcome.reason, "'../outside.txt' is outside the project");
 
-  assert.equal(write(path.join(outside, 'secret.txt')).decision, 'deny');
-  assert.equal(write('~/.ssh/id_rsa').decision, 'deny');
+  assert.equal(write(path.join(outside, 'secret.txt')).decision, 'ask');
+  assert.equal(write('~/.ssh/id_rsa').decision, 'ask');
 });
 
-test('a file tool denies what bash only asks about', () => {
-  const denied = write('../outside.txt');
-  const asked = command('rm ../outside.txt');
+test('a file tool and bash answer the same for a path outside the project', () => {
+  const file = write('../outside.txt');
+  const bash = command('rm ../outside.txt');
 
-  assert.equal(denied.decision, 'deny');
-  assert.equal(asked.decision, 'ask');
-  assert.equal(asked.suppressible, false);
-  assert.equal(denied.reason, asked.reason);
+  assert.equal(file.decision, bash.decision);
+  assert.equal(file.suppressible, bash.suppressible);
+  assert.equal(file.reason, bash.reason);
+  assert.equal(file.decision, 'ask');
+  assert.equal(file.suppressible, false);
 });
 
 test('a read inside the project runs without asking', () => {
@@ -259,15 +276,15 @@ test('a read of a protected path is still only a read', () => {
   }
 });
 
-test('a read outside the project is denied and names the path', () => {
+test('a read outside the project asks and names the path', () => {
   const outcome = read('~/.ssh/id_rsa');
 
-  assert.equal(outcome.decision, 'deny');
+  assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
   assert.equal(outcome.reason, "reads '~/.ssh/id_rsa' outside the project");
 
-  assert.equal(read('../outside.txt').decision, 'deny');
-  assert.equal(read(path.join(outside, 'secret.txt')).decision, 'deny');
+  assert.equal(read('../outside.txt').decision, 'ask');
+  assert.equal(read(path.join(outside, 'secret.txt')).decision, 'ask');
 });
 
 test('a read approval has a key of its own', () => {
@@ -343,11 +360,17 @@ test('empty rules reproduce the outcomes of the classifier alone', () => {
   }
 });
 
-test('a rule never decides a write or a read', () => {
+test('only a deny rule decides a read', () => {
+  assert.equal(read('src/a.ts', {deny: ['edit(src/**)']}).decision, 'deny');
+  assert.equal(read('.git/config', {deny: ['edit(**)']}).decision, 'deny');
+  assert.equal(read('src/a.ts', {ask: ['edit(src/**)']}).decision, 'allow');
+  assert.equal(read('src/a.ts', {allow: ['edit(src/**)']}).decision, 'allow');
   assert.equal(write('src/a.ts', {deny: ['src/*']}).decision, 'allow');
-  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'deny');
+  assert.equal(write('../outside.txt', {allow: ['*']}).decision, 'ask');
+  assert.equal(write('../outside.txt', {allow: ['*']}).suppressible, false);
   assert.equal(read('src/a.ts', {deny: ['src/*']}).decision, 'allow');
-  assert.equal(read('../outside.txt', {allow: ['*']}).decision, 'deny');
+  assert.equal(read('../outside.txt', {allow: ['*']}).decision, 'ask');
+  assert.equal(read('../outside.txt', {allow: ['*']}).suppressible, false);
 });
 
 test('clearing the conversation keeps the rules', () => {
@@ -386,67 +409,109 @@ test('ask-edits runs a read without a prompt', () => {
   assert.equal(read('src/a.ts', undefined, 'ask-edits').decision, 'allow');
 });
 
-test('read-only refuses a write inside the project instead of asking', () => {
-  const refused = write('src/a.ts', undefined, 'read-only');
-  assert.equal(refused.decision, 'deny');
-  assert.equal(refused.suppressible, false);
-  assert.match(refused.reason, /read-only mode/);
-
-  assert.equal(command('echo x > src/a.ts', undefined, 'read-only').decision, 'deny');
-  assert.equal(command('rm build.log', undefined, 'read-only').decision, 'deny');
-});
-
-test('read-only runs a read', () => {
-  for (const text of QUIET.filter((quiet) => !quiet.startsWith('npm'))) {
-    assert.equal(command(text, undefined, 'read-only').decision, 'allow', text);
-  }
-  assert.equal(read('src/a.ts', undefined, 'read-only').decision, 'allow');
-  assert.equal(read('.git/config', undefined, 'read-only').decision, 'allow');
-});
-
-test('read-only refuses npm test, which is the accepted cost', () => {
-  for (const text of ['npm test', 'npm run build']) {
-    const refused = command(text, undefined, 'read-only');
-    assert.equal(refused.decision, 'deny', text);
-    assert.equal(refused.suppressible, false, text);
-  }
-});
-
-test('read-only refuses a command it cannot classify', () => {
-  const refused = command('python3 build.py', undefined, 'read-only');
-  assert.equal(refused.decision, 'deny');
-  assert.equal(refused.suppressible, false);
-  assert.match(refused.reason, /cannot be classified from its text/);
-});
-
 test('an escape is never remembered in any mode', () => {
   for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0', 'cat ~/.ssh/id_rsa']) {
     assert.equal(command(text, undefined, 'auto-edits').decision, 'ask', text);
     assert.equal(command(text, undefined, 'ask-edits').decision, 'ask', text);
-    assert.equal(command(text, undefined, 'read-only').decision, 'deny', text);
-    for (const mode of ['auto-edits', 'ask-edits', 'read-only'] as Mode[]) {
+    for (const mode of ['auto-edits', 'ask-edits'] as Mode[]) {
       assert.equal(command(text, undefined, mode).suppressible, false, `${mode} ${text}`);
     }
   }
 });
 
-test('no allow rule can rescue what read-only refuses', () => {
-  const everything = {allow: ['*']};
-  for (const text of ['npm test', 'rm build.log', 'python3 build.py']) {
-    const refused = command(text, everything, 'read-only');
-    assert.equal(refused.decision, 'deny', text);
-    assert.doesNotMatch(refused.reason, /settings\.json/, text);
-  }
-  assert.equal(write('src/a.ts', everything, 'read-only').decision, 'deny');
-});
-
 test('a deny rule still refuses in every mode', () => {
-  for (const mode of ['auto-edits', 'ask-edits', 'read-only'] as Mode[]) {
+  for (const mode of ['auto-edits', 'ask-edits'] as Mode[]) {
     const refused = command('ls', {deny: ['ls*']}, mode);
     assert.equal(refused.decision, 'deny', mode);
     assert.equal(refused.suppressible, false, mode);
     assert.match(refused.reason, /settings\.json/, mode);
   }
+});
+
+test('no mode returns deny on its own', () => {
+  for (const mode of MODES) {
+    assert.notEqual(write('.git/config', undefined, mode).decision, 'deny', mode);
+    assert.notEqual(command('rm build.log', undefined, mode).decision, 'deny', mode);
+    assert.notEqual(
+      command('python3 build.py', undefined, mode).decision,
+      'deny',
+      mode,
+    );
+
+    for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0']) {
+      const escape = command(text, undefined, mode);
+      assert.notEqual(escape.decision, 'deny', `${mode} ${text}`);
+      assert.equal(escape.suppressible, false, `${mode} ${text}`);
+    }
+  }
+});
+
+test('auto sends every classifier ask to the judge', () => {
+  const above: [string, Outcome][] = [
+    ['.git/config write', write('.git/config', undefined, 'auto')],
+    ['rm build.log', command('rm build.log', undefined, 'auto')],
+    ['python3 build.py', command('python3 build.py', undefined, 'auto')],
+    ...ESCAPES.map(
+      (text): [string, Outcome] => [text, command(text, undefined, 'auto')],
+    ),
+  ];
+
+  for (const [what, outcome] of above) {
+    assert.equal(outcome.decision, 'judge', what);
+  }
+
+  for (const mode of ['ask-edits', 'auto-edits'] as Mode[]) {
+    assert.equal(write('.git/config', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('rm build.log', undefined, mode).decision, 'ask', mode);
+    assert.equal(command('python3 build.py', undefined, mode).decision, 'ask', mode);
+    for (const text of ESCAPES) {
+      assert.equal(command(text, undefined, mode).decision, 'ask', `${mode} ${text}`);
+    }
+  }
+});
+
+test('auto allows exactly what auto-edits allows', () => {
+  for (const text of QUIET) {
+    assert.deepEqual(
+      command(text, undefined, 'auto'),
+      command(text, undefined, 'auto-edits'),
+      text,
+    );
+  }
+  for (const target of ['src/a.ts', 'notes/todo.md']) {
+    assert.deepEqual(
+      write(target, undefined, 'auto'),
+      write(target, undefined, 'auto-edits'),
+      target,
+    );
+    assert.deepEqual(
+      read(target, undefined, 'auto'),
+      read(target, undefined, 'auto-edits'),
+      target,
+    );
+  }
+  assert.equal(write('src/a.ts', undefined, 'auto').decision, 'allow');
+  assert.equal(command('echo hi > src/a.ts', undefined, 'auto').decision, 'allow');
+});
+
+test('a rule verdict is never judged in auto', () => {
+  const denied = command('ls', {deny: ['ls*']}, 'auto');
+  assert.equal(denied.decision, 'deny');
+  assert.equal(denied.suppressible, false);
+
+  const questioned = command('rm build.log', {ask: ['rm *']}, 'auto');
+  assert.equal(questioned.decision, 'ask');
+  assert.match(questioned.reason, /settings\.json/);
+
+  const permitted = command('rm build.log', {allow: ['rm *']}, 'auto');
+  assert.equal(permitted.decision, 'allow');
+  assert.match(permitted.reason, /settings\.json/);
+
+  const deniedWrite = write('.git/config', {deny: ['edit(.git/**)']}, 'auto');
+  assert.equal(deniedWrite.decision, 'deny');
+
+  const allowedWrite = write('.git/config', {allow: ['edit(.git/**)']}, 'auto');
+  assert.equal(allowedWrite.decision, 'allow');
 });
 
 test('a new session starts in auto-edits', () => {
@@ -461,10 +526,10 @@ const alwaysApproves: Host = {
   },
 };
 
-function ctxOf(session: Session): ToolContext {
+function ctxOf(session: Session, host: Host = alwaysApproves): ToolContext {
   return {
     root: session.root,
-    host: alwaysApproves,
+    host,
     allowed: session.allowed,
     rules: session.rules,
     mode: session.mode,
@@ -483,41 +548,207 @@ const fakeBash: Tool = {
   },
 };
 
-function write_file(session: Session): Promise<{text: string}> {
+function write_file(session: Session, host?: Host): Promise<{text: string}> {
   return runTool(
     tools,
     'write_file',
     JSON.stringify({path: 'src/a.ts', content: 'one\n'}),
-    ctxOf(session),
+    ctxOf(session, host),
   );
 }
 
 test('the gate follows a switch inside one session', async () => {
   const session = createSession(project, 'system', 100);
+  const watching = counting();
 
-  const before = await write_file(session);
+  const before = await write_file(session, watching.host);
   assert.doesNotMatch(before.text, /^Error/, before.text);
+  assert.equal(watching.count(), 0);
 
-  setMode(session, 'read-only');
+  setMode(session, 'ask-edits');
 
-  const after = await write_file(session);
-  assert.match(after.text, /^Error/);
-  assert.match(after.text, /read-only mode/);
+  const after = await write_file(session, watching.host);
+  assert.doesNotMatch(after.text, /^Error/, after.text);
+  assert.equal(watching.count(), 1);
 });
 
-test('an approval granted before the switch does not survive it', async () => {
+test('an approval granted in auto-edits still holds in ask-edits', async () => {
   const session = createSession(project, 'system', 100);
   const registry = [fakeBash];
   const args = JSON.stringify({command: 'rm build.log'});
+  let confirms = 0;
+  const remembering: Host = {
+    signal: new AbortController().signal,
+    onEvent() {},
+    async confirm() {
+      confirms += 1;
+      return 'session';
+    },
+  };
 
-  const approved = await runTool(registry, 'bash', args, ctxOf(session));
+  const approved = await runTool(registry, 'bash', args, ctxOf(session, remembering));
   assert.equal(approved.text, '[exit 0]');
   assert.equal(session.allowed.size, 1);
+  assert.equal(confirms, 1);
 
-  setMode(session, 'read-only');
+  setMode(session, 'ask-edits');
 
-  const refused = await runTool(registry, 'bash', args, ctxOf(session));
+  const again = await runTool(registry, 'bash', args, ctxOf(session, remembering));
+  assert.equal(again.text, '[exit 0]');
   assert.equal(session.allowed.size, 1);
+  assert.equal(confirms, 1);
+});
+
+test('a deny rule refuses a write the mode would have allowed', () => {
+  const refused = write('src/a.ts', {deny: ['edit(**)']});
+
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /settings\.json/);
+});
+
+test('deny every edit but one directory is the whole feature', () => {
+  const config = {deny: ['edit(**)'], allow: ['edit(plans/**)']};
+
+  assert.equal(write('src/a.ts', config).decision, 'deny');
+  assert.equal(write('plans/05.md', config).decision, 'allow');
+  assert.match(write('plans/05.md', config).reason, /settings\.json/);
+});
+
+test('an allow rule lets a write through a mode that would ask', () => {
+  const asked = write('src/a.ts', undefined, 'ask-edits');
+  assert.equal(asked.decision, 'ask');
+
+  const allowed = write('src/a.ts', {allow: ['edit(src/**)']}, 'ask-edits');
+  assert.equal(allowed.decision, 'allow');
+  assert.match(allowed.reason, /settings\.json/);
+});
+
+test('an ask rule stops a write the mode would have run silently', () => {
+  assert.equal(write('src/a.ts', undefined, 'auto-edits').decision, 'allow');
+
+  const asked = write('src/a.ts', {ask: ['edit(**)']}, 'auto-edits');
+  assert.equal(asked.decision, 'ask');
+  assert.equal(asked.suppressible, true);
+  assert.match(asked.reason, /settings\.json/);
+});
+
+test('no allow rule can rescue a write that leaves the project', () => {
+  const target = path.join(outside, 'a.ts');
+  for (const config of [{allow: ['edit(**)']}, {allow: ['edit(*)']}]) {
+    const refused = write(target, config);
+    assert.equal(refused.decision, 'ask', target);
+    assert.equal(refused.suppressible, false, target);
+    assert.doesNotMatch(refused.reason, /settings\.json/, target);
+  }
+});
+
+test('a deny rule naming an outside path absolutely refuses a write', () => {
+  const target = path.join(outside, 'a.ts');
+  const refused = write(target, {deny: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /settings\.json/);
+});
+
+test('no relative deny rule reaches a write that leaves the project', () => {
+  const target = path.join(outside, 'a.ts');
+  for (const config of [{deny: ['edit(**)']}, {deny: ['edit(*)']}]) {
+    const asking = write(target, config);
+    assert.equal(asking.decision, 'ask', target);
+    assert.equal(asking.suppressible, false, target);
+    assert.doesNotMatch(asking.reason, /settings\.json/, target);
+  }
+});
+
+test('an absolute allow rule still cannot rescue a write that leaves the project', () => {
+  const target = path.join(outside, 'a.ts');
+  const refused = write(target, {allow: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'ask');
+  assert.equal(refused.suppressible, false);
+  assert.doesNotMatch(refused.reason, /settings\.json/);
+});
+
+test('a deny rule naming an outside path absolutely refuses a read', () => {
+  const target = path.join(outside, 'id_rsa');
+  const refused = read(target, {deny: [`edit(${outside}/**)`]});
+  assert.equal(refused.decision, 'deny');
+  assert.equal(refused.suppressible, false);
+  assert.match(refused.reason, /settings\.json/);
+});
+
+test('no allow or ask rule changes a read that leaves the project', () => {
+  const target = path.join(outside, 'id_rsa');
+  for (const config of [
+    {allow: [`edit(${outside}/**)`]},
+    {ask: [`edit(${outside}/**)`]},
+  ]) {
+    const asking = read(target, config);
+    assert.equal(asking.decision, 'ask');
+    assert.equal(asking.suppressible, false);
+    assert.doesNotMatch(asking.reason, /settings\.json/);
+  }
+});
+
+test('an allow rule does reach a protected path', () => {
+  assert.equal(write('.git/config').decision, 'ask');
+
+  const allowed = write('.git/config', {allow: ['edit(**)']});
+  assert.equal(allowed.decision, 'allow');
+  assert.match(allowed.reason, /settings\.json/);
+});
+
+test('an edit rule leaves a bash redirect to the bash rules', () => {
+  const text = 'echo x > src/a.ts';
+  assert.deepEqual(command(text, {deny: ['edit(**)']}), command(text));
+  assert.deepEqual(command(text, {allow: ['edit(**)']}), command(text));
+});
+
+function counting(): {host: Host; count: () => number} {
+  let confirms = 0;
+  return {
+    host: {
+      signal: new AbortController().signal,
+      onEvent() {},
+      async confirm() {
+        confirms += 1;
+        return 'once';
+      },
+    },
+    count: () => confirms,
+  };
+}
+
+function writeWith(host: Host, some: RuleText, mode: Mode): Promise<{text: string}> {
+  const session = createSession(project, 'system', 100);
+  return runTool(tools, 'write_file', JSON.stringify({path: 'src/a.ts', content: 'one\n'}), {
+    root: session.root,
+    host,
+    allowed: session.allowed,
+    rules: rules(some),
+    mode,
+  });
+}
+
+test('an allow rule runs a write with no prompt at all', async () => {
+  const asking = counting();
+  const asked = await writeWith(asking.host, {}, 'ask-edits');
+  assert.doesNotMatch(asked.text, /^Error/, asked.text);
+  assert.equal(asking.count(), 1);
+
+  const allowing = counting();
+  const allowed = await writeWith(allowing.host, {allow: ['edit(src/**)']}, 'ask-edits');
+  assert.doesNotMatch(allowed.text, /^Error/, allowed.text);
+  assert.equal(allowing.count(), 0);
+});
+
+test('a deny rule refuses a write through runTool without a prompt', async () => {
+  const denying = counting();
+  fs.rmSync(path.join(project, 'src/a.ts'), {force: true});
+  const refused = await writeWith(denying.host, {deny: ['edit(**)']}, 'auto-edits');
+
   assert.match(refused.text, /^Error/);
-  assert.match(refused.text, /read-only mode/);
+  assert.match(refused.text, /settings\.json/);
+  assert.equal(denying.count(), 0);
+  assert.equal(fs.existsSync(path.join(project, 'src/a.ts')), false);
 });
