@@ -6,7 +6,9 @@
 A small terminal coding agent that reads, edits, and runs code in the current
 directory.
 
-![acc adding a field to a health route, showing its tool calls and the diff it wrote](assets/demo.png)
+<p align="center">
+  <img src="assets/demo.png" width="720" alt="acc adding a field to a health route, showing its tool calls and the diff it wrote">
+</p>
 
 ## What it is
 
