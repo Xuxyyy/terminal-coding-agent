@@ -1,0 +1,85 @@
+name: Bug report
+description: Something in acc does not work
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Point acc at a throwaway folder, not a repo you care about.
+      placeholder: |
+        1. mkdir /tmp/scratch && cd /tmp/scratch
+        2. acc
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - deepseek
+        - glm
+        - kimi
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Model id
+      options:
+        - deepseek-v4-flash
+        - deepseek-v4-pro
+        - glm-4.7-flash
+        - glm-5.2
+        - kimi-k2.7-code
+        - kimi-k3
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`. acc needs 22 or newer.
+      placeholder: v22.11.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15.2 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cheap-model
+    attributes:
+      label: Does it still happen with ACC_MODEL=deepseek-v4-flash?
+      description: The cheap default, so you can check without spending much.
+      options:
+        - "Yes, still happens"
+        - "No, only on the other model"
+        - "Have not tried"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything else
+      description: Error text, a screenshot of the terminal, or the session id.
+    validations:
+      required: false

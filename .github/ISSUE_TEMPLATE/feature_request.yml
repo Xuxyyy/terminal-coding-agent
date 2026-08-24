@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest something acc should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem it solves
+      description: What you were trying to do, and where acc got in the way.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool-shape
+    attributes:
+      label: Does this fit the five tools?
+      description: >-
+        acc has five tools: read_file, grep, edit_file, write_file, bash.
+        A sixth tool is a much larger change than a change to an existing one.
+      options:
+        - "Fits the five tools"
+        - "Asks for a sixth tool"
+        - "Not about tools"
+    validations:
+      required: true
