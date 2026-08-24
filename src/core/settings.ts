@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {MODEL_IDS, MODELS} from './models.js';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome, makeDir} from './projects.js';
 
@@ -13,6 +14,7 @@ const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
 const RULE_PATTERN = /^(bash|edit)\((.*)\)$/;
 const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
+const MODEL_KEY = 'model';
 
 export class SettingsError extends Error {}
 
@@ -66,6 +68,27 @@ export function parseMode(text: string, file: string, user: boolean): Mode | nul
   return value;
 }
 
+export function parseModel(
+  text: string,
+  file: string,
+  user: boolean,
+): string | null {
+  const value = parseObject(text, file)[MODEL_KEY];
+  if (value === undefined) return null;
+  if (!user) {
+    throw new SettingsError(
+      `${file}: "${MODEL_KEY}" is only read from ${userSettingsFile()}; ` +
+        'remove it from this file',
+    );
+  }
+  if (typeof value !== 'string' || !MODELS[value]) {
+    throw new SettingsError(
+      `${file}: "${MODEL_KEY}" is ${JSON.stringify(value)}; use ${MODEL_IDS.join(', ')}`,
+    );
+  }
+  return value;
+}
+
 export function parseSettings(text: string, file: string): Rules {
   const root = parseObject(text, file);
   const rules = emptyRules();
@@ -112,12 +135,14 @@ export function parseSettings(text: string, file: string): Rules {
 
 let cached: Rules = emptyRules();
 let cachedMode: Mode = DEFAULT_MODE;
+let cachedModel: string | null = null;
 
 export function loadSettings(
   files: string[] = settingsFiles(process.cwd()),
 ): Rules {
   const merged = emptyRules();
   let mode: Mode = DEFAULT_MODE;
+  let model: string | null = null;
   for (const file of files) {
     if (!fs.existsSync(file)) continue;
     let text: string;
@@ -129,9 +154,11 @@ export function loadSettings(
     const rules = parseSettings(text, file);
     for (const list of LISTS) merged[list].push(...rules[list]);
     mode = parseMode(text, file, isUserSettings(file)) ?? mode;
+    model = parseModel(text, file, isUserSettings(file)) ?? model;
   }
   cached = merged;
   cachedMode = mode;
+  cachedModel = model;
   return merged;
 }
 
@@ -143,14 +170,27 @@ export function modeOf(): Mode {
   return cachedMode;
 }
 
-export function rememberMode(mode: Mode): void {
+export function modelOf(): string | null {
+  return cachedModel;
+}
+
+function remember(key: string, value: string): void {
   const file = userSettingsFile();
   const existing = fs.existsSync(file)
     ? parseObject(fs.readFileSync(file, 'utf8'), file)
     : {};
   makeDir(path.dirname(file));
-  fs.writeFileSync(file, `${JSON.stringify({...existing, [MODE_KEY]: mode}, null, 2)}\n`, {
+  fs.writeFileSync(file, `${JSON.stringify({...existing, [key]: value}, null, 2)}\n`, {
     mode: 0o600,
   });
+}
+
+export function rememberMode(mode: Mode): void {
+  remember(MODE_KEY, mode);
   cachedMode = mode;
+}
+
+export function rememberModel(id: string): void {
+  remember(MODEL_KEY, id);
+  cachedModel = id;
 }

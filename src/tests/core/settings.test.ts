@@ -3,10 +3,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
+import {MODEL_IDS} from '../../core/models.js';
 import {
   loadSettings,
   modeOf,
+  modelOf,
   rememberMode,
+  rememberModel,
   parseSettings,
   rulesOf,
   SettingsError,
@@ -315,6 +318,59 @@ test('remembering a mode with no settings file yet writes one', () => {
       permission_mode: 'ask-edits',
     });
     assert.deepEqual(fs.readdirSync(home), ['settings.json']);
+  });
+});
+
+test('a saved model round-trips through remembering and loading again', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {});
+    loadSettings(files);
+    assert.equal(modelOf(), null);
+
+    rememberModel('glm-5.2');
+    assert.equal(modelOf(), 'glm-5.2');
+
+    loadSettings(files);
+    assert.equal(modelOf(), 'glm-5.2');
+  });
+});
+
+test('an unknown model refuses to start and lists the valid ids', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {model: 'gpt-9'});
+    const message = refused(files).message;
+
+    assert.ok(message.includes('gpt-9'), message);
+    for (const id of MODEL_IDS) assert.ok(message.includes(id), message);
+  });
+});
+
+test('a model in a project file refuses to start and names the user file', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {}, {model: 'glm-5.2'});
+    const message = refused(files).message;
+
+    assert.ok(message.includes('"model"'), message);
+    assert.ok(message.includes(path.join(home, 'settings.json')), message);
+  });
+});
+
+test('remembering a model keeps every other setting', () => {
+  withHome((home) => {
+    const files = settingsIn(home, {
+      permission_mode: 'ask-edits',
+      permissions: {allow: ['bash(npm run *)']},
+    });
+    loadSettings(files);
+
+    rememberModel('kimi-k3');
+
+    assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
+      permission_mode: 'ask-edits',
+      permissions: {allow: ['bash(npm run *)']},
+      model: 'kimi-k3',
+    });
+    assert.equal(modeOf(), 'ask-edits');
   });
 });
 

@@ -70,3 +70,16 @@ test('chooseModel obeys an explicit ACC_MODEL', () => {
 test('chooseModel names the default when nothing is configured', () => {
   assert.equal(chooseModel({}), DEFAULT_MODEL);
 });
+
+test('chooseModel takes the saved model when the environment names none', () => {
+  assert.equal(chooseModel({}, 'glm-5.2'), 'glm-5.2');
+});
+
+test('an explicit ACC_MODEL beats a saved model', () => {
+  assert.equal(chooseModel({ACC_MODEL: 'kimi-k3'}, 'glm-5.2'), 'kimi-k3');
+});
+
+test('a saved model beats the key scan', () => {
+  assert.equal(chooseModel({MOONSHOT_API_KEY: 'k'}, 'glm-5.2'), 'glm-5.2');
+  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}, 'glm-5.2'), 'glm-5.2');
+});

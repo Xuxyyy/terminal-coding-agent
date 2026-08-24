@@ -10,6 +10,7 @@ import {
   hasKey,
 } from './models.js';
 import {withRetry, type RetryOptions} from './retry.js';
+import {modelOf} from './settings.js';
 import type {ToolDefinition} from './tools/registry.js';
 
 export {DEFAULT_MODEL, MODELS} from './models.js';
@@ -29,9 +30,13 @@ export type ModelChoice = {
   contextWindow: number;
 };
 
-export function chooseModel(env: NodeJS.ProcessEnv = process.env): string {
+export function chooseModel(
+  env: NodeJS.ProcessEnv = process.env,
+  saved: string | null = modelOf(),
+): string {
   const explicit = env.ACC_MODEL;
   if (explicit) return explicit;
+  if (saved) return saved;
   if (hasKey(DEFAULT_MODEL, env)) return DEFAULT_MODEL;
   return MODEL_IDS.find((id) => hasKey(id, env)) ?? DEFAULT_MODEL;
 }
