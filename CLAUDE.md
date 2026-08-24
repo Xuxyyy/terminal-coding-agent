@@ -62,8 +62,9 @@ instead; that is a different thing and nothing here depends on it.
 `notes/` is session handoffs. Scratch, safe to ignore. It stays at the root
 because that is where the handoff tooling writes.
 
-**`docs/`, `plans/`, and `notes/` are untracked.** They are absent from a fresh
-clone or a `git worktree`; ask for them if they are missing.
+**`docs/` is tracked** — a fresh clone or a `git worktree` has all five files.
+**`plans/` and `notes/` are not.** They are absent from a fresh clone or a
+worktree; ask for them if they are missing.
 
 ## The docs site
 
@@ -89,8 +90,8 @@ design. Nothing configures it.
 `README.md` points at the site, it does not copy it. The model table, the tool
 list, and the settings syntax live on the site only, because two copies of a
 fact drift apart and the site is the one that gets updated. The README's own
-Architecture section is the exception: it exists nowhere else, because `docs/`
-is untracked.
+Architecture section is the exception: nothing on the site covers it, and it is
+the short version a reader gets before opening `docs/`.
 
 ## Sessions
 
