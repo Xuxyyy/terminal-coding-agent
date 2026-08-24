@@ -66,6 +66,10 @@ into a new one, so a resumed run and its original stay a single session on disk.
 - [Your first run](https://coding-cli-docs.vercel.app/start/first-run/)
 - [Commands](https://coding-cli-docs.vercel.app/reference/commands/)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
