@@ -1,15 +1,18 @@
-export type Provider = {baseUrl: string; keyEnv: string};
+export type Provider = {label: string; baseUrl: string; keyEnv: string};
 
 export const PROVIDERS: Record<string, Provider> = {
   deepseek: {
+    label: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
     keyEnv: 'DEEPSEEK_API_KEY',
   },
   glm: {
+    label: 'Z.ai',
     baseUrl: 'https://api.z.ai/api/paas/v4/',
     keyEnv: 'GLM_API_KEY',
   },
   kimi: {
+    label: 'Moonshot',
     baseUrl: 'https://api.moonshot.ai/v1',
     keyEnv: 'MOONSHOT_API_KEY',
   },
@@ -51,6 +54,11 @@ export const JUDGE_MODELS: Record<string, string> = {
 export const DEFAULT_MODEL = 'deepseek-v4-flash';
 
 export const MODEL_IDS = Object.keys(MODELS);
+
+export function providerLabelOf(id: string): string | null {
+  const info = MODELS[id];
+  return info ? (PROVIDERS[info.provider]?.label ?? null) : null;
+}
 
 export function keyEnvOf(id: string): string | null {
   const info = MODELS[id];

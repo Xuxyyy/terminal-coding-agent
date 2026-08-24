@@ -51,10 +51,15 @@ export function Entry({item}: {item: Item}) {
   }
   if (item.event.type === 'error') {
     return (
-      <Text color={theme.error}>
-        {'✖ '}
-        {item.event.message}
-      </Text>
+      <Box flexDirection="column">
+        <Text color={theme.error}>
+          {'✖ '}
+          {item.event.message}
+        </Text>
+        {item.event.hint ? (
+          <Text color={theme.muted}>{`  ${item.event.hint}`}</Text>
+        ) : null}
+      </Box>
     );
   }
   return null;

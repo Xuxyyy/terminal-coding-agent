@@ -8,6 +8,7 @@ import {
   type ModelChoice,
 } from './client.js';
 import type {Host, Usage} from './host.js';
+import {explainError} from './errors.js';
 import {clearRecoverable} from './clear.js';
 import {compactSession, withoutText} from './compact.js';
 import {
@@ -282,7 +283,8 @@ export async function runAgent(
     }
     save(partial?.usage ?? NO_USAGE);
     if (aborted(error, host)) return;
-    host.onEvent({type: 'error', message: (error as Error).message});
+    const explained = explainError(error, choice.model);
+    host.onEvent({type: 'error', ...explained});
     host.onEvent({type: 'turn_end', usage: total});
   }
 }

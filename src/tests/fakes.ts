@@ -65,8 +65,8 @@ export function connectionError(): Error {
   return error;
 }
 
-export function statusError(status: number): Error {
-  return Object.assign(new Error(`status ${status}`), {status});
+export function statusError(status: number, message?: string): Error {
+  return Object.assign(new Error(message ?? `status ${status}`), {status});
 }
 
 export function abortError(name = 'APIUserAbortError'): Error {

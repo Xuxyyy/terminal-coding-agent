@@ -97,6 +97,26 @@ model a workspace it cannot explain. Two places in `loop.ts` do this:
 The transcript stays honest either way: a killed command reports `[exit 130] stopped by the
 user`, and a call that never started says `[interrupted by the user]`.
 
+### What a failed turn says
+
+The `catch` does not print the provider's own words. `explainError` in `core/errors.ts` turns
+the error into a message and an optional hint, and the hint is what the screen draws under it.
+
+Raw provider text is unreadable to the person running the tool. Moonshot answers a rate limit
+with `Your account org-…<ak-…> request reached organization max RPM: 3` — it never says rate
+limit, never says which model, and never says what to do. Two cases are recognised, both by
+status with the text as a fallback: `429` is a rate limit, `402` or an `insufficient balance`
+is an empty account. Anything else passes through unchanged, because inventing a friendly
+sentence for an error nobody has seen hides more than it explains.
+
+The status is read from the error, then from its `cause` — a rate limit that arrives after the
+first chunk comes wrapped in a `StreamFailure`, which keeps the original underneath.
+
+Retries happen before this. `withRetry` treats `429` as retryable and backs off 1s, 2s, 4s, so
+what reaches the screen is a limit that survived four attempts. The backoff ignores the wait
+the server asks for; at Moonshot's 3 requests a minute no backoff would help anyway, because a
+turn needs one request per step and a slow crawl reads worse than a clear failure.
+
 ## Context pressure
 
 **The one rule the whole design rests on: a summarizing compaction only ever happens when no

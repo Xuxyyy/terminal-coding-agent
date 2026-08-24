@@ -29,7 +29,7 @@ export type AgentEvent =
   | {type: 'context_cleared'; freed: number}
   | {type: 'compact_start'}
   | {type: 'compact_end'; replaced: number; before: number; after: number}
-  | {type: 'error'; message: string};
+  | {type: 'error'; message: string; hint?: string};
 
 export type ConfirmDecision = 'once' | 'session' | 'deny';
 
