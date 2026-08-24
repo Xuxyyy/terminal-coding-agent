@@ -91,8 +91,8 @@ async function mount(
     press(key);
     await tick();
   }
-  const screen = frames.filter((frame) => frame.includes('Choose one')).pop() ?? '';
   instance.unmount();
+  const screen = frames.filter((frame) => frame.includes('Choose one')).pop() ?? '';
   return {picked, cancelled, screen};
 }
 
