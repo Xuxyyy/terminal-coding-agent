@@ -28,7 +28,7 @@ export function permissionAt(current: Mode): number {
   return MODES.indexOf(current);
 }
 
-function fit(text: string, width: number): string {
+export function fit(text: string, width: number): string {
   if (stringWidth(text) <= width) return text;
   let cut = text;
   while (stringWidth(cut) > width - 1) cut = cut.slice(0, -1);
