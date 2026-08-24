@@ -30,6 +30,7 @@ export type TaskItem = {kind: 'task'; text: string};
 export type NoticeItem = {kind: 'notice'; text: string};
 export type ContextItem = {kind: 'context'} & Partial<ContextStatus> &
   Pick<ContextStatus, 'used' | 'budget'>;
+export type ModelItem = {kind: 'model'; id: string; label: string};
 export type EventItem = {kind: 'event'; event: AgentEvent};
 
 export type RowParts = {head: string; tail: string};
@@ -40,6 +41,7 @@ export type Item =
   | TaskItem
   | NoticeItem
   | ContextItem
+  | ModelItem
   | EventItem;
 
 import type {ConfirmRequest} from '../core/host.js';
@@ -53,6 +55,7 @@ export type Phase =
   | {kind: 'picking'}
   | {kind: 'rewinding'}
   | {kind: 'permission'}
+  | {kind: 'model'}
   | {kind: 'rewind-confirm'; id: string; title: string; files: RewindFile[]}
   | {kind: 'closed'};
 

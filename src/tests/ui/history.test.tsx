@@ -1,7 +1,37 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {historyRows, splitRows} from '../../ui/components/history/HistoryList.js';
+import {render} from 'ink';
+import {
+  HistoryList,
+  historyRows,
+  splitRows,
+} from '../../ui/components/history/HistoryList.js';
 import type {Item} from '../../ui/events.js';
+
+const ESC = String.fromCharCode(27);
+const ANSI = new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g');
+
+function renderHistory(items: Item[]): string {
+  let buffer = '';
+  const stdout = {
+    columns: 200,
+    rows: 40,
+    isTTY: true,
+    write(chunk: string) {
+      buffer += chunk;
+    },
+    on() {},
+    off() {},
+    removeListener() {},
+  };
+  const instance = render(<HistoryList items={items} awaitingApproval={false} />, {
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  });
+  instance.unmount();
+  return buffer.split(ANSI).join('');
+}
 
 test('historyRows pairs a tool result with its call', () => {
   const items: Item[] = [
@@ -186,4 +216,24 @@ test('splitRows keeps a stale unpaired tool printable', () => {
   ]);
 
   assert.deepEqual(splitRows(rows), {done: rows, live: []});
+});
+
+test('a model item draws its label between the divider rules', () => {
+  const screen = renderHistory([{kind: 'model', id: 'glm-5.2', label: 'GLM 5.2'}]);
+
+  const line = screen
+    .split('\n')
+    .find((row) => row.includes('GLM 5.2'));
+  assert.ok(line, screen);
+  assert.match(line!, /^─+ GLM 5\.2 ─+\s*$/);
+});
+
+test('a model label too wide for the divider is elided, not wrapped', () => {
+  const label = 'M'.repeat(200);
+  const screen = renderHistory([{kind: 'model', id: 'long', label}]);
+
+  const drawn = screen.split('\n').filter((row) => row.includes('MMM'));
+  assert.equal(drawn.length, 1, screen);
+  assert.ok(drawn[0]!.includes('…'), drawn[0]);
+  assert.ok(drawn[0]!.trimEnd().length <= 72, String(drawn[0]!.length));
 });

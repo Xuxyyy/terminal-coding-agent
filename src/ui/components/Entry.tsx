@@ -2,6 +2,7 @@ import {Box, Text} from 'ink';
 import {contextReadout, type Item} from '../events.js';
 import {theme} from '../theme.js';
 import {Markdown} from './Markdown.js';
+import {ModelDivider} from './ModelDivider.js';
 import {Welcome} from './Welcome.js';
 
 export function Entry({item}: {item: Item}) {
@@ -44,6 +45,9 @@ export function Entry({item}: {item: Item}) {
         ))}
       </Box>
     );
+  }
+  if (item.kind === 'model') {
+    return <ModelDivider label={item.label} />;
   }
   if (item.event.type === 'error') {
     return (
