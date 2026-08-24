@@ -6,7 +6,7 @@
 A small terminal coding agent that reads, edits, and runs code in the current
 directory.
 
-<!-- demo: replace with ![acc](assets/demo.gif) -->
+![acc adding a field to a health route, showing its tool calls and the diff it wrote](assets/demo.png)
 
 ## What it is
 
