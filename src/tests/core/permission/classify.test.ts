@@ -183,7 +183,13 @@ test('protected paths are recognised anywhere under the root', () => {
 });
 
 test('the root is compared by its real path, not the name it was given', () => {
-  assert.notEqual(project, realPath(project));
-  assert.equal(level('touch value.txt'), 'recoverable');
-  assert.equal(classifyCommand('touch value.txt', realPath(project)).level, 'recoverable');
+  const linked = path.join(os.tmpdir(), 'coding-cli-classify-link');
+  fs.rmSync(linked, {force: true});
+  fs.symlinkSync(project, linked);
+  assert.notEqual(linked, realPath(linked));
+  assert.equal(classifyCommand('touch value.txt', linked).level, 'recoverable');
+  assert.equal(
+    classifyCommand('touch value.txt', realPath(linked)).level,
+    'recoverable',
+  );
 });
