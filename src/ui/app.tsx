@@ -13,6 +13,14 @@ import {Picker} from './components/Picker.js';
 import {RewindConfirm} from './components/RewindConfirm.js';
 import {SessionPicker} from './components/SessionPicker.js';
 import {
+  MODEL_HINT,
+  MODEL_TITLE,
+  missingKeyHint,
+  modelAt,
+  modelLine,
+  modelRows,
+} from './model.js';
+import {
   PERMISSION_HINT,
   PERMISSION_TITLE,
   permissionAt,
@@ -38,6 +46,7 @@ export function App({
   const {
     committed,
     mode,
+    modelId,
     streamText,
     phase,
     generation,
@@ -57,6 +66,8 @@ export function App({
     compact,
     permission,
     setPermission,
+    model,
+    setModel,
     shutdown,
   } = useAgent(workspaceRoot, choice);
   const [input, setInput] = useState('');
@@ -76,6 +87,7 @@ export function App({
   );
   const rewindable = phase.kind === 'rewinding' ? checkpoints() : [];
   const modes = phase.kind === 'permission' ? permissionRows(mode) : [];
+  const models = phase.kind === 'model' ? modelRows(modelId) : [];
 
   const submit = (value: string) => {
     const command = value.trim();
@@ -116,6 +128,11 @@ export function App({
     }
     if (command === '/permission') {
       permission();
+      setInput('');
+      return;
+    }
+    if (command === '/model') {
+      model();
       setInput('');
       return;
     }
@@ -198,6 +215,19 @@ export function App({
             onPick={setPermission}
             onCancel={cancelPick}
             initial={permissionAt(mode)}
+          />
+        ) : phase.kind === 'model' ? (
+          <Picker
+            title={MODEL_TITLE}
+            rows={models}
+            hint={MODEL_HINT}
+            empty=""
+            renderRow={modelLine}
+            onPick={setModel}
+            onCancel={cancelPick}
+            initial={modelAt(modelId)}
+            disabled={(row) => row.missingKey !== null}
+            disabledHint={missingKeyHint}
           />
         ) : phase.kind === 'rewind-confirm' ? (
           <RewindConfirm

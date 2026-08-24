@@ -6,13 +6,14 @@ import test from 'node:test';
 import {render} from 'ink';
 import {listSessions, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
-import {loadSettings, modeOf, settingsFiles} from '../../core/settings.js';
+import {loadSettings, modeOf, modelOf, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import type {
   ContextItem,
   HeaderItem,
   Item,
+  ModelItem,
   NoticeItem,
   TaskItem,
   TextItem,
@@ -46,10 +47,11 @@ function answer(text: string): AsyncIterable<unknown> {
 function mount(
   root: string,
   choice: ReturnType<typeof fakeModel>['choice'],
+  makeClient?: (id: string) => ReturnType<typeof fakeModel>['choice'],
 ): {agent: Ref; unmount: () => void} {
   const agent: Ref = {current: null};
   function Probe() {
-    agent.current = useAgent(root, choice);
+    agent.current = useAgent(root, choice, makeClient);
     return null;
   }
   const instance = render(<Probe />, {
@@ -1125,5 +1127,179 @@ test('/permission while the agent is busy does nothing', async () => {
   release();
   await settle(agent);
   assert.equal(agent.current!.mode, 'auto-edits');
+  unmount();
+});
+
+const GLM = {model: 'glm-5.2', label: 'GLM 5.2', contextWindow: 200_000};
+
+function switchable(): {
+  agent: Ref;
+  unmount: () => void;
+  first: () => number;
+  second: () => number;
+} {
+  const root = workspace();
+  loadSettings([]);
+  const first = fakeModel(() => answer('done'));
+  const second = fakeModel(() => answer('done'));
+  const swapped = {...second.choice, ...GLM};
+  const {agent, unmount} = mount(root, first.choice, () => swapped);
+  return {agent, unmount, first: first.calls, second: second.calls};
+}
+
+async function switchTo(agent: Ref, id: string): Promise<void> {
+  agent.current!.model();
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'model');
+  agent.current!.setModel(id);
+  await tick();
+}
+
+test('a switch hands the new client to the next turn', async () => {
+  const {agent, unmount, first, second} = switchable();
+
+  assert.equal(agent.current!.send('fix the cart'), true);
+  await settle(agent);
+  assert.equal(first(), 1);
+
+  await switchTo(agent, GLM.model);
+  assert.equal(agent.current!.modelId, GLM.model);
+
+  assert.equal(agent.current!.send('and the checkout'), true);
+  await settle(agent);
+
+  assert.equal(second(), 1);
+  assert.equal(first(), 1);
+  unmount();
+});
+
+test('a switch moves the context budget to the new window', async () => {
+  const {agent, unmount} = switchable();
+
+  agent.current!.context();
+  await tick();
+  assert.equal((agent.current!.committed.at(-1) as ContextItem).budget, 1_000_000);
+
+  await switchTo(agent, GLM.model);
+  agent.current!.context();
+  await tick();
+
+  assert.equal(
+    (agent.current!.committed.at(-1) as ContextItem).budget,
+    GLM.contextWindow,
+  );
+  unmount();
+});
+
+test('a switch marks the transcript and leaves the old header alone', async () => {
+  const {agent, unmount} = switchable();
+  const header = agent.current!.committed[0] as HeaderItem;
+  assert.equal(header.ready!.model.label, 'Fake');
+
+  await switchTo(agent, GLM.model);
+
+  const divider = agent.current!.committed.at(-2) as ModelItem;
+  assert.equal(divider.kind, 'model');
+  assert.equal(divider.id, GLM.model);
+  assert.equal(divider.label, GLM.label);
+  const notice = agent.current!.committed.at(-1) as NoticeItem;
+  assert.equal(notice.kind, 'notice');
+  assert.equal(notice.text, `switched to ${GLM.label}`);
+  assert.deepEqual(agent.current!.committed[0], header);
+  unmount();
+});
+
+test('a switch is written to the user settings file', async () => {
+  const {agent, unmount} = switchable();
+  const home = process.env.ACC_HOME!;
+
+  await switchTo(agent, GLM.model);
+
+  assert.equal(modelOf(), GLM.model);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(home, 'settings.json'), 'utf8')),
+    {model: GLM.model},
+  );
+  unmount();
+});
+
+test('cancelling the model picker changes nothing', async () => {
+  const {agent, unmount} = switchable();
+  const home = process.env.ACC_HOME!;
+  const before = agent.current!.committed;
+
+  agent.current!.model();
+  await tick();
+  agent.current!.cancelPick();
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.equal(agent.current!.modelId, 'fake-model');
+  assert.deepEqual(agent.current!.committed, before);
+  assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
+  unmount();
+});
+
+test('picking the model already in use commits nothing', async () => {
+  const {agent, unmount} = switchable();
+  const before = agent.current!.committed;
+
+  await switchTo(agent, 'fake-model');
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.deepEqual(agent.current!.committed, before);
+  unmount();
+});
+
+test('/model while the agent is busy does nothing', async () => {
+  const root = workspace();
+  loadSettings([]);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const {choice} = fakeModel(() => ({
+    async *[Symbol.asyncIterator]() {
+      await held;
+      yield textChunk('done');
+      yield finishChunk('stop');
+      yield usageChunk(10, 5);
+    },
+  }));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'busy');
+  const before = agent.current!.committed;
+
+  agent.current!.model();
+  await tick();
+
+  assert.equal(agent.current!.phase.kind, 'busy');
+  assert.deepEqual(agent.current!.committed, before);
+  release();
+  await settle(agent);
+  assert.equal(agent.current!.modelId, 'fake-model');
+  unmount();
+});
+
+test('a client that refuses to build leaves the model where it was', async () => {
+  const root = workspace();
+  loadSettings([]);
+  const home = process.env.ACC_HOME!;
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice, () => {
+    throw new Error('GLM_API_KEY is not set — needed for GLM 5.2.');
+  });
+
+  await switchTo(agent, GLM.model);
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  assert.equal(agent.current!.modelId, 'fake-model');
+  const notice = agent.current!.committed.at(-1) as NoticeItem;
+  assert.equal(notice.kind, 'notice');
+  assert.match(notice.text, /GLM_API_KEY is not set/);
+  assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
 });

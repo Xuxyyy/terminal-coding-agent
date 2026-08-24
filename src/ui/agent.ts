@@ -1,5 +1,5 @@
 import {useRef, useState} from 'react';
-import type {ModelChoice} from '../core/client.js';
+import {createClient, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
@@ -15,7 +15,7 @@ import {
   setMode,
   type Session,
 } from '../core/session.js';
-import {modeOf, rememberMode} from '../core/settings.js';
+import {modeOf, rememberMode, rememberModel} from '../core/settings.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -26,6 +26,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
+import {modelNotice} from './model.js';
 import {permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
@@ -33,6 +34,7 @@ import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.j
 export type Agent = {
   committed: Item[];
   mode: Mode;
+  modelId: string;
   streamText: string;
   phase: Phase;
   generation: number;
@@ -52,6 +54,8 @@ export type Agent = {
   compact: () => void;
   permission: () => void;
   setPermission: (mode: Mode) => void;
+  model: () => void;
+  setModel: (id: string) => void;
   shutdown: () => void;
 };
 
@@ -64,11 +68,17 @@ function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   };
 }
 
-export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
+export function useAgent(
+  workspaceRoot: string,
+  initial: ModelChoice,
+  makeClient: (id: string) => ModelChoice = createClient,
+): Agent {
+  const choiceRef = useRef(initial);
+  const [choice, setChoice] = useState(initial);
   const header = (): Item => ({
     kind: 'header',
     workspaceRoot,
-    ready: readyInfo(workspaceRoot, choice),
+    ready: readyInfo(workspaceRoot, choiceRef.current),
   });
   const [committed, setCommitted] = useState<Item[]>(() => [header()]);
   const [streamText, setStreamText] = useState('');
@@ -84,7 +94,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     sessionRef.current = createSession(
       workspaceRoot,
       systemPrompt(workspaceRoot, modeOf()),
-      choice.contextWindow,
+      choiceRef.current.contextWindow,
     );
   }
   const session = sessionRef.current;
@@ -167,7 +177,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       },
     };
 
-    void runAgent(session, choice, host, undefined, store ?? undefined).finally(() => {
+    void runAgent(session, choiceRef.current, host, undefined, store ?? undefined).finally(() => {
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {
@@ -209,7 +219,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     if (
       phase.kind !== 'picking' &&
       phase.kind !== 'rewinding' &&
-      phase.kind !== 'permission'
+      phase.kind !== 'permission' &&
+      phase.kind !== 'model'
     ) {
       return;
     }
@@ -335,7 +346,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
       },
     };
 
-    void compactSession(session, choice, host, storeRef.current ?? undefined)
+    void compactSession(session, choiceRef.current, host, storeRef.current ?? undefined)
       .then((result) => {
         if (!result) {
           liveTextRef.current = '';
@@ -376,6 +387,39 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     commit([{kind: 'notice', text: permissionNotice(mode, remembered)}]);
   };
 
+  const model = () => {
+    if (phase.kind !== 'idle') return;
+    setPhase({kind: 'model'});
+  };
+
+  const setModel = (id: string) => {
+    if (phase.kind !== 'model') return;
+    setPhase({kind: 'idle'});
+    if (id === choiceRef.current.model) return;
+
+    let next: ModelChoice;
+    try {
+      next = makeClient(id);
+    } catch (error) {
+      commit([{kind: 'notice', text: `could not switch: ${(error as Error).message}`}]);
+      return;
+    }
+
+    choiceRef.current = next;
+    setChoice(next);
+    session.contextWindow = next.contextWindow;
+    let remembered = true;
+    try {
+      rememberModel(id);
+    } catch {
+      remembered = false;
+    }
+    commit([
+      {kind: 'model', id, label: next.label},
+      {kind: 'notice', text: modelNotice(next.label, remembered)},
+    ]);
+  };
+
   const shutdown = () => {
     controllerRef.current?.abort();
     try {
@@ -389,6 +433,7 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
   return {
     committed,
     mode: session.mode,
+    modelId: choice.model,
     streamText,
     phase,
     generation,
@@ -408,6 +453,8 @@ export function useAgent(workspaceRoot: string, choice: ModelChoice): Agent {
     compact,
     permission,
     setPermission,
+    model,
+    setModel,
     shutdown,
   };
 }
