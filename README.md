@@ -1,9 +1,31 @@
 # acc
 
+[![test](https://github.com/Xuxyyy/coding-cli/actions/workflows/test.yml/badge.svg)](https://github.com/Xuxyyy/coding-cli/actions/workflows/test.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A small terminal coding agent that reads, edits, and runs code in the current
 directory.
 
 <!-- demo: replace with ![acc](assets/demo.gif) -->
+
+## What it is
+
+One TypeScript package — about 4,800 lines and 596 tests. You start it inside a
+project, describe a task in plain English, and it reads the files, searches
+them, edits them, and runs commands until the task is done — asking you first
+before anything it cannot take back.
+
+- Five tools: `read_file`, `grep`, `edit_file`, `write_file`, and `bash`.
+- Three providers — DeepSeek, GLM, and Kimi — six models behind one client.
+- One permission gate that every tool call passes through.
+- Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
+  the conversation *and* the files back to before a message you sent.
+- A context readout. `/context` prints how full the window is, with a
+  breakdown; `/compact` replaces the conversation with a summary when it gets
+  long.
+
+**It edits your files and runs shell commands** in the folder you start it
+from. That is what it is for, and it is why every call goes through the gate.
 
 ## Quick start
 
@@ -16,32 +38,23 @@ cd ~/some-project
 acc
 ```
 
-**The workspace is the current directory.** `acc` reads, edits, and runs code in
-the folder you start it from. It takes no path argument and no flags.
+It is not published on npm — cloning is the way to install it.
 
-## Requirements
+**The workspace is the current directory.** `acc` takes no path argument and no
+flags, and it refuses to start in your home directory or at the filesystem
+root, so `cd` into a project folder first.
 
-- Node 22 or newer.
+## Requirements and keys
+
+- Node 22 or newer, on macOS or Linux. The `bash` tool runs commands through
+  `bash`, so Windows needs WSL.
 - ripgrep (`rg`) on your `PATH`, for the `grep` tool. Without it the agent falls
   back to shell `grep` — that works, but it is slower and ignores `.gitignore`.
+- One API key is enough. Copy `.env.example` to `.env` and fill in DeepSeek,
+  GLM, or Kimi; `acc` picks a model from whichever key it finds. The six model
+  ids are on [Models and keys](https://coding-cli-docs.vercel.app/start/models/).
 
-## API keys
-
-One key is enough. Copy `.env.example` to `.env` and fill in DeepSeek, GLM, or
-Kimi; `acc` picks a model from whichever key it finds. The six model ids are on
-[Models and keys](https://coding-cli-docs.vercel.app/start/models/).
-
-## What it can do
-
-- Five tools: `read_file`, `grep`, `edit_file`, `write_file`, and `bash`.
-- Three providers — DeepSeek, GLM, and Kimi — six models between them.
-- Sessions you can resume and rewind. `/resume` reopens an earlier run;
-  `/rewind` goes back to before a message you sent, restoring the files it
-  touched.
-- One permission gate that every tool call passes through.
-- A context readout: `/context` prints how full the window is, with a breakdown.
-
-## Architecture
+## How it works
 
 **The seam.** `src/core` runs the agent and never imports React; `src/ui` draws
 it with Ink. They meet at one interface, `Host` in `src/core/host.ts`, which is
@@ -60,7 +73,24 @@ holding both the messages the model saw and the view the terminal drew. `/resume
 reopens a session in the folder it already owns instead of copying its history
 into a new one, so a resumed run and its original stay a single session on disk.
 
+## Design notes
+
+Five design docs in [`docs/`](docs/) — about 1,900 lines — record *why* each
+subsystem is shaped the way it is, one doc per subsystem. The code is the truth
+about *what*; those files are the truth about *why*, and each one opens with
+when to read it.
+
+Left undone on purpose: a git-backed snapshot that would catch what `bash`
+changes, and a byte cap on the copies a write stores — both wait for numbers
+from real use rather than a guess. So does compacting and retrying when a
+provider rejects a turn for length: the error differs per provider, and there is
+no way to test it without paying for a deliberate failure.
+[`docs/features.md`](docs/features.md) lists what ships today and what does not.
+
 ## Docs
+
+Full documentation is at
+[coding-cli-docs.vercel.app](https://coding-cli-docs.vercel.app).
 
 - [Install](https://coding-cli-docs.vercel.app/start/install/)
 - [Your first run](https://coding-cli-docs.vercel.app/start/first-run/)
