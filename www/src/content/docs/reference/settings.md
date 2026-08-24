@@ -21,6 +21,7 @@ Setting `ACC_HOME` moves the first one.
 ```json
 {
   "permission_mode": "auto-edits",
+  "model": "deepseek-v4-flash",
   "permissions": {
     "deny":  ["bash(curl *)"],
     "ask":   ["bash(npm run deploy*)"],
@@ -170,11 +171,28 @@ cloned must not be able to make your agent permanently more permissive.
 `/permission` writes this same key, so what you read in the file is always what
 is live.
 
+## `model`
+
+```json
+{ "model": "deepseek-v4-flash" }
+```
+
+One of the six model ids — see [Models](/start/models). Absent everywhere means
+`acc` falls back to the first provider key it finds.
+
+**It is read from `~/.acc/settings.json` only**, the same rule
+`permission_mode` follows. The key in a project's `.acc/settings.json` is a
+startup error naming the user file, and an unknown id is a startup error listing
+the six valid ones.
+
+[`/model`](/reference/commands#model) writes this key, so what you read in the
+file is always what the next run starts on. `ACC_MODEL` still wins over it.
+
 ## A broken file stops `acc`
 
 Bad JSON, a rule that is not a string, an unknown key inside `permissions`, an
-unknown tag, or an unknown `permission_mode` all print the file and the problem
-and exit 1:
+unknown tag, an unknown `permission_mode`, or an unknown `model` all print the
+file and the problem and exit 1:
 
 ```
 error: /Users/you/.acc/settings.json: the rule "write(src/**)" in "permissions.allow" must be written bash(<pattern>) or edit(<pattern>); edit(<pattern>) covers both edit_file and write_file

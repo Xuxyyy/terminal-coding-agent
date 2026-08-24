@@ -56,9 +56,15 @@ DEEPSEEK_API_KEY=sk-...
 ## How the model is chosen
 
 1. If `ACC_MODEL` is set, that model is used.
-2. Otherwise, if `DEEPSEEK_API_KEY` is set, the default `deepseek-v4-flash` is
+2. Otherwise, if `"model"` is saved in `~/.acc/settings.json`, that model is
+   used. The [`/model`](/reference/commands#model) picker writes that key, so a
+   model you switch to is still there tomorrow.
+3. Otherwise, if `DEEPSEEK_API_KEY` is set, the default `deepseek-v4-flash` is
    used.
-3. Otherwise the first model whose provider key is present is used.
+4. Otherwise the first model whose provider key is present is used.
+
+`ACC_MODEL` stays above the saved model on purpose: an override a settings file
+could beat would not be an override.
 
 If the chosen model needs a key you have not set, `acc` stops at startup with
 `DEEPSEEK_API_KEY is not set — needed for DeepSeek v4 Flash.` If `ACC_MODEL`

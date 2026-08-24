@@ -38,6 +38,11 @@ OpenAI-compatible client, so three providers work through one code path:
 DeepSeek, GLM, and Kimi (six model ids). Default is DeepSeek v4 Flash. Keys
 load from `.env` files, including `~/.acc/.env`.
 
+The model is chosen in three steps, first hit wins: `ACC_MODEL`, then the
+`"model"` key saved in `~/.acc/settings.json` by the `/model` picker, then the
+first model in registry order whose provider key is set. An env override a
+settings file could beat would not be an override, so `ACC_MODEL` stays on top.
+
 Three environment variables change what the client does: `ACC_MODEL` picks the
 model id, `ACC_HOME` moves the session store off `~/.acc`, and `ACC_COMPACT_AT`
 overrides the fraction of the window at which the agent compacts itself. The
@@ -146,7 +151,7 @@ Ink TUI, adapted from the Python agent's interface: streaming markdown,
 diffs in history, spinner and status line, an input box with a slash-command
 menu, ↑/↓ prompt history saved to disk, the y/a/n confirm prompt, an exit
 summary, and `/clear`, `/context`, `/compact`, `/resume`, `/rewind`,
-`/permission` plus `exit`/`quit`/`q`.
+`/permission`, `/model` plus `exit`/`quit`/`q`.
 
 A tool row is `• name`, then the argument, then what came back. `bash` splits in
 two when the model wrote a `description`: the sentence sits on the row and the
@@ -236,6 +241,32 @@ total to fall back on until the next real turn, so it shows an estimate that
 runs ~28% low. Two numbers, one of them shaky, said less than one. Type
 `/context` if you want it. See `sessions.md`.
 
+`/model` switches the provider while you work, in the same box, marker and hint
+style as `/permission`. All six models are listed in registry order, opened on
+the one you are on. A model whose provider key is unset is **shown, not
+hidden**: the row stays grey when the cursor lands on it, `enter` refuses it,
+and the hint line under the box turns into `set GLM_API_KEY to use this model`.
+Hiding the row would leave you wondering where your model went; the grey row
+names the variable instead.
+
+A pick swaps the live client, so the next turn — and the permission judge, which
+follows the model for free — runs on the new provider. It also moves
+`session.contextWindow`, which is what `/context` measures against and what the
+80% compaction trigger reads: switching to a 200k model without it would leave
+the threshold budgeting for 262k the model does not have.
+
+Unlike `/permission`, a switch does **not** rewrite the transcript. A mode is a
+fact about now, so it repaints every past header; a model is a fact about a
+point in time, so it gets a divider line at that point and earlier rows keep
+naming the model that actually answered them.
+
+The pick is written back to `"model"` in `~/.acc/settings.json`, the same
+user-level-file-only rule `"permission_mode"` follows: the key in a project's
+`.acc/settings.json` stops `acc` at startup naming the user file, and an unknown
+model id stops it listing the six valid ones. `/resume` does not restore the
+model a session was last on — reopening a Kimi session while you are running
+DeepSeek should not quietly spend money on a provider you did not pick this run.
+
 **The header does not repaint when `/permission` changes the mode.** The picker
 closes and the notice prints, but the mode in the header stays stale. It is
 ink's `Static` in `src/ui/components/history/HistoryList.tsx:112`, not the
@@ -256,7 +287,7 @@ and the picker both already correct.
 
 A byte cap on the copies a write stores, and a git-backed snapshot that would
 catch what `bash` changes — both wait for numbers from real use (see
-`sessions.md`). The sandbox, a `/model` picker, network tools, a
+`sessions.md`). The sandbox, network tools, a
 debugging transcript, todo panel, skills, memory. Reacting to a provider's context-length rejection by compacting and
 retrying — the safety net under the 80% trigger — is also still open: the error
 shape differs per provider and none of it can be tested without paying for a

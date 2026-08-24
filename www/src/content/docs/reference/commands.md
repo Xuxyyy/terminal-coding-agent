@@ -117,6 +117,36 @@ Choosing one prints `switched to auto` and saves it to
 so: `switched to auto (not saved to settings.json)`.
 [Permissions](/guide/permissions) explains what each mode allows.
 
+## `/model`
+
+*Switch the model.*
+
+Opens a picker of all six models, in registry order, on the one you are using:
+
+```
+Choose a model
+  Kimi K3 — needs MOONSHOT_API_KEY
+  Kimi K2.7 Code — needs MOONSHOT_API_KEY
+  DeepSeek v4 Pro — deepseek-v4-pro
+❯ DeepSeek v4 Flash (current) — deepseek-v4-flash
+  GLM 5.2 — needs GLM_API_KEY
+↑↓ to move · enter to choose · esc to cancel
+```
+
+A model whose provider key is not set is shown rather than hidden, so you can
+see it is there and read which variable it wants. Such a row stays grey when you
+move onto it, `enter` does nothing, and the hint line becomes
+`set GLM_API_KEY to use this model`.
+
+Choosing one prints `switched to GLM 5.2`, draws a divider across the
+transcript where the change happened, and saves the id to `~/.acc/settings.json`
+for next time. If it could not be saved, the notice says so:
+`switched to GLM 5.2 (not saved to settings.json)`.
+
+The conversation carries over untouched — only the client changes. Earlier rows
+keep naming the model that answered them, and the new one picks up the context
+budget of its own window. [Models](/start/models) lists the six.
+
 ## Keys and leaving
 
 | Input | What it does |
