@@ -1,58 +1,18 @@
 import OpenAI from 'openai';
 import {loadEnvFiles} from './env.js';
 import type {Host, Usage} from './host.js';
+import {
+  DEFAULT_MODEL,
+  JUDGE_MODELS,
+  MODELS,
+  MODEL_IDS,
+  PROVIDERS,
+  hasKey,
+} from './models.js';
 import {withRetry, type RetryOptions} from './retry.js';
 import type {ToolDefinition} from './tools/registry.js';
 
-type Provider = {baseUrl: string; keyEnv: string};
-
-const PROVIDERS: Record<string, Provider> = {
-  deepseek: {
-    baseUrl: 'https://api.deepseek.com',
-    keyEnv: 'DEEPSEEK_API_KEY',
-  },
-  glm: {
-    baseUrl: 'https://api.z.ai/api/paas/v4/',
-    keyEnv: 'GLM_API_KEY',
-  },
-  kimi: {
-    baseUrl: 'https://api.moonshot.ai/v1',
-    keyEnv: 'MOONSHOT_API_KEY',
-  },
-};
-
-type ModelInfo = {provider: string; label: string; contextWindow: number};
-
-export const MODELS: Record<string, ModelInfo> = {
-  'kimi-k3': {provider: 'kimi', label: 'Kimi K3', contextWindow: 262_144},
-  'kimi-k2.7-code': {
-    provider: 'kimi',
-    label: 'Kimi K2.7 Code',
-    contextWindow: 262_144,
-  },
-  'deepseek-v4-pro': {
-    provider: 'deepseek',
-    label: 'DeepSeek v4 Pro',
-    contextWindow: 262_144,
-  },
-  'deepseek-v4-flash': {
-    provider: 'deepseek',
-    label: 'DeepSeek v4 Flash',
-    contextWindow: 262_144,
-  },
-  'glm-5.2': {provider: 'glm', label: 'GLM 5.2', contextWindow: 262_144},
-  'glm-4.7-flash': {
-    provider: 'glm',
-    label: 'GLM 4.7 Flash',
-    contextWindow: 200_000,
-  },
-};
-
-const JUDGE_MODELS: Record<string, string> = {
-  deepseek: 'deepseek-v4-flash',
-  kimi: 'kimi-k2.7-code',
-  glm: 'glm-4.7-flash',
-};
+export {DEFAULT_MODEL, MODELS} from './models.js';
 
 export function judgeModelFor(model: string): string {
   const info = MODELS[model];
@@ -69,18 +29,11 @@ export type ModelChoice = {
   contextWindow: number;
 };
 
-export const DEFAULT_MODEL = 'deepseek-v4-flash';
-
-function hasKey(id: string, env: NodeJS.ProcessEnv): boolean {
-  const info = MODELS[id];
-  return info ? Boolean(env[PROVIDERS[info.provider]!.keyEnv]) : false;
-}
-
 export function chooseModel(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.ACC_MODEL;
   if (explicit) return explicit;
   if (hasKey(DEFAULT_MODEL, env)) return DEFAULT_MODEL;
-  return Object.keys(MODELS).find((id) => hasKey(id, env)) ?? DEFAULT_MODEL;
+  return MODEL_IDS.find((id) => hasKey(id, env)) ?? DEFAULT_MODEL;
 }
 
 export function createClient(modelId?: string): ModelChoice {
@@ -89,7 +42,7 @@ export function createClient(modelId?: string): ModelChoice {
   const info = MODELS[resolved];
   if (!info) {
     throw new Error(
-      `Unknown model '${resolved}'. Choose one of: ${Object.keys(MODELS).join(', ')}.`,
+      `Unknown model '${resolved}'. Choose one of: ${MODEL_IDS.join(', ')}.`,
     );
   }
   const provider = PROVIDERS[info.provider]!;
