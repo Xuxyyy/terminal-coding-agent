@@ -2,6 +2,11 @@
 
 `acc` — a small coding agent CLI. The workspace is the current directory.
 
+## Workflow
+
+Solo project — no pull requests. Work lands as commits; `/code-review` runs
+against the local diff or a branch, never a PR number.
+
 ## Build and test
 
 `npm test` is the whole check: it runs `tsc` first, so a type error fails the
