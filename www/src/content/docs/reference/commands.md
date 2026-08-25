@@ -9,8 +9,18 @@ Type `/` in the input box to open the menu. It filters as you type, ↑↓ moves
 through the matches, and enter runs the highlighted one — so `/co` then enter
 runs `/context`.
 
-All six commands only work while `acc` is idle — typing one while the agent is
+All seven commands only work while `acc` is idle — typing one while the agent is
 still working does nothing.
+
+| Command | What it does |
+|---|---|
+| [`/context`](#context) | Shows how full the context window is, broken into system prompt, tools, messages, and free space. |
+| [`/compact`](#compact) | Replaces the conversation with a summary the model writes, and reports what it freed. |
+| [`/clear`](#clear) | Throws the conversation away and closes the session file, so the next message starts a new one. |
+| [`/resume`](#resume) | Picks a past conversation from this folder and reopens it in place. |
+| [`/rewind`](#rewind) | Goes back to before one of your earlier messages, restoring the files the agent wrote. |
+| [`/permission`](#permission) | Switches between the three permission modes and saves the choice for next time. |
+| [`/model`](#model) | Switches which model answers, keeping the conversation as it is. |
 
 ## `/context`
 

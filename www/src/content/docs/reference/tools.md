@@ -8,6 +8,14 @@ sidebar:
 The model has five tools and nothing else. There is no network access, no
 browser, and no way to reach a file outside the workspace.
 
+| Tool | What it does |
+|---|---|
+| [`read_file`](#read_file) | Reads a text file back with line numbers, a slice at a time. |
+| [`grep`](#grep) | Searches file contents with ripgrep, returning the matching paths. |
+| [`edit_file`](#edit_file) | Replaces one exact, unique piece of text in a file. |
+| [`write_file`](#write_file) | Creates a file, or replaces everything in one. |
+| [`bash`](#bash) | Runs a shell command in the workspace root — tests, git, deletes. |
+
 **Every path is resolved against the workspace root before the tool runs.** A
 path that lands outside it does not silently fail — it stops and asks you, every
 single time, and that prompt can never be remembered. See
