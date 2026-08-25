@@ -10,11 +10,21 @@ export type Rule = {tag: Tag; pattern: string};
 
 export type Rules = {allow: Rule[]; ask: Rule[]; deny: Rule[]};
 
+export type StdioServer = {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+};
+
 const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
 const RULE_PATTERN = /^(bash|edit)\((.*)\)$/;
 const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
 const MODEL_KEY = 'model';
+const SERVERS_KEY = 'mcpServers';
+const SERVER_KEYS = ['command', 'args', 'env'];
+const SERVER_NAME = /^[a-z0-9_-]+$/i;
+const VARIABLE = /\$\{([^}]*)\}/g;
 
 export class SettingsError extends Error {}
 
@@ -89,6 +99,108 @@ export function parseModel(
   return value;
 }
 
+function expand(
+  value: string,
+  where: string,
+  file: string,
+  environment: NodeJS.ProcessEnv,
+): string {
+  return value.replace(VARIABLE, (_whole, name: string) => {
+    const found = environment[name];
+    if (found === undefined) {
+      throw new SettingsError(
+        `${file}: ${where} uses \${${name}} but ${name} is not set in the environment`,
+      );
+    }
+    return found;
+  });
+}
+
+function parseServer(
+  spec: unknown,
+  name: string,
+  file: string,
+  environment: NodeJS.ProcessEnv,
+): StdioServer {
+  const where = `"${SERVERS_KEY}.${name}"`;
+  if (!isObject(spec)) {
+    throw new SettingsError(`${file}: ${where} must be an object`);
+  }
+  for (const key of Object.keys(spec)) {
+    if (!SERVER_KEYS.includes(key)) {
+      throw new SettingsError(
+        `${file}: ${where} has no key "${key}"; use ${SERVER_KEYS.join(', ')}`,
+      );
+    }
+  }
+  if (typeof spec.command !== 'string' || spec.command.trim() === '') {
+    throw new SettingsError(
+      `${file}: ${where}.command must be a non-empty string`,
+    );
+  }
+  const args: string[] = [];
+  if (spec.args !== undefined) {
+    if (!Array.isArray(spec.args)) {
+      throw new SettingsError(`${file}: ${where}.args must be an array`);
+    }
+    for (const value of spec.args) {
+      if (typeof value !== 'string') {
+        throw new SettingsError(
+          `${file}: every entry in ${where}.args must be a string, found ` +
+            `${JSON.stringify(value)}`,
+        );
+      }
+      args.push(expand(value, `${where}.args`, file, environment));
+    }
+  }
+  const env: Record<string, string> = {};
+  if (spec.env !== undefined) {
+    if (!isObject(spec.env)) {
+      throw new SettingsError(`${file}: ${where}.env must be an object`);
+    }
+    for (const [key, value] of Object.entries(spec.env)) {
+      if (typeof value !== 'string') {
+        throw new SettingsError(
+          `${file}: ${where}.env.${key} must be a string, found ` +
+            `${JSON.stringify(value)}`,
+        );
+      }
+      env[key] = expand(value, `${where}.env.${key}`, file, environment);
+    }
+  }
+  return {command: spec.command, args, env};
+}
+
+export function parseServers(
+  text: string,
+  file: string,
+  user: boolean,
+  environment: NodeJS.ProcessEnv = process.env,
+): Record<string, StdioServer> {
+  const value = parseObject(text, file)[SERVERS_KEY];
+  if (value === undefined) return {};
+  if (!user) {
+    throw new SettingsError(
+      `${file}: "${SERVERS_KEY}" is only read from ${userSettingsFile()}; ` +
+        'remove it from this file',
+    );
+  }
+  if (!isObject(value)) {
+    throw new SettingsError(`${file}: "${SERVERS_KEY}" must be an object`);
+  }
+  const servers: Record<string, StdioServer> = {};
+  for (const [name, spec] of Object.entries(value)) {
+    if (!SERVER_NAME.test(name)) {
+      throw new SettingsError(
+        `${file}: the server name ${JSON.stringify(name)} in "${SERVERS_KEY}" must ` +
+          'use letters, digits, dashes and underscores only',
+      );
+    }
+    servers[name] = parseServer(spec, name, file, environment);
+  }
+  return servers;
+}
+
 export function parseSettings(text: string, file: string): Rules {
   const root = parseObject(text, file);
   const rules = emptyRules();
@@ -136,6 +248,7 @@ export function parseSettings(text: string, file: string): Rules {
 let cached: Rules = emptyRules();
 let cachedMode: Mode = DEFAULT_MODE;
 let cachedModel: string | null = null;
+let cachedServers: Record<string, StdioServer> = {};
 
 export function loadSettings(
   files: string[] = settingsFiles(process.cwd()),
@@ -143,6 +256,7 @@ export function loadSettings(
   const merged = emptyRules();
   let mode: Mode = DEFAULT_MODE;
   let model: string | null = null;
+  let servers: Record<string, StdioServer> = {};
   for (const file of files) {
     if (!fs.existsSync(file)) continue;
     let text: string;
@@ -155,10 +269,12 @@ export function loadSettings(
     for (const list of LISTS) merged[list].push(...rules[list]);
     mode = parseMode(text, file, isUserSettings(file)) ?? mode;
     model = parseModel(text, file, isUserSettings(file)) ?? model;
+    servers = {...servers, ...parseServers(text, file, isUserSettings(file))};
   }
   cached = merged;
   cachedMode = mode;
   cachedModel = model;
+  cachedServers = servers;
   return merged;
 }
 
@@ -172,6 +288,10 @@ export function modeOf(): Mode {
 
 export function modelOf(): string | null {
   return cachedModel;
+}
+
+export function serversOf(): Record<string, StdioServer> {
+  return cachedServers;
 }
 
 function remember(key: string, value: string): void {
