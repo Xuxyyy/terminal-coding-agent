@@ -38,6 +38,7 @@
     "test": "tsc && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "ink": "^5.1.0",
     "ink-text-input": "^6.0.0",
     "marked": "^14.0.0",
