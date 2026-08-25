@@ -11,8 +11,8 @@ sidebar:
 2. `<workspace>/.acc/settings.json` — the project's
 
 Both are optional and both are hand-written. Neither is reloaded while `acc`
-runs, so a change needs a restart. [Permissions](/guide/permissions) is the
-guide to what these rules do; this page is the syntax.
+runs, so a change needs a restart. [The permission gate](/design/permissions) is the
+reasoning behind these rules; this page is the syntax.
 
 Setting `ACC_HOME` moves the first one.
 
@@ -162,7 +162,7 @@ An `allow` rule *can* reach a protected path — `allow: ["edit(**)"]` reaches
 ```
 
 One of `ask-edits`, `auto-edits`, or `auto` — see
-[Permissions](/guide/permissions). Absent everywhere means `auto-edits`.
+[Commands](/reference/commands). Absent everywhere means `auto-edits`.
 
 **It is read from `~/.acc/settings.json` only.** The same key in a project's
 `.acc/settings.json` is a startup error naming that file — a repository you

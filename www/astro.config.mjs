@@ -14,7 +14,6 @@ export default defineConfig({
       sidebar: [
         { label: "Start", autogenerate: { directory: "start" } },
         { label: "Design", autogenerate: { directory: "design" } },
-        { label: "Guide", autogenerate: { directory: "guide" } },
         { label: "Reference", autogenerate: { directory: "reference" } },
       ],
     }),

@@ -29,8 +29,53 @@ messages              ~37,088
 free                  220,936
 ```
 
-The total is what your provider measured on the last turn; the parts are
-estimates and are marked `~`. [Context](/guide/context) explains each part.
+- **system prompt** — the instructions `acc` sends every turn, including a
+  description of your project.
+- **system tools** — the definitions of the five tools.
+- **messages** — everything you and the model have said, plus every file read
+  and every command's output.
+- **free** — what is left.
+
+The total on the first line is the number your provider actually charged on the
+last turn. The four parts underneath are **estimated** from character count,
+which is why they carry a `~`. They always add up to the total exactly. Before
+the first model reply there is nothing measured yet, so the total is an estimate
+too and gets its own `~`.
+
+### As the window fills
+
+`acc` manages the window on its own, in three steps, and only the last two are
+visible.
+
+**First it clears quietly.** Past 80% it drops the *contents* of old tool
+results it can get back — a file it read becomes
+`[file contents cleared; read the file again if needed]`, a search becomes
+`[search results cleared; run the same grep again if needed]`, and a shell
+command keeps its `[exit 0]` line but loses its output. The most recent round of
+tool calls is never touched, so work in progress is safe.
+
+**Then it says so.** When clearing cannot free anything more, it prints one line
+and keeps going:
+
+```
+compaction threshold reached
+```
+
+**Then it compacts by itself.** At the start of your next message, if the
+conversation is still over the line, `acc` replaces it with a summary before
+sending. The spinner reads `Compacting…`, and your message is held aside and
+sent straight after, so nothing is lost.
+
+If none of that is enough — the next request plus room for a 32,000-token reply
+would not fit — the turn stops rather than sending something the provider will
+refuse:
+
+```
+stopped: the context is full and nothing more can be freed; send your next message and it will compact first
+```
+
+The 80% line is the default and `ACC_COMPACT_AT` moves it — see
+[Settings and models](/reference/settings).
 
 ## `/compact`
 
@@ -44,7 +89,12 @@ compacted 34 messages, ~28,400 tokens freed
 ```
 
 If the summary fails, nothing changes and you get
-`nothing compacted: the summary failed`. See [Context](/guide/context).
+`nothing compacted: the summary failed`.
+
+The summary keeps what the conversation decided and drops the transcript that
+got there. Use it when you are about to start a big new task in a session that
+has been running a while. `/rewind` still reaches past a summary — messages a
+summary replaced stay in its picker.
 
 ## `/clear`
 
@@ -72,7 +122,20 @@ Reopen a conversation
 ```
 
 If there is nothing to show, it says `No past conversations in this folder yet.`
-See [Sessions](/guide/sessions).
+
+Sessions live in `~/.acc/projects/<folder-name>-<hash>/sessions/<id>/`. The
+project folder is named after the directory you ran `acc` in plus a short hash
+of its full path, so two projects with the same name never collide. Files are
+created readable only by you, and `ACC_HOME` moves all of it somewhere else.
+
+**Two things are not saved.** Approvals last for the run and no longer, so a
+resumed session starts asking again — to make one permanent, write it as a rule
+in [Settings and models](/reference/settings). And the permission mode is not
+restored either: `/resume` reopens a conversation, not a configuration.
+
+Old sessions are evicted when `acc` starts. One is deleted only when it is
+**both** outside the 50 most recent and older than 30 days, counted across all
+your projects together.
 
 ## `/rewind`
 
@@ -95,8 +158,11 @@ Afterwards a notice counts what happened, like
 
 Rows marked `— before the summary` are messages a `/compact` replaced; picking
 one brings that conversation back. If there is nothing to rewind to, it says
-`Nothing to rewind yet.` [Sessions](/guide/sessions) covers what it can and
-cannot put back.
+`Nothing to rewind yet.`
+
+Files changed by a shell command, or by you in your editor, are not restored —
+only writes that went through `edit_file` or `write_file`.
+[What I left out, and why](/design/tradeoffs) explains that boundary.
 
 ## `/permission`
 
@@ -115,7 +181,24 @@ Choose what runs without asking
 Choosing one prints `switched to auto` and saves it to
 `~/.acc/settings.json` for next time. If it could not be saved, the notice says
 so: `switched to auto (not saved to settings.json)`.
-[Permissions](/guide/permissions) explains what each mode allows.
+The choice takes effect from your next message and the conversation is not
+disturbed.
+
+| Mode | Runs without asking | Above that line |
+|---|---|---|
+| `ask-edits` | reads only | asks you |
+| `auto-edits` | reads and writes inside the project | asks you |
+| `auto` | reads and writes inside the project | asks a model |
+
+`auto-edits` is where a session starts. **No mode refuses anything by itself** —
+above its line a mode asks or delegates, and that is all a mode can do. To make
+`acc` unable to do something, write a `deny` rule instead, which names paths.
+[The permission gate](/design/permissions) is the reasoning behind the line.
+
+**The header keeps showing the mode you left.** After switching, the
+`permissions:` line at the top of the screen still reads the old name. This is a
+display bug, not a failed switch — the notice under the picker is what tells you
+it worked, and reopening `/permission` shows the new mode marked `(current)`.
 
 ## `/model`
 
