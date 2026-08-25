@@ -68,10 +68,3 @@ npm unlink -g coding-cli
 
 That removes the global link. Delete the clone afterwards if you want it gone,
 and remove `~/.acc/` to drop your saved sessions and settings with it.
-
-## Why not `npm install -g`
-
-The package is marked private and is not published, so there is nothing on the
-registry to install. Cloning is the only supported route today. If publishing
-happens later, it will be one extra section on this page and nothing else on
-this site will change.
