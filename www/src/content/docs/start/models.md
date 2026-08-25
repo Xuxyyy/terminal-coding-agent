@@ -72,7 +72,7 @@ names a model that does not exist, it stops with `Unknown model` and lists the
 six valid ids.
 
 The model in use is printed in the header when `acc` starts — see
-[Your first run](/start/first-run).
+[Install and first run](/start/install).
 
 ## Environment variables
 
