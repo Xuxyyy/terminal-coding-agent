@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {render} from 'ink';
 import {createClient} from './core/client.js';
+import {connectServers, disconnectServers, serverStatus} from './core/mcp/connect.js';
 import {evictSessions} from './core/projects.js';
 import {loadSettings, settingsFiles} from './core/settings.js';
 import {App} from './ui/app.js';
@@ -12,6 +13,12 @@ try {
   loadSettings(settingsFiles(options.workspaceRoot));
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('interactive mode requires a terminal');
+  }
+  await connectServers();
+  for (const server of serverStatus()) {
+    if (server.state === 'failed') {
+      process.stderr.write(`warning: MCP server ${server.label} ${server.error}\n`);
+    }
   }
   try {
     evictSessions();
@@ -35,6 +42,7 @@ try {
     />,
   );
   await instance.waitUntilExit();
+  await disconnectServers();
   if (summary) {
     process.stdout.write(`\n${dimText(summary)}\n`);
   }
