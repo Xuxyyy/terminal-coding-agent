@@ -94,9 +94,16 @@ design. Nothing configures it.
 
 `README.md` points at the site, it does not copy it. The model table, the tool
 list, and the settings syntax live on the site only, because two copies of a
-fact drift apart and the site is the one that gets updated. The README's own
-Architecture section is the exception: nothing on the site covers it, and it is
-the short version a reader gets before opening `docs/`.
+fact drift apart and the site is the one that gets updated.
+
+Architecture is the deliberate exception, and it now exists at three lengths.
+The README's *How it works* is the thirty-second version, for someone who landed
+on GitHub and will not click anything. The site's **Design** section is the
+version with the reasoning, for a reader who will give it ten minutes. `docs/`
+is the full argument, for whoever changes the code. That duplication is on
+purpose — a reader who stops at the first one should still have something true.
+Change architecture writing in all three, or say in the commit which length you
+chose not to touch.
 
 ## Sessions
 
