@@ -37,6 +37,10 @@ promise, and the Ink app resolves it when a key is pressed.
 What that buys shows up twice below — the loop runs with no terminal at all, and
 so does every test of it.
 
+The two pages that follow are about the core side of that line: [the permission
+gate](/design/permissions) that every tool passes through, and [the five
+tools](/design/tools) themselves.
+
 ## The loop
 
 ### One word, one meaning

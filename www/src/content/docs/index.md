@@ -8,25 +8,21 @@ project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
 
-## Quick start
+It is one npm package, 641 tests, and no dependency on a hosted service:
+three providers work through one client, and one API key is enough.
 
-```bash
-git clone https://github.com/Xuxyyy/coding-cli.git
-cd coding-cli && npm install && npm link
-```
+## Three decisions worth defending
 
-Then go to the project you want to work on and start:
-
-```bash
-cd ~/code/my-project
-acc
-```
-
-The folder you are in **is** the workspace. `acc` reads and writes there and
-nowhere else, so start it in the project you mean.
-
-You will need Node 22 or newer, [ripgrep](https://github.com/BurntSushi/ripgrep)
-on your `PATH`, and one API key.
+- **The permission rule is what git can undo, not which tool asked.** A write
+  inside the repo runs silently whether it came from `edit_file` or an `echo >`
+  in a shell command; a delete, a push, or anything outside the project stops
+  and asks. → [The permission gate](/design/permissions)
+- **Five tools, and editing matches an exact string.** Line numbers drift the
+  moment the model makes its first edit; an exact match either applies or fails
+  loudly, and loud is recoverable. → [Designing the tools](/design/tools)
+- **Resume reopens a session in place.** The history is seeded back into the
+  live conversation rather than copied into a new folder, so a resumed run and
+  its original stay one session on disk. → [How it's built](/design/how-its-built)
 
 ## What it can do
 
@@ -43,8 +39,13 @@ on your `PATH`, and one API key.
 - **A context readout.** `/context` shows what is filling the window, and
   `/compact` replaces the conversation with a summary when it gets long.
 
-## Where to go next
+## Where to start reading
 
-- **[Install](/start/install)** — clone, build, link, and check it worked.
-- **[Models and keys](/start/models)** — pick a provider and set one key.
-- **[Your first run](/start/first-run)** — what the screen shows and how to read it.
+- **[How it's built](/design/how-its-built)** — the seam between the agent and
+  the terminal, the turn loop, what a run leaves on disk, and how all of it is
+  tested without a terminal or an API key. Start here.
+- **[What I left out, and why](/design/tradeoffs)** — three features that are
+  cheap to add and expensive to add wrong, and what each is waiting for.
+
+Want to run it instead? [Install and first run](/start/install) has the four
+commands and what the first screen shows.
