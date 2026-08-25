@@ -63,6 +63,7 @@ export function App({
     cancelRewind,
     applyRewind,
     context,
+    mcp,
     compact,
     permission,
     setPermission,
@@ -118,6 +119,11 @@ export function App({
     }
     if (command === '/context') {
       context();
+      setInput('');
+      return;
+    }
+    if (command === '/mcp') {
+      mcp();
       setInput('');
       return;
     }

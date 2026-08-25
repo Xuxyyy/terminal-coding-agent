@@ -3,6 +3,7 @@ import {createClient, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
+import {serverStatus} from '../core/mcp/connect.js';
 import type {Mode} from '../core/permission/mode.js';
 import {systemPrompt} from '../core/prompt.js';
 import {rewindPlan, rewindSession} from '../core/rewind.js';
@@ -26,6 +27,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
+import {mcpReadout} from './mcp.js';
 import {modelNotice} from './model.js';
 import {permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
@@ -51,6 +53,7 @@ export type Agent = {
   cancelRewind: () => void;
   applyRewind: (id: string) => void;
   context: () => void;
+  mcp: () => void;
   compact: () => void;
   permission: () => void;
   setPermission: (mode: Mode) => void;
@@ -328,6 +331,11 @@ export function useAgent(
     commit([{kind: 'context', ...status}]);
   };
 
+  const mcp = () => {
+    if (phase.kind !== 'idle') return;
+    commit([{kind: 'notice', text: mcpReadout(serverStatus())}]);
+  };
+
   const compact = () => {
     if (phase.kind !== 'idle') return;
     const controller = new AbortController();
@@ -450,6 +458,7 @@ export function useAgent(
     cancelRewind,
     applyRewind,
     context,
+    mcp,
     compact,
     permission,
     setPermission,

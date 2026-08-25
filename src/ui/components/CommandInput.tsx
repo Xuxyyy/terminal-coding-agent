@@ -11,6 +11,7 @@ const COMMANDS = [
   {value: '/rewind', description: 'go back to before an earlier message'},
   {value: '/permission', description: 'change what runs without asking'},
   {value: '/model', description: 'switch the model'},
+  {value: '/mcp', description: 'show the MCP servers'},
 ];
 
 export function commandMatches(input: string) {

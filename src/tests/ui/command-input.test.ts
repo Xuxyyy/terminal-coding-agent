@@ -13,6 +13,7 @@ test('the menu offers only the commands this version has', () => {
       '/rewind',
       '/permission',
       '/model',
+      '/mcp',
     ],
   );
 });
@@ -28,6 +29,23 @@ test('/model completes from the first few letters', () => {
     ['/model'],
   );
   assert.equal(completeCommand('/mod'), '/model');
+});
+
+test('/mcp completes from the first few letters', () => {
+  assert.deepEqual(
+    commandMatches('/mc').map((command) => command.value),
+    ['/mcp'],
+  );
+  assert.equal(completeCommand('/mc'), '/mcp');
+});
+
+test('/m offers the model switch first and the MCP readout second', () => {
+  assert.deepEqual(
+    commandMatches('/m').map((command) => command.value),
+    ['/model', '/mcp'],
+  );
+  assert.equal(completeCommand('/m', 0), '/model');
+  assert.equal(completeCommand('/m', 1), '/mcp');
 });
 
 test('/permission completes from the first few letters', () => {
