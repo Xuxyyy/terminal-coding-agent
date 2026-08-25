@@ -7,7 +7,7 @@ export default defineConfig({
   devToolbar: { enabled: false },
   integrations: [
     starlight({
-      title: "acc",
+      title: "Coding CLI Docs",
       description: "A small terminal coding agent that reads, edits, and runs code in the current directory.",
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/Xuxyyy/coding-cli" }],
       plugins: [starlightLinksValidator()],
