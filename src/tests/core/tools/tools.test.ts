@@ -665,3 +665,62 @@ test('every mode is offered every tool', () => {
   assert.deepEqual(toolsFor('auto-edits').map((tool) => tool.name), full);
   assert.deepEqual(toolsFor('ask-edits').map((tool) => tool.name), full);
 });
+
+const RAW_SCHEMA = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  type: 'object',
+  properties: {query: {type: 'string', description: 'what to look for'}},
+  required: ['query'],
+  additionalProperties: false,
+};
+
+function rawTool(parameters: Record<string, unknown>): Tool {
+  return {
+    name: 'mcp__notion__search',
+    description: 'search a workspace',
+    schema: z.record(z.unknown()),
+    parameters,
+    run: async (args) => ({text: JSON.stringify(args)}),
+  };
+}
+
+test('a tool that supplies raw json schema emits it verbatim', () => {
+  const definition = toolDefinitions([rawTool(RAW_SCHEMA)])[0];
+
+  assert.deepEqual(definition.function.parameters, RAW_SCHEMA);
+  assert.equal(
+    (definition.function.parameters as {$schema?: string}).$schema,
+    RAW_SCHEMA.$schema,
+  );
+});
+
+test('a tool without raw json schema is converted from zod as before', () => {
+  const [read] = toolDefinitions([readFile]);
+  const parameters = read.function.parameters as Record<string, unknown>;
+
+  assert.equal(parameters.type, 'object');
+  assert.deepEqual(parameters.required, ['path']);
+  assert.equal('$schema' in parameters, false);
+});
+
+test('raw json schema is not validated against, but zod arguments still are', async () => {
+  const root = workspace();
+  const {host} = hostThatAnswers('once');
+  const anything = rawTool(RAW_SCHEMA);
+
+  const passed = await runTool(
+    [anything],
+    anything.name,
+    JSON.stringify({whatever: 1, nested: {deep: true}}),
+    context(root, host),
+  );
+  assert.deepEqual(JSON.parse(passed.text), {whatever: 1, nested: {deep: true}});
+
+  const rejected = await runTool(
+    [readFile],
+    'read_file',
+    JSON.stringify({path: 7}),
+    context(root, host),
+  );
+  assert.match(rejected.text, /invalid arguments/);
+});

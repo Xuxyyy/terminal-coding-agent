@@ -27,6 +27,7 @@ export type Tool = {
   name: string;
   description: string;
   schema: z.ZodTypeAny;
+  parameters?: Record<string, unknown>;
   request?: (args: unknown) => Request;
   run: (args: unknown, ctx: ToolContext) => Promise<ToolOutput>;
 };
@@ -40,13 +41,18 @@ export type ToolDefinition = {
   };
 };
 
+function jsonSchemaOf(schema: z.ZodTypeAny): Record<string, unknown> {
+  const converted = zodToJsonSchema(schema, {
+    $refStrategy: 'none',
+    target: 'openApi3',
+  }) as Record<string, unknown>;
+  delete converted.$schema;
+  return converted;
+}
+
 export function toolDefinitions(tools: Tool[]): ToolDefinition[] {
   return tools.map((tool) => {
-    const schema = zodToJsonSchema(tool.schema, {
-      $refStrategy: 'none',
-      target: 'openApi3',
-    }) as Record<string, unknown>;
-    delete schema.$schema;
+    const schema = tool.parameters ?? jsonSchemaOf(tool.schema);
     return {
       type: 'function',
       function: {
