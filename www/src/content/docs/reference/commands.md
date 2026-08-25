@@ -145,7 +145,7 @@ for next time. If it could not be saved, the notice says so:
 
 The conversation carries over untouched — only the client changes. Earlier rows
 keep naming the model that answered them, and the new one picks up the context
-budget of its own window. [Models](/start/models) lists the six.
+budget of its own window. [Settings and models](/reference/settings) lists the six.
 
 ## Keys and leaving
 

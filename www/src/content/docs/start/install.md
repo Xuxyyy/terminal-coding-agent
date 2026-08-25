@@ -19,7 +19,7 @@ npm registry yet, so there is no `npm install -g acc`.
   Install ripgrep with `brew install ripgrep`, `apt install ripgrep`, or from
   [the ripgrep releases](https://github.com/BurntSushi/ripgrep/releases).
 - **An API key** for DeepSeek, GLM, or Kimi. One is enough — see
-  [Models and keys](/start/models).
+  [Settings and models](/reference/settings).
 
 ## Install
 
