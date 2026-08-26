@@ -7,7 +7,7 @@ for *why* each part looks the way it does.
 
 ## Shape
 
-One TypeScript package, 6,582 lines outside the tests. `src/core` runs the
+One TypeScript package, 6,699 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
 seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 723 tests, all
 passing.
