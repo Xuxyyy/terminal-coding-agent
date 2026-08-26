@@ -7,7 +7,7 @@ import {serversOf, type StdioServer} from '../settings.js';
 import type {Tool} from '../tools/registry.js';
 import {adaptTool, type CallResult, type RemoteTool} from './adapt.js';
 
-export const CONNECT_TIMEOUT = 5_000;
+export const CONNECT_TIMEOUT = 15_000;
 
 export type ServerStatus = {
   label: string;
@@ -32,14 +32,15 @@ function reason(error: unknown): string {
 async function withTimeout<T>(
   work: Promise<T>,
   label: string,
+  timeout: number,
   onTimeout: () => void,
 ): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const expiry = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       onTimeout();
-      reject(new Error(`${label} did not answer within ${CONNECT_TIMEOUT}ms`));
-    }, CONNECT_TIMEOUT);
+      reject(new Error(`${label} did not answer within ${timeout}ms`));
+    }, timeout);
   });
   try {
     return await Promise.race([work, expiry]);
@@ -51,6 +52,7 @@ async function withTimeout<T>(
 async function connectOne(
   label: string,
   server: StdioServer,
+  timeout: number,
 ): Promise<Connection> {
   const transport = new StdioClientTransport({
     command: server.command,
@@ -67,6 +69,7 @@ async function connectOne(
     const listed = await withTimeout(
       client.connect(transport).then(() => client.listTools()),
       label,
+      timeout,
       () => void close(),
     );
     const call = async (name: string, args: unknown): Promise<CallResult> =>
@@ -94,10 +97,13 @@ async function connectOne(
 
 export async function connectServers(
   servers: Record<string, StdioServer> = serversOf(),
+  timeout: number = CONNECT_TIMEOUT,
 ): Promise<void> {
   await disconnectServers();
   connections = await Promise.all(
-    Object.entries(servers).map(([label, server]) => connectOne(label, server)),
+    Object.entries(servers).map(([label, server]) =>
+      connectOne(label, server, timeout),
+    ),
   );
 }
 

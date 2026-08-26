@@ -59,9 +59,10 @@ function echoServer(env: Record<string, string> = {}): StdioServer {
 async function connect(
   t: TestContext,
   servers: Record<string, StdioServer>,
+  timeout?: number,
 ): Promise<void> {
   t.after(() => disconnectServers());
-  await connectServers(servers);
+  await connectServers(servers, timeout);
 }
 
 test('the echo server fixture sits where the compiled test looks for it', () => {
@@ -125,14 +126,22 @@ test('one server failing leaves the working server its tools', async (t) => {
   );
 });
 
+test('the default connect timeout leaves room for a cold npx download', () => {
+  assert.equal(CONNECT_TIMEOUT, 15_000);
+});
+
 test(
   'a server slower than the connect timeout fails and does not hold up the others',
   {timeout: 60_000},
   async (t) => {
-    await connect(t, {
-      slow: echoServer({ECHO_SLEEP_MS: String(CONNECT_TIMEOUT * 3)}),
-      echo: echoServer(),
-    });
+    await connect(
+      t,
+      {
+        slow: echoServer({ECHO_SLEEP_MS: '5000'}),
+        echo: echoServer(),
+      },
+      400,
+    );
 
     assert.deepEqual(
       serverStatus().map((status) => [status.label, status.state, status.tools]),
@@ -141,7 +150,7 @@ test(
         ['echo', 'ready', 1],
       ],
     );
-    assert.match(serverStatus()[0].error ?? '', /slow did not answer within/);
+    assert.match(serverStatus()[0].error ?? '', /slow did not answer within 400ms/);
     assert.deepEqual(
       connectedTools().map((tool) => tool.name),
       ['mcp__echo__echo'],
