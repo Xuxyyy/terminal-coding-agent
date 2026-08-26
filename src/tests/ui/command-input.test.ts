@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {commandMatches, completeCommand} from '../../ui/components/CommandInput.js';
+import {
+  commandMatches,
+  completeCommand,
+  splitCommand,
+} from '../../ui/components/CommandInput.js';
 
 test('the menu offers only the commands this version has', () => {
   assert.deepEqual(
@@ -69,4 +73,20 @@ test('completeCommand picks the highlighted match, not always the first', () => 
 test('completeCommand leaves the input alone when the index misses', () => {
   assert.equal(completeCommand('/c', 9), '/c');
   assert.equal(completeCommand('hello', 0), 'hello');
+});
+
+test('a command with no argument splits to itself and an empty argument', () => {
+  assert.deepEqual(splitCommand('/mcp'), {name: '/mcp', argument: ''});
+  assert.deepEqual(splitCommand('  /mcp  '), {name: '/mcp', argument: ''});
+});
+
+test('a command with an argument splits at the first run of spaces', () => {
+  assert.deepEqual(splitCommand('/mcp github'), {name: '/mcp', argument: 'github'});
+  assert.deepEqual(splitCommand('/mcp   github'), {name: '/mcp', argument: 'github'});
+  assert.deepEqual(splitCommand('/mcp github  '), {name: '/mcp', argument: 'github'});
+});
+
+test('only the first word is the command name, so /clear now is not /clear', () => {
+  assert.equal(splitCommand('/clear now').name, '/clear');
+  assert.notEqual('/clear now', '/clear');
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {ServerStatus} from '../../core/mcp/connect.js';
 import {userSettingsFile} from '../../core/settings.js';
-import {mcpReadout} from '../../ui/mcp.js';
+import {mcpReadout, mcpServerReadout} from '../../ui/mcp.js';
 
 function names(count: number): string[] {
   return Array.from({length: count}, (_value, index) => `tool_${index + 1}`);
@@ -138,4 +138,59 @@ test('a disabled server sits between the others without disturbing their lines',
       'db — failed: connection refused',
     ],
   );
+});
+
+function named(label: string, tools: string[], listed = tools.length): ServerStatus {
+  return {label, state: 'ready', tools, listed, unmatched: [], error: null};
+}
+
+test('a known label lists the tool names that server published', () => {
+  assert.deepEqual(
+    mcpServerReadout(
+      [named('github', ['list_issues', 'list_prs', 'get_file'], 45)],
+      'github',
+    ).split('\n'),
+    ['github — ready, 3 of 45 tools', '  list_issues  list_prs', '  get_file'],
+  );
+});
+
+test('the names are padded so the second column lines up', () => {
+  assert.deepEqual(
+    mcpServerReadout([named('docs', ['a', 'search_code', 'bb', 'c'])], 'docs').split(
+      '\n',
+    ),
+    ['docs — ready, 4 tools', '  a            search_code', '  bb           c'],
+  );
+});
+
+test('an unknown label says so and names the servers that do exist', () => {
+  assert.equal(
+    mcpServerReadout([named('full', ['a']), disabled('off')], 'nope'),
+    'no MCP server called "nope" — configured servers: full, off',
+  );
+});
+
+test('a disabled label prints its line and no tool names', () => {
+  assert.equal(
+    mcpServerReadout([disabled('off'), named('full', ['a'])], 'off'),
+    'off — disabled',
+  );
+});
+
+test('a failed label prints its line and no tool names', () => {
+  assert.equal(
+    mcpServerReadout([failed('db', 'connection refused')], 'db'),
+    'db — failed: connection refused',
+  );
+});
+
+test('a server that published nothing prints its line alone', () => {
+  assert.equal(
+    mcpServerReadout([named('github', [], 45)], 'github'),
+    'github — ready, 0 of 45 tools',
+  );
+});
+
+test('asking for a server when none are configured points at the settings file', () => {
+  assert.equal(mcpServerReadout([], 'github'), mcpReadout([]));
 });

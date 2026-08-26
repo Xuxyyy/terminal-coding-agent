@@ -6,7 +6,7 @@ import {statusFor} from './events.js';
 import {streamRowBudget, tailLines} from './stream-view.js';
 import {appendCommandHistory, loadCommandHistory} from './command-history.js';
 import {Activity} from './components/Activity.js';
-import {CommandInput, commandMatches} from './components/CommandInput.js';
+import {CommandInput, commandMatches, splitCommand} from './components/CommandInput.js';
 import {Confirm} from './components/Confirm.js';
 import {Markdown} from './components/Markdown.js';
 import {Picker} from './components/Picker.js';
@@ -122,8 +122,9 @@ export function App({
       setInput('');
       return;
     }
-    if (command === '/mcp') {
-      mcp();
+    const mcpCommand = splitCommand(command);
+    if (mcpCommand.name === '/mcp') {
+      mcp(mcpCommand.argument);
       setInput('');
       return;
     }

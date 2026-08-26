@@ -27,7 +27,7 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
-import {mcpReadout} from './mcp.js';
+import {mcpReadout, mcpServerReadout} from './mcp.js';
 import {modelNotice} from './model.js';
 import {permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
@@ -53,7 +53,7 @@ export type Agent = {
   cancelRewind: () => void;
   applyRewind: (id: string) => void;
   context: () => void;
-  mcp: () => void;
+  mcp: (label?: string) => void;
   compact: () => void;
   permission: () => void;
   setPermission: (mode: Mode) => void;
@@ -331,9 +331,12 @@ export function useAgent(
     commit([{kind: 'context', ...status}]);
   };
 
-  const mcp = () => {
+  const mcp = (label = '') => {
     if (phase.kind !== 'idle') return;
-    commit([{kind: 'notice', text: mcpReadout(serverStatus())}]);
+    const statuses = serverStatus();
+    const text =
+      label === '' ? mcpReadout(statuses) : mcpServerReadout(statuses, label);
+    commit([{kind: 'notice', text}]);
   };
 
   const compact = () => {

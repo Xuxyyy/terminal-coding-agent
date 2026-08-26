@@ -23,6 +23,13 @@ export function completeCommand(input: string, index = 0): string {
   return commandMatches(input)[index]?.value ?? input;
 }
 
+export function splitCommand(input: string): {name: string; argument: string} {
+  const trimmed = input.trim();
+  const gap = trimmed.search(/\s/);
+  if (gap === -1) return {name: trimmed, argument: ''};
+  return {name: trimmed.slice(0, gap), argument: trimmed.slice(gap).trim()};
+}
+
 export function CommandInput({
   value,
   onChange,

@@ -43,3 +43,26 @@ export function mcpReadout(statuses: ServerStatus[]): string {
   }
   return statuses.map(serverLine).join('\n');
 }
+
+function toolRows(tools: string[]): string[] {
+  const width = Math.max(...tools.map((tool) => tool.length));
+  const rows: string[] = [];
+  for (let index = 0; index < tools.length; index += 2) {
+    const pair = tools.slice(index, index + 2);
+    rows.push(`  ${pair[0].padEnd(width)}  ${pair[1] ?? ''}`.trimEnd());
+  }
+  return rows;
+}
+
+export function mcpServerReadout(statuses: ServerStatus[], label: string): string {
+  if (statuses.length === 0) return mcpReadout(statuses);
+  const status = statuses.find((candidate) => candidate.label === label);
+  if (!status) {
+    const known = statuses.map((candidate) => candidate.label).join(', ');
+    return `no MCP server called "${label}" — configured servers: ${known}`;
+  }
+  if (status.state !== 'ready' || status.tools.length === 0) {
+    return serverLine(status);
+  }
+  return [serverLine(status), ...toolRows(status.tools)].join('\n');
+}
