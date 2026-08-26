@@ -4,12 +4,23 @@ import type {ServerStatus} from '../../core/mcp/connect.js';
 import {userSettingsFile} from '../../core/settings.js';
 import {mcpReadout} from '../../ui/mcp.js';
 
+function names(count: number): string[] {
+  return Array.from({length: count}, (_value, index) => `tool_${index + 1}`);
+}
+
 function ready(label: string, tools: number): ServerStatus {
-  return {label, state: 'ready', tools, error: null};
+  return {
+    label,
+    state: 'ready',
+    tools: names(tools),
+    listed: tools,
+    unmatched: [],
+    error: null,
+  };
 }
 
 function failed(label: string, error: string): ServerStatus {
-  return {label, state: 'failed', tools: 0, error};
+  return {label, state: 'failed', tools: [], listed: 0, unmatched: [], error};
 }
 
 test('an empty list points at the user settings file', () => {

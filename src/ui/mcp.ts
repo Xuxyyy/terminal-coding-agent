@@ -13,7 +13,10 @@ function serverLine(status: ServerStatus): string {
   if (status.state === 'failed') {
     return `${status.label} — failed: ${oneLine(status.error ?? 'no reason given')}`;
   }
-  return `${status.label} — ready, ${toolCount(status.tools)}`;
+  if (status.state === 'disabled') {
+    return `${status.label} — disabled`;
+  }
+  return `${status.label} — ready, ${toolCount(status.tools.length)}`;
 }
 
 export function mcpReadout(statuses: ServerStatus[]): string {

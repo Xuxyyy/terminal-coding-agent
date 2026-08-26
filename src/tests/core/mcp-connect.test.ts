@@ -10,6 +10,7 @@ import {
   disconnectServers,
   serverStatus,
   CONNECT_TIMEOUT,
+  type ServerStatus,
 } from '../../core/mcp/connect.js';
 import type {StdioServer} from '../../core/settings.js';
 import {toolsFor} from '../../core/tools/index.js';
@@ -18,6 +19,11 @@ import {runTool, type ToolContext} from '../../core/tools/registry.js';
 const FIXTURE = path.join(
   import.meta.dirname,
   '../../../src/tests/fixtures/echo-server.js',
+);
+
+const MANY = path.join(
+  import.meta.dirname,
+  '../../../src/tests/fixtures/many-tools-server.js',
 );
 
 function workspace(): string {
@@ -60,6 +66,16 @@ function echoServer(env: Record<string, string> = {}): StdioServer {
   return server({command: process.execPath, args: [FIXTURE], env});
 }
 
+function manyServer(tools: string[] | null = null): StdioServer {
+  return server({command: process.execPath, args: [MANY], tools});
+}
+
+function statusOf(label: string): ServerStatus {
+  const found = serverStatus().find((status) => status.label === label);
+  assert.ok(found, `no status for ${label}`);
+  return found;
+}
+
 async function connect(
   t: TestContext,
   servers: Record<string, StdioServer>,
@@ -77,7 +93,14 @@ test('a server that starts is ready with the tools it listed', async (t) => {
   await connect(t, {echo: echoServer()});
 
   assert.deepEqual(serverStatus(), [
-    {label: 'echo', state: 'ready', tools: 1, error: null},
+    {
+      label: 'echo',
+      state: 'ready',
+      tools: ['echo'],
+      listed: 1,
+      unmatched: [],
+      error: null,
+    },
   ]);
   assert.deepEqual(
     connectedTools().map((tool) => tool.name),
@@ -106,7 +129,9 @@ test('a command that does not exist fails without rejecting the connect', async 
 
   assert.equal(status.label, 'broken');
   assert.equal(status.state, 'failed');
-  assert.equal(status.tools, 0);
+  assert.deepEqual(status.tools, []);
+  assert.equal(status.listed, 0);
+  assert.deepEqual(status.unmatched, []);
   assert.notEqual(status.error, null);
   assert.deepEqual(connectedTools(), []);
 });
@@ -138,29 +163,29 @@ test(
   'a server slower than the connect timeout fails and does not hold up the others',
   {timeout: 60_000},
   async (t) => {
-    await connect(
-      t,
-      {
-        slow: echoServer({ECHO_SLEEP_MS: '5000'}),
-        echo: echoServer(),
-      },
-      400,
-    );
+      await connect(
+        t,
+        {
+          slow: echoServer({ECHO_SLEEP_MS: '5000'}),
+          echo: echoServer(),
+        },
+        400,
+      );
 
-    assert.deepEqual(
-      serverStatus().map((status) => [status.label, status.state, status.tools]),
-      [
-        ['slow', 'failed', 0],
-        ['echo', 'ready', 1],
-      ],
-    );
-    assert.match(serverStatus()[0].error ?? '', /slow did not answer within 400ms/);
-    assert.deepEqual(
-      connectedTools().map((tool) => tool.name),
-      ['mcp__echo__echo'],
-    );
-  },
-);
+      assert.deepEqual(
+        serverStatus().map((status) => [status.label, status.state, status.listed]),
+        [
+          ['slow', 'failed', 0],
+          ['echo', 'ready', 1],
+        ],
+      );
+      assert.match(serverStatus()[0].error ?? '', /slow did not answer within 400ms/);
+      assert.deepEqual(
+        connectedTools().map((tool) => tool.name),
+        ['mcp__echo__echo'],
+      );
+    },
+  );
 
 test('with no server configured the model is offered the built-ins alone', async (t) => {
   await connect(t, {});
@@ -168,6 +193,88 @@ test('with no server configured the model is offered the built-ins alone', async
   assert.deepEqual(
     toolsFor('auto-edits').map((tool) => tool.name),
     ['read_file', 'grep', 'edit_file', 'write_file', 'bash'],
+  );
+});
+
+test('with no tools key every listed tool is published', async (t) => {
+  await connect(t, {many: manyServer()});
+
+  assert.deepEqual(statusOf('many').tools, [
+    'list_issues',
+    'list_prs',
+    'get_file',
+    'search_code',
+    'create_issue',
+  ]);
+  assert.equal(statusOf('many').listed, 5);
+  assert.equal(connectedTools().length, 5);
+});
+
+test(
+  'an allowlist publishes only what it matches and still counts what was listed',
+  async (t) => {
+    await connect(t, {many: manyServer(['list_*', 'get_file'])});
+
+    assert.deepEqual(statusOf('many').tools, ['list_issues', 'list_prs', 'get_file']);
+    assert.equal(statusOf('many').listed, 5);
+    assert.deepEqual(statusOf('many').unmatched, []);
+    assert.deepEqual(
+      connectedTools().map((tool) => tool.name),
+      ['mcp__many__list_issues', 'mcp__many__list_prs', 'mcp__many__get_file'],
+    );
+  },
+);
+
+test(
+  'a pattern that matches nothing publishes nothing and is reported as unmatched',
+  async (t) => {
+    await connect(t, {many: manyServer(['nope_*'])});
+
+    assert.equal(statusOf('many').state, 'ready');
+    assert.deepEqual(statusOf('many').tools, []);
+    assert.equal(statusOf('many').listed, 5);
+    assert.deepEqual(statusOf('many').unmatched, ['nope_*']);
+    assert.deepEqual(connectedTools(), []);
+  },
+);
+
+test('an empty allowlist publishes nothing from that server', async (t) => {
+  await connect(t, {many: manyServer([])});
+
+  assert.equal(statusOf('many').state, 'ready');
+  assert.deepEqual(statusOf('many').tools, []);
+  assert.equal(statusOf('many').listed, 5);
+  assert.deepEqual(statusOf('many').unmatched, []);
+  assert.deepEqual(connectedTools(), []);
+});
+
+test('a disabled server is never spawned, however broken its command', async (t) => {
+  await connect(t, {
+    off: server({command: 'definitely-not-a-real-binary', enabled: false}),
+  });
+
+  assert.deepEqual(serverStatus(), [
+    {label: 'off', state: 'disabled', tools: [], listed: 0, unmatched: [], error: null},
+  ]);
+  assert.deepEqual(connectedTools(), []);
+});
+
+test('a disabled server beside a ready one leaves the ready one its tools', async (t) => {
+  await connect(t, {
+    off: server({command: 'definitely-not-a-real-binary', enabled: false}),
+    echo: echoServer(),
+  });
+
+  assert.deepEqual(
+    serverStatus().map((status) => [status.label, status.state]),
+    [
+      ['off', 'disabled'],
+      ['echo', 'ready'],
+    ],
+  );
+  assert.deepEqual(
+    connectedTools().map((tool) => tool.name),
+    ['mcp__echo__echo'],
   );
 });
 

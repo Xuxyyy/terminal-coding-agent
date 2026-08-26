@@ -3,6 +3,7 @@ import {
   StdioClientTransport,
   getDefaultEnvironment,
 } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {matchPattern} from '../permission/rules.js';
 import {serversOf, type StdioServer} from '../settings.js';
 import type {Tool} from '../tools/registry.js';
 import {adaptTool, type CallResult, type RemoteTool} from './adapt.js';
@@ -11,8 +12,10 @@ export const CONNECT_TIMEOUT = 15_000;
 
 export type ServerStatus = {
   label: string;
-  state: 'ready' | 'failed';
-  tools: number;
+  state: 'ready' | 'failed' | 'disabled';
+  tools: string[];
+  listed: number;
+  unmatched: string[];
   error: string | null;
 };
 
@@ -77,22 +80,59 @@ async function connectOne(
         name,
         arguments: (args ?? {}) as Record<string, unknown>,
       })) as CallResult;
-    const tools = (listed.tools as RemoteTool[]).map((remote) =>
-      adaptTool(label, remote, call),
+    const offered = listed.tools as RemoteTool[];
+    const allow = server.tools;
+    const published =
+      allow === null
+        ? offered
+        : offered.filter((remote) =>
+            allow.some((pattern) => matchPattern(pattern, remote.name)),
+          );
+    const unmatched = (allow ?? []).filter(
+      (pattern) => !offered.some((remote) => matchPattern(pattern, remote.name)),
     );
     return {
-      status: {label, state: 'ready', tools: tools.length, error: null},
-      tools,
+      status: {
+        label,
+        state: 'ready',
+        tools: published.map((remote) => remote.name),
+        listed: offered.length,
+        unmatched,
+        error: null,
+      },
+      tools: published.map((remote) => adaptTool(label, remote, call)),
       close,
     };
   } catch (error) {
     await close();
     return {
-      status: {label, state: 'failed', tools: 0, error: reason(error)},
+      status: {
+        label,
+        state: 'failed',
+        tools: [],
+        listed: 0,
+        unmatched: [],
+        error: reason(error),
+      },
       tools: [],
       close: async () => {},
     };
   }
+}
+
+function disabled(label: string): Connection {
+  return {
+    status: {
+      label,
+      state: 'disabled',
+      tools: [],
+      listed: 0,
+      unmatched: [],
+      error: null,
+    },
+    tools: [],
+    close: async () => {},
+  };
 }
 
 export async function connectServers(
@@ -102,7 +142,7 @@ export async function connectServers(
   await disconnectServers();
   connections = await Promise.all(
     Object.entries(servers).map(([label, server]) =>
-      connectOne(label, server, timeout),
+      server.enabled ? connectOne(label, server, timeout) : disabled(label),
     ),
   );
 }
