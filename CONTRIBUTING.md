@@ -3,6 +3,21 @@
 This file covers the few things you cannot get from the code or the
 [docs site](https://coding-cli-docs.vercel.app).
 
+## Issues and pull requests
+
+Both are welcome.
+
+Open an issue first for anything large, so neither of us spends an evening on a
+change the other would turn down. A small fix — a typo, a broken link, a case
+the tests miss — can go straight to a pull request.
+
+CI runs `npm test` and builds the site on every pull request, so you will see a
+green or red check without anyone pulling your branch down.
+
+This is a side project, so a reply can take a while. That is not disinterest.
+
+Contributions land under the MIT license, the same as the rest of the project.
+
 ## Setup
 
 Node 22 or newer, then `npm install`. `prepare` runs `tsc`, so the install

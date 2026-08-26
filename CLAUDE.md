@@ -4,8 +4,9 @@
 
 ## Workflow
 
-Solo project — no pull requests. Work lands as commits; `/code-review` runs
-against the local diff or a branch, never a PR number.
+Work lands as commits on `main` — do not open a pull request for it.
+`/code-review` runs against the local diff or a branch, never a PR number.
+Contributions from other people are a different path; `CONTRIBUTING.md` has it.
 
 ## Build and test
 
