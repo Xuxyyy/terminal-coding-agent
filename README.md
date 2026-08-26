@@ -12,12 +12,16 @@ directory.
 
 ## What it is
 
-One TypeScript package — about 4,800 lines and 596 tests. You start it inside a
+One TypeScript package — 6,582 lines and 692 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
 
-- Five tools: `read_file`, `grep`, `edit_file`, `write_file`, and `bash`.
+- Five built-in tools: `read_file`, `grep`, `edit_file`, `write_file`, and
+  `bash`.
+- MCP servers, declared in `~/.acc/settings.json` and started with `acc`. Their
+  tools are published beside the built-in five, and no permission mode runs one
+  of them silently — [why](https://coding-cli-docs.vercel.app/design/mcp/).
 - Three providers — DeepSeek, GLM, and Kimi — six models behind one client.
 - One permission gate that every tool call passes through.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
