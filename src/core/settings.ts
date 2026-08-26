@@ -15,6 +15,7 @@ export type StdioServer = {
   args: string[];
   env: Record<string, string>;
   enabled: boolean;
+  tools: string[] | null;
 };
 
 const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
@@ -23,7 +24,7 @@ const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
 const MODEL_KEY = 'model';
 const SERVERS_KEY = 'mcpServers';
-const SERVER_KEYS = ['command', 'args', 'env', 'enabled'];
+const SERVER_KEYS = ['command', 'args', 'env', 'enabled', 'tools'];
 const SERVER_NAME = /^[a-z0-9_-]+$/i;
 const VARIABLE = /\$\{([^}]*)\}/g;
 
@@ -176,7 +177,23 @@ function parseServer(
     }
     enabled = spec.enabled;
   }
-  return {command: spec.command, args, env, enabled};
+  let tools: string[] | null = null;
+  if (spec.tools !== undefined) {
+    if (!Array.isArray(spec.tools)) {
+      throw new SettingsError(`${file}: ${where}.tools must be an array`);
+    }
+    tools = [];
+    for (const value of spec.tools) {
+      if (typeof value !== 'string' || value.trim() === '') {
+        throw new SettingsError(
+          `${file}: every entry in ${where}.tools must be a non-empty string, found ` +
+            `${JSON.stringify(value)}`,
+        );
+      }
+      tools.push(value);
+    }
+  }
+  return {command: spec.command, args, env, enabled, tools};
 }
 
 export function parseServers(

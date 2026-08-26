@@ -22,7 +22,7 @@ function parse(
 }
 
 function server(fields: Partial<StdioServer> & {command: string}): StdioServer {
-  return {args: [], env: {}, enabled: true, ...fields};
+  return {args: [], env: {}, enabled: true, tools: null, ...fields};
 }
 
 function thrown(value: unknown, environment: NodeJS.ProcessEnv = {}): SettingsError {
@@ -157,6 +157,51 @@ test('an enabled that is not a boolean is a startup error naming the server', ()
     assert.match(error.message, /"mcpServers\.files"\.enabled must be true or false/);
     assert.ok(error.message.includes(FILE), error.message);
   }
+});
+
+test('a server with no tools key publishes everything', () => {
+  assert.deepEqual(parse({mcpServers: {gh: {command: 'gh-mcp'}}}), {
+    gh: server({command: 'gh-mcp', tools: null}),
+  });
+});
+
+test('a tools allowlist is kept as written', () => {
+  assert.deepEqual(
+    parse({mcpServers: {gh: {command: 'gh-mcp', tools: ['list_*', 'get_file']}}}),
+    {gh: server({command: 'gh-mcp', tools: ['list_*', 'get_file']})},
+  );
+});
+
+test('an empty tools allowlist publishes nothing and is not an error', () => {
+  assert.deepEqual(parse({mcpServers: {gh: {command: 'gh-mcp', tools: []}}}), {
+    gh: server({command: 'gh-mcp', tools: []}),
+  });
+});
+
+test('a bare string instead of an array of tools is a startup error', () => {
+  const error = thrown({mcpServers: {gh: {command: 'gh-mcp', tools: 'list_*'}}});
+  assert.match(error.message, /"mcpServers\.gh"\.tools must be an array/);
+  assert.ok(error.message.includes(FILE), error.message);
+});
+
+test('an entry in tools that is not a non-empty string is refused by name', () => {
+  for (const value of [7, null, '', '  ', ['list_*']]) {
+    const error = thrown({mcpServers: {gh: {command: 'gh-mcp', tools: [value]}}});
+    assert.match(
+      error.message,
+      /every entry in "mcpServers\.gh"\.tools must be a non-empty string/,
+    );
+    assert.ok(error.message.includes(FILE), error.message);
+  }
+});
+
+test('a variable inside a tools pattern is left literal, not expanded', () => {
+  assert.deepEqual(
+    parse({mcpServers: {gh: {command: 'gh-mcp', tools: ['${TOOL}_*']}}}, {
+      TOOL: 'list',
+    }),
+    {gh: server({command: 'gh-mcp', tools: ['${TOOL}_*']})},
+  );
 });
 
 test('serversOf is empty until the settings are loaded and then holds them', () => {
