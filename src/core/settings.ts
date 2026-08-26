@@ -14,6 +14,7 @@ export type StdioServer = {
   command: string;
   args: string[];
   env: Record<string, string>;
+  enabled: boolean;
 };
 
 const LISTS: (keyof Rules)[] = ['allow', 'ask', 'deny'];
@@ -22,7 +23,7 @@ const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
 const MODEL_KEY = 'model';
 const SERVERS_KEY = 'mcpServers';
-const SERVER_KEYS = ['command', 'args', 'env'];
+const SERVER_KEYS = ['command', 'args', 'env', 'enabled'];
 const SERVER_NAME = /^[a-z0-9_-]+$/i;
 const VARIABLE = /\$\{([^}]*)\}/g;
 
@@ -168,7 +169,14 @@ function parseServer(
       env[key] = expand(value, `${where}.env.${key}`, file, environment);
     }
   }
-  return {command: spec.command, args, env};
+  let enabled = true;
+  if (spec.enabled !== undefined) {
+    if (typeof spec.enabled !== 'boolean') {
+      throw new SettingsError(`${file}: ${where}.enabled must be true or false`);
+    }
+    enabled = spec.enabled;
+  }
+  return {command: spec.command, args, env, enabled};
 }
 
 export function parseServers(

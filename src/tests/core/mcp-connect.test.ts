@@ -53,7 +53,7 @@ function session(...answers: ConfirmDecision[]) {
 }
 
 function echoServer(env: Record<string, string> = {}): StdioServer {
-  return {command: process.execPath, args: [FIXTURE], env};
+  return {command: process.execPath, args: [FIXTURE], env, enabled: true};
 }
 
 async function connect(
@@ -97,7 +97,9 @@ test('a connected tool runs over stdio and returns what the server echoed', asyn
 });
 
 test('a command that does not exist fails without rejecting the connect', async (t) => {
-  await connect(t, {broken: {command: '/no/such/binary', args: [], env: {}}});
+  await connect(t, {
+    broken: {command: '/no/such/binary', args: [], env: {}, enabled: true},
+  });
   const [status] = serverStatus();
 
   assert.equal(status.label, 'broken');
@@ -110,7 +112,7 @@ test('a command that does not exist fails without rejecting the connect', async 
 test('one server failing leaves the working server its tools', async (t) => {
   await connect(t, {
     echo: echoServer(),
-    broken: {command: '/no/such/binary', args: [], env: {}},
+    broken: {command: '/no/such/binary', args: [], env: {}, enabled: true},
   });
 
   assert.deepEqual(

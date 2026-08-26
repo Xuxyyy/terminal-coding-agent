@@ -21,6 +21,10 @@ function parse(
   return parseServers(JSON.stringify(value), FILE, true, environment);
 }
 
+function server(fields: Partial<StdioServer> & {command: string}): StdioServer {
+  return {args: [], env: {}, enabled: true, ...fields};
+}
+
 function thrown(value: unknown, environment: NodeJS.ProcessEnv = {}): SettingsError {
   try {
     parse(value, environment);
@@ -33,7 +37,7 @@ function thrown(value: unknown, environment: NodeJS.ProcessEnv = {}): SettingsEr
 
 test('parseServers reads one server and defaults its args and env to empty', () => {
   assert.deepEqual(parse({mcpServers: {files: {command: 'mcp-files'}}}), {
-    files: {command: 'mcp-files', args: [], env: {}},
+    files: server({command: 'mcp-files'}),
   });
 });
 
@@ -44,7 +48,7 @@ test('parseServers keeps the args and the env that are written', () => {
         files: {command: 'npx', args: ['-y', 'mcp-files'], env: {ROOT: '/srv'}},
       },
     }),
-    {files: {command: 'npx', args: ['-y', 'mcp-files'], env: {ROOT: '/srv'}}},
+    {files: server({command: 'npx', args: ['-y', 'mcp-files'], env: {ROOT: '/srv'}})},
   );
 });
 
@@ -95,7 +99,7 @@ test('a server name with a dot, a space, or nothing in it is refused', () => {
 
 test('a server name of letters, digits, dashes and underscores is accepted', () => {
   assert.deepEqual(parse({mcpServers: {'note-taker_1': {command: 'notes'}}}), {
-    'note-taker_1': {command: 'notes', args: [], env: {}},
+    'note-taker_1': server({command: 'notes'}),
   });
 });
 
@@ -104,7 +108,7 @@ test('a variable in an env value is expanded from the environment passed in', ()
     parse({mcpServers: {gh: {command: 'gh-mcp', env: {KEY: 'Bearer ${TOKEN}'}}}}, {
       TOKEN: 'secret',
     }),
-    {gh: {command: 'gh-mcp', args: [], env: {KEY: 'Bearer secret'}}},
+    {gh: server({command: 'gh-mcp', env: {KEY: 'Bearer secret'}})},
   );
 });
 
@@ -113,7 +117,7 @@ test('a variable in an args entry is expanded from the environment passed in', (
     parse({mcpServers: {files: {command: 'npx', args: ['--root=${ROOT}']}}}, {
       ROOT: '/srv',
     }),
-    {files: {command: 'npx', args: ['--root=/srv'], env: {}}},
+    {files: server({command: 'npx', args: ['--root=/srv']})},
   );
 });
 
@@ -131,7 +135,28 @@ test('a variable that is not set in the environment is refused by name', () => {
 test('parseServers rejects an unknown key inside a server', () => {
   const error = thrown({mcpServers: {files: {command: 'npx', cwd: '/srv'}}});
   assert.match(error.message, /"mcpServers\.files" has no key "cwd"/);
-  assert.match(error.message, /command, args, env/);
+  assert.match(error.message, /command, args, env, enabled/);
+});
+
+test('a server with no enabled key is enabled', () => {
+  assert.deepEqual(parse({mcpServers: {files: {command: 'npx'}}}), {
+    files: server({command: 'npx', enabled: true}),
+  });
+});
+
+test('enabled false parses as disabled and keeps the rest of the server', () => {
+  assert.deepEqual(
+    parse({mcpServers: {files: {command: 'npx', args: ['-y'], enabled: false}}}),
+    {files: server({command: 'npx', args: ['-y'], enabled: false})},
+  );
+});
+
+test('an enabled that is not a boolean is a startup error naming the server', () => {
+  for (const value of ['no', 0, null, []]) {
+    const error = thrown({mcpServers: {files: {command: 'npx', enabled: value}}});
+    assert.match(error.message, /"mcpServers\.files"\.enabled must be true or false/);
+    assert.ok(error.message.includes(FILE), error.message);
+  }
 });
 
 test('serversOf is empty until the settings are loaded and then holds them', () => {
@@ -146,7 +171,7 @@ test('serversOf is empty until the settings are loaded and then holds them', () 
 
     loadSettings([file]);
 
-    assert.deepEqual(serversOf(), {files: {command: 'npx', args: [], env: {}}});
+    assert.deepEqual(serversOf(), {files: server({command: 'npx'})});
   } finally {
     if (previous === undefined) delete process.env.ACC_HOME;
     else process.env.ACC_HOME = previous;
