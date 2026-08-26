@@ -48,6 +48,29 @@ all five today; the parameter is the seam a mode with its own list would use. It
 is the default argument of both `runAgent` and `contextStatus`, so what the model
 is offered and what the context readout counts can never drift apart.
 
+## Tools an MCP server adds
+
+Five is what ships built in, not what the model is offered. `toolsFor(mode)`
+returns the five plus `connectedTools()` (`src/core/tools/index.ts:13`) — every
+tool listed by an MCP server that connected at boot, named
+`mcp__<label>__<tool>`.
+
+They are not a second kind of tool. `adaptTool` (`src/core/mcp/adapt.ts:30-47`)
+builds each one into the same `Tool` this file describes below, so `runTool`
+validates, runs, and caps it exactly as it does `bash`, and `permitted()` gates it
+from the same `request` field. The only differences: the schema is
+`z.record(z.unknown())` with the server's own JSON Schema passed through as
+`parameters`, and `request` returns `{kind: 'mcp'}` — which is never allowed
+outright, in any mode.
+
+An MCP tool's `description` is prompt text the same way a built-in's is, with one
+difference worth remembering: **a third party wrote it.** Everything the section
+below says about descriptions being the prompt holds, except that this prompt did
+not come from this repo.
+
+`mcp.md` has the transport, the connection lifecycle, and why every call reaches
+the gate.
+
 ## The shape every tool shares
 
 A tool is a `Tool` — `name`, `description`, `schema`, an optional `request`, and
@@ -234,6 +257,8 @@ nothing more; what stops it is the permission gate, not a path check.
    can outrun the compaction trigger, and say in the marker what repair to try.
 4. Fail with a sentence that names the fix, not just the problem. Every error in
    this file is written for a reader that has one chance to repair the call.
-5. Register it in `src/core/tools/index.ts`. The array order is the order the
-   model sees.
+5. Register it in `src/core/tools/index.ts`, in the `tools` array. The array
+   order is the order the model sees, and MCP tools are appended after it. This
+   step is what "built-in" means — an MCP server is the other route to a tool,
+   and it needs none of these six (`mcp.md`).
 6. Decide how `src/ui/events.ts` draws its row — see `features.md`.

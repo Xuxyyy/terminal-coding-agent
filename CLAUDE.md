@@ -50,6 +50,7 @@ read it. They record *why*; the code is the truth about *what*.
 - `docs/tools.md` — read before adding a tool or changing what one returns.
 - `docs/permissions.md` — read before touching `src/core/permission/`.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
+- `docs/mcp.md` — read before changing `src/core/mcp/`.
 - `docs/features.md` — what ships today; read before planning what is next.
 
 A doc describes the code as it is now. When a decision is reversed, **rewrite the
@@ -67,7 +68,7 @@ instead; that is a different thing and nothing here depends on it.
 `notes/` is session handoffs. Scratch, safe to ignore. It stays at the root
 because that is where the handoff tooling writes.
 
-**`docs/` is tracked** — a fresh clone or a `git worktree` has all five files.
+**`docs/` is tracked** — a fresh clone or a `git worktree` has all six files.
 **`plans/` and `notes/` are not.** They are absent from a fresh clone or a
 worktree; ask for them if they are missing.
 
