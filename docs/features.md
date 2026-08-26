@@ -1,23 +1,24 @@
 # What `acc` can do today
 
-Status: v4, 2026-08-17. A list of shipped features, not a design doc.
+Status: v5, 2026-08-26. A list of shipped features, not a design doc.
 Read when: you want to know what exists before planning what is next.
-See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md` for *why*
-each part looks the way it does.
+See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`
+for *why* each part looks the way it does.
 
 ## Shape
 
-One TypeScript package, ~4,800 lines. `src/core` runs the agent and never
-imports React; `src/ui` draws it with Ink. The two meet at one seam, the `Host`
-interface (`confirm`, `onEvent`, `signal`). 596 tests, all passing.
+One TypeScript package, 6,582 lines outside the tests. `src/core` runs the
+agent and never imports React; `src/ui` draws it with Ink. The two meet at one
+seam, the `Host`
+interface (`confirm`, `onEvent`, `signal`). 692 tests, all passing.
 
 The workspace is the current directory. Installed as the `acc` command.
 
 ## The agent loop
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
-- Five tools: `read_file`, `grep`, `edit_file` (unique-match), `write_file`,
-  `bash`.
+- Five built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
+  `write_file`, `bash`. MCP servers add more — see below.
 - `grep` shells out to `rg` on `PATH`. It returns matching paths only unless
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
@@ -31,6 +32,25 @@ The workspace is the current directory. Installed as the `acc` command.
 - Broken tool-call JSON comes back as a tool error, not a crash.
 - Esc aborts the model request and any running command.
 - System prompt carries an environment block: cwd, OS, git, file tree.
+
+## MCP servers
+
+- `acc` is an MCP **client**. Servers are declared in an `mcpServers` block in
+  `~/.acc/settings.json` — user settings only, so a repository you cloned cannot
+  spawn a process on your machine.
+- stdio transport only: each server is a `command` with `args` and `env`, spawned
+  at startup. `${VAR}` expands in `args` and `env`; an unset variable stops
+  startup and names the variable.
+- Their tools are published beside the built-in five as
+  `mcp__<server>__<tool>`, and everything downstream — the loop, the gate, the
+  UI — treats them as ordinary tools.
+- **Every MCP call reaches the permission gate and is never allowed outright.**
+  It asks in `ask-edits` and `auto-edits` and goes to the judge in `auto`.
+  An approval is remembered per tool for the session, not per server.
+- One server failing to start does not stop the CLI or the others: it is recorded
+  as failed with a reason, and its tool list is empty.
+- `/mcp` shows each server as ready with a tool count, or failed with the reason.
+  Connection happens at boot, so a settings change needs a restart.
 
 ## Models
 
@@ -288,7 +308,13 @@ and the picker both already correct.
 A byte cap on the copies a write stores, and a git-backed snapshot that would
 catch what `bash` changes — both wait for numbers from real use (see
 `sessions.md`). The sandbox, network tools, a
-debugging transcript, todo panel, skills, memory. Reacting to a provider's context-length rejection by compacting and
+debugging transcript, todo panel, skills, memory.
+
+On MCP, deliberately: hosted/HTTP transport and the OAuth it needs; resources and
+prompts, which are the halves of the spec that are not tools; `mcp(...)` rules in
+`settings.json`, so session approval is the only memory an MCP call has;
+per-project servers, refused on purpose; and reconnect without a restart — a
+server that dies mid-session stays dead. `mcp.md` has the reason for each. Reacting to a provider's context-length rejection by compacting and
 retrying — the safety net under the 80% trigger — is also still open: the error
 shape differs per provider and none of it can be tested without paying for a
 deliberate failure.
