@@ -10,8 +10,11 @@ you add a server. None of them reaches the network, none opens a browser, and
 none reaches a file outside the workspace without asking you first.
 
 An [MCP server](/reference/settings) adds more, published beside these five and
-named `mcp__<server>__<tool>`. What those can reach is the server's business, not
-this page's — which is why every one of their calls asks before it runs.
+named `mcp__<server>__<tool>`. You never call one by name — the model picks it
+the way it picks these five, from the description the server sent at startup;
+[`/mcp`](/reference/commands) only reports which servers are up. What those can
+reach is the server's business, not this page's — which is why every one of
+their calls asks before it runs.
 
 | Tool | What it does |
 |---|---|
