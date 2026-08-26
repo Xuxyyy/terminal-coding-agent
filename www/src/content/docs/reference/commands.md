@@ -9,7 +9,7 @@ Type `/` in the input box to open the menu. It filters as you type, ↑↓ moves
 through the matches, and enter runs the highlighted one — so `/co` then enter
 runs `/context`.
 
-All seven commands only work while `acc` is idle — typing one while the agent is
+All eight commands only work while `acc` is idle — typing one while the agent is
 still working does nothing.
 
 | Command | What it does |
@@ -21,6 +21,7 @@ still working does nothing.
 | [`/rewind`](#rewind) | Goes back to before one of your earlier messages, restoring the files the agent wrote. |
 | [`/permission`](#permission) | Switches between the three permission modes and saves the choice for next time. |
 | [`/model`](#model) | Switches which model answers, keeping the conversation as it is. |
+| [`/mcp`](#mcp) | Lists the MCP servers from your settings file and whether each one connected. |
 
 ## `/context`
 
@@ -41,7 +42,8 @@ free                  220,936
 
 - **system prompt** — the instructions `acc` sends every turn, including a
   description of your project.
-- **system tools** — the definitions of the five tools.
+- **system tools** — the definitions of the tools the model is offered: the
+  five built-ins, plus any an MCP server added.
 - **messages** — everything you and the model have said, plus every file read
   and every command's output.
 - **free** — what is left.
@@ -239,6 +241,35 @@ for next time. If it could not be saved, the notice says so:
 The conversation carries over untouched — only the client changes. Earlier rows
 keep naming the model that answered them, and the new one picks up the context
 budget of its own window. [Settings and models](/reference/settings) lists the six.
+
+## `/mcp`
+
+*Show the MCP servers.*
+
+Lists every server in the `mcpServers` block of your `~/.acc/settings.json` and
+what happened when `acc` tried to start it.
+
+```
+github — ready, 12 tools
+linear — failed: spawn linear-mcp ENOENT
+```
+
+A **ready** server is connected and its tools are already offered to the model,
+named `mcp__github__list_issues` and so on. A **failed** one is skipped: its
+reason is whatever went wrong — the command was not found, it did not speak MCP,
+or it did not answer within fifteen seconds — and the other servers keep their
+tools. One bad server never stops `acc` from starting.
+
+With no servers configured it says so and names the file to add them to:
+
+```
+no MCP servers configured — add an "mcpServers" block to /Users/you/.acc/settings.json
+```
+
+Servers connect once, at startup. Editing the block while `acc` is running
+changes nothing until you restart — the same rule the
+[settings files](/reference/settings) follow. `/mcp` reports what the *current*
+run connected to.
 
 ## Keys and leaving
 

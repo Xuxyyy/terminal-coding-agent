@@ -26,6 +26,13 @@ Setting `ACC_HOME` moves the first one.
     "deny":  ["bash(curl *)"],
     "ask":   ["bash(npm run deploy*)"],
     "allow": ["bash(npm run *)", "bash(git *)"]
+  },
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
+    }
   }
 }
 ```
@@ -187,6 +194,70 @@ the six valid ones.
 
 [`/model`](/reference/commands) writes this key, so what you read in the file is
 always what the next run starts on. `ACC_MODEL` still wins over it.
+
+## `mcpServers`
+
+Servers that speak the [Model Context Protocol](https://modelcontextprotocol.io).
+Each one is a command `acc` spawns at startup; the tools it offers join the
+built-in five for the rest of the session.
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
+    },
+    "notes": {
+      "command": "/usr/local/bin/notes-mcp"
+    }
+  }
+}
+```
+
+The name on the left — `github`, `notes` — is yours. It may use letters, digits,
+dashes and underscores, and nothing else. It prefixes every tool that server
+offers, so the model sees `mcp__github__list_issues`, and two servers offering
+the same tool never collide.
+
+Each server takes three keys and no others:
+
+| Key | Required | What it is |
+|---|---|---|
+| `command` | yes | The executable to spawn. A non-empty string. |
+| `args` | no | An array of strings, passed to it. |
+| `env` | no | An object of strings, added to its environment. |
+
+Any other key is a startup error naming the three that are valid.
+
+**It is read from `~/.acc/settings.json` only**, the same rule `permission_mode`
+and `model` follow. The key in a project's `.acc/settings.json` is a startup
+error naming the user file — a repository you cloned must not be able to spawn a
+process on your machine.
+
+### `${VAR}`
+
+`${VAR}` in an `args` entry or an `env` value is replaced with that environment
+variable, so your token stays out of a file you might paste into an issue. It is
+**not** expanded in `command`.
+
+If the variable is not set, `acc` does not start, and the error names the
+variable. A server that silently receives an empty token would connect, list its
+tools, and then fail every call with an opaque error instead.
+
+### Every MCP call asks
+
+An MCP server is code `acc` did not write, running outside your workspace, so no
+permission mode ever runs one of its tools silently — see
+[the permission gate](/design/permissions). Answering "yes, and stop asking" is
+remembered for that **one tool** for the rest of the session; the same server's
+other tools still ask the first time.
+
+Servers connect once at startup, and like everything else on this page a change
+needs a restart. [`/mcp`](/reference/commands) shows which ones are up. A server
+that fails to start is reported and skipped — the others keep their tools and
+`acc` runs.
 
 ## Providers and keys
 
