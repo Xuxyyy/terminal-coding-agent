@@ -81,14 +81,11 @@ into a new one, so a resumed run and its original stay a single session on disk.
 
 The longer version of all three, with the alternatives that were rejected, is
 [How it's built](https://coding-cli-docs.vercel.app/design/how-its-built/) on
-the docs site.
+the docs site. Six design docs in [`docs/`](docs/) — about 2,300 lines — go one
+level deeper, one per subsystem: the code is the truth about *what*, those files
+are the truth about *why*.
 
-## Design notes
-
-Six design docs in [`docs/`](docs/) — about 2,300 lines — record *why* each
-subsystem is shaped the way it is, one doc per subsystem. The code is the truth
-about *what*; those files are the truth about *why*, and each one opens with
-when to read it.
+## Not built yet
 
 Left undone on purpose: a git-backed snapshot that would catch what `bash`
 changes, and a byte cap on the copies a write stores — both wait for numbers
