@@ -85,7 +85,7 @@ the docs site.
 
 ## Design notes
 
-Five design docs in [`docs/`](docs/) — about 1,900 lines — record *why* each
+Six design docs in [`docs/`](docs/) — about 2,300 lines — record *why* each
 subsystem is shaped the way it is, one doc per subsystem. The code is the truth
 about *what*; those files are the truth about *why*, and each one opens with
 when to read it.
