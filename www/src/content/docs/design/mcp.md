@@ -1,6 +1,6 @@
 ---
 title: Connecting to MCP servers
-description: Why acc is an MCP client and not a server, why stdio came before hosted transports, why no permission mode ever runs a server's tool silently, and what is deliberately missing.
+description: Why acc is an MCP client and not a server, why stdio came before hosted transports, why no permission mode ever runs a server's tool silently, why you can narrow what a server publishes, and what is deliberately missing.
 sidebar:
   order: 4
 ---
@@ -73,6 +73,47 @@ server's read-only tool once tells `acc` nothing about the one that writes; that
 one asks on its own the first time it is used. A server cannot earn standing
 trust by being harmless once.
 
+## A server's tool list is something you pay for
+
+A tool is not free to have. Its name, its description, and its argument schema
+are text in the prompt, and they are sent again on **every turn** of the
+conversation. Five built-in tools are a rounding error. A big server is not: the
+GitHub one offers forty-five, and adding it quietly spends a slice of every
+window for the whole session, mostly on tools you were never going to use.
+
+`acc` already put a number on this — `/context` shows where the window is going.
+That made the gap obvious: it could measure the cost and offered no way to change
+it. So a server block takes a `tools` list, and only what it names is published.
+
+Two choices in it are worth the reasoning.
+
+**It is an allowlist, not a denylist**, and that is the whole point rather than a
+detail. A denylist looks friendlier — name the three you don't want and keep the
+rest — but it fails in the direction that matters. A server that adds twelve
+tools in its next release spends your window on all twelve, silently, and you
+find out weeks later from `/context`, if ever. An allowlist means an upgrade
+costs you nothing you did not ask for. The budget stays predictable, which is the
+only reason to have the feature.
+
+**A pattern that matches nothing does not stop `acc` from starting.** A server's
+tool names change between releases, and refusing to boot because a name moved
+would be its own kind of failure: the stale config entry that stops the whole
+tool from launching. But a typo that silently costs you a tool is no good
+either, so the unmatched pattern is named on that server's line in `/mcp`. Not
+fatal, not silent.
+
+The companion key is `enabled: false`, which keeps a server in your settings file
+without starting it — no process, no wait, no tools. It still appears in `/mcp`,
+marked disabled. Hiding it would recreate the exact confusion the feature exists
+to remove.
+
+**None of this is a permission.** That distinction is easy to lose and expensive
+to lose. Narrowing a server's tool list is a budget decision: which tools the
+model is *shown*. The gate above is a trust decision: which calls run without
+your say-so. Everything you publish still asks the first time. The two do not
+share syntax, deliberately, so that trimming a tool list can never be mistaken
+for trusting a server.
+
 ## Your settings, not the repository's
 
 Most of what `acc` reads can be set per project, because a project's settings
@@ -105,9 +146,11 @@ whole tool from launching, days after you added it, with an error about a
 package you have forgotten. Startup is where a small tool earns trust.
 
 The corollary is that a failure has to be **visible**, or the tools simply seem
-to be missing. `/mcp` is that readout — every server, ready with a tool count or
-failed with the reason, and a pointer to the settings file when there are none
-at all.
+to be missing. `/mcp` is that readout — one line per server, ready with a tool
+count, filtered with both counts, disabled, or failed with the reason, and a
+pointer to the settings file when there are none at all. `/mcp <server>` prints
+one server's tool names, which is where you read them to write a `tools` list
+with.
 
 ## What is not built, and what each is waiting for
 
@@ -121,7 +164,12 @@ at all.
   pre-approves a server's tools across sessions. Session approval is deliberately
   the only memory an MCP call has: a rule that persists is standing trust granted
   from a file, which is the thing every other decision on this page is arranged
-  to avoid. It wants a considered design.
+  to avoid. It wants a considered design. The `tools` list is not this and does
+  not stand in for it — it narrows what is offered, never what is trusted.
+- **Excluding a few tools rather than naming the ones you want.** There is no
+  `!pattern` syntax. It only earns its place once someone wants *everything
+  except three*, and nobody has asked. Ship the smaller thing and let real use
+  argue for the rest.
 - **Per-project servers.** Refused on purpose, as above. This one is not waiting
   for anything.
 - **Reconnect without a restart.** Servers connect once. A server that dies

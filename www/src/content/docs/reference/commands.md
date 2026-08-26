@@ -21,7 +21,7 @@ still working does nothing.
 | [`/rewind`](#rewind) | Goes back to before one of your earlier messages, restoring the files the agent wrote. |
 | [`/permission`](#permission) | Switches between the three permission modes and saves the choice for next time. |
 | [`/model`](#model) | Switches which model answers, keeping the conversation as it is. |
-| [`/mcp`](#mcp) | Lists the MCP servers from your settings file and whether each one connected. |
+| [`/mcp`](#mcp) | Lists the MCP servers from your settings file and whether each one connected. `/mcp <server>` lists one server's tools. |
 
 ## `/context`
 
@@ -250,7 +250,9 @@ Lists every server in the `mcpServers` block of your `~/.acc/settings.json` and
 what happened when `acc` tried to start it.
 
 ```
-github — ready, 12 tools
+docs — ready, 12 tools
+github — ready, 6 of 45 tools (no tool matches "list_isues")
+scratch — disabled
 linear — failed: spawn linear-mcp ENOENT
 ```
 
@@ -259,6 +261,32 @@ named `mcp__github__list_issues` and so on. A **failed** one is skipped: its
 reason is whatever went wrong — the command was not found, it did not speak MCP,
 or it did not answer within fifteen seconds — and the other servers keep their
 tools. One bad server never stops `acc` from starting.
+
+**`6 of 45 tools`** means that server has a
+[`tools` allowlist](/reference/settings): it offered forty-five and six were
+published. Without one the line reads plainly, `12 tools`, so a filtered server
+and a small server never look the same. A pattern that matched nothing is named
+in brackets on that line — a typo costs you a tool, and this is where you see it.
+
+**`disabled`** is a server with `"enabled": false`. It was never spawned at all,
+so it has no tools and no startup cost, and it is listed rather than hidden so
+you can see why its tools are gone.
+
+### `/mcp <server>`
+
+Prints one server's line and then the tool names it published, two per row:
+
+```
+github — ready, 6 of 45 tools
+  list_issues        list_prs
+  list_commits       get_file
+  get_me             search_code
+```
+
+Those are the names to write a `tools` allowlist with, so the usual order is: add
+the server unfiltered, run `/mcp <server>`, then narrow it. A disabled or failed
+server prints its line and nothing else. A name that is not one of your servers
+says so and lists the ones that are.
 
 With no servers configured it says so and names the file to add them to:
 

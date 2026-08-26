@@ -207,10 +207,15 @@ built-in five for the rest of the session.
     "github": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
+      "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"},
+      "tools": ["list_*", "get_file"]
     },
     "notes": {
       "command": "/usr/local/bin/notes-mcp"
+    },
+    "scratch": {
+      "command": "scratch-mcp",
+      "enabled": false
     }
   }
 }
@@ -221,15 +226,17 @@ dashes and underscores, and nothing else. It prefixes every tool that server
 offers, so the model sees `mcp__github__list_issues`, and two servers offering
 the same tool never collide.
 
-Each server takes three keys and no others:
+Each server takes five keys and no others:
 
 | Key | Required | What it is |
 |---|---|---|
 | `command` | yes | The executable to spawn. A non-empty string. |
 | `args` | no | An array of strings, passed to it. |
 | `env` | no | An object of strings, added to its environment. |
+| `enabled` | no | `false` means never spawn this server. Default `true`. |
+| `tools` | no | An array of patterns. Only the tools they match are published. Default: publish everything. |
 
-Any other key is a startup error naming the three that are valid.
+Any other key is a startup error naming the five that are valid.
 
 **It is read from `~/.acc/settings.json` only**, the same rule `permission_mode`
 and `model` follow. The key in a project's `.acc/settings.json` is a startup
@@ -246,6 +253,63 @@ If the variable is not set, `acc` does not start, and the error names the
 variable. A server that silently receives an empty token would connect, list its
 tools, and then fail every call with an opaque error instead.
 
+### `tools` — publishing fewer of them
+
+Every tool a server offers is a name, a description, and a JSON schema sitting in
+the prompt on **every turn**. A big server is not free: some publish forty or
+more, and you can watch what that costs in [`/context`](/reference/commands).
+`tools` is how you pay for only the ones you use.
+
+It is an **allowlist**. The patterns name what to publish, and everything else
+the server listed is dropped:
+
+```json
+{"github": {"command": "gh-mcp", "tools": ["list_*", "get_file"]}}
+```
+
+`*` means any run of characters — the same glob as `bash(...)` in the rules
+above. A pattern matches the **remote** name, without the `mcp__github__` prefix:
+you write `list_issues`, and the model is offered `mcp__github__list_issues`.
+`${VAR}` is **not** expanded here; a tool name is not a secret, and a filter that
+changed with your environment would be a trap.
+
+The way to write one is to run the server unfiltered first:
+
+1. Add the server with no `tools` key and start `acc`.
+2. Run `/mcp <server>` to print the tool names it actually offers.
+3. Add a `tools` list naming the ones you want, and restart.
+
+`/mcp` then reads `github — ready, 6 of 45 tools`, so you can always see what you
+narrowed. An empty array publishes nothing from that server, which is legal and
+sometimes what you want.
+
+**A pattern that matches nothing is not a startup error.** It is reported on that
+server's `/mcp` line instead:
+
+```
+github — ready, 6 of 45 tools (no tool matches "list_isues")
+```
+
+A server's tool list changes between releases, so a name that was right last
+month must never stop `acc` from starting — but a typo would otherwise cost you a
+tool with nothing on screen saying why.
+
+**`tools` is not a permission.** It decides what the model is *offered*, not what
+it is allowed to do. Everything you publish still asks, exactly as below.
+
+### `enabled` — keeping a server without running it
+
+`"enabled": false` means the server is **never spawned**: no process, no startup
+wait, no tools in the prompt. The block stays in your settings file for when you
+want it back. `/mcp` still lists it:
+
+```
+scratch — disabled
+```
+
+It is listed rather than hidden on purpose — a server missing from the readout
+with nothing saying why is the confusion these keys exist to remove.
+
 ### Every MCP call asks
 
 An MCP server is code `acc` did not write, running outside your workspace, so no
@@ -255,9 +319,10 @@ remembered for that **one tool** for the rest of the session; the same server's
 other tools still ask the first time.
 
 Servers connect once at startup, and like everything else on this page a change
-needs a restart. [`/mcp`](/reference/commands) shows which ones are up. A server
-that fails to start is reported and skipped — the others keep their tools and
-`acc` runs. [Why it works this way](/design/mcp).
+needs a restart. [`/mcp`](/reference/commands) shows which ones are up, which are
+filtered, and which are disabled; `/mcp <server>` prints one server's tool names.
+A server that fails to start is reported and skipped — the others keep their tools
+and `acc` runs. [Why it works this way](/design/mcp).
 
 ## Providers and keys
 

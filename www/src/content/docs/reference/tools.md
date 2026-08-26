@@ -5,8 +5,13 @@ sidebar:
   order: 2
 ---
 
-The model has five tools and nothing else. There is no network access, no
-browser, and no way to reach a file outside the workspace.
+These five are the tools `acc` builds in, and they are all the model has until
+you add a server. None of them reaches the network, none opens a browser, and
+none reaches a file outside the workspace without asking you first.
+
+An [MCP server](/reference/settings) adds more, published beside these five and
+named `mcp__<server>__<tool>`. What those can reach is the server's business, not
+this page's — which is why every one of their calls asks before it runs.
 
 | Tool | What it does |
 |---|---|
