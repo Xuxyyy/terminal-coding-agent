@@ -9,8 +9,8 @@ for *why* each part looks the way it does.
 
 One TypeScript package, 6,582 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host`
-interface (`confirm`, `onEvent`, `signal`). 692 tests, all passing.
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 692 tests, all
+passing.
 
 The workspace is the current directory. Installed as the `acc` command.
 
