@@ -2,7 +2,7 @@
 title: What I left out, and why
 description: Three features that are cheap to add and expensive to add wrong — a git-backed snapshot, a byte cap on stored file copies, and compact-and-retry — and what each one is waiting for.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 This is the page I would want to read about someone else's project, so it is the

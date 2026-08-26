@@ -257,7 +257,7 @@ other tools still ask the first time.
 Servers connect once at startup, and like everything else on this page a change
 needs a restart. [`/mcp`](/reference/commands) shows which ones are up. A server
 that fails to start is reported and skipped — the others keep their tools and
-`acc` runs.
+`acc` runs. [Why it works this way](/design/mcp).
 
 ## Providers and keys
 
