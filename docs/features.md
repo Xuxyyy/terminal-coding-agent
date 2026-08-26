@@ -9,7 +9,7 @@ for *why* each part looks the way it does.
 
 One TypeScript package, 6,582 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 692 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 723 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.
@@ -41,6 +41,15 @@ The workspace is the current directory. Installed as the `acc` command.
 - stdio transport only: each server is a `command` with `args` and `env`, spawned
   at startup. `${VAR}` expands in `args` and `env`; an unset variable stops
   startup and names the variable.
+- `"enabled": false` on a server block means it is **never spawned** — no process,
+  no startup wait, no tools in the prompt. It still shows in `/mcp` as `disabled`.
+- `"tools": ["list_*", "get_file"]` is an **allowlist**: only the tools it matches
+  are published, and everything else the server listed is dropped. Patterns are the
+  same `*` glob the permission rules use and match the remote name, without the
+  `mcp__<server>__` prefix. No key means publish everything; `${VAR}` is not
+  expanded here. A pattern matching nothing is reported in `/mcp`, not a startup
+  error. This is a context-budget control, **not** a permission — an allowlisted
+  tool still asks.
 - Their tools are published beside the built-in five as
   `mcp__<server>__<tool>`, and everything downstream — the loop, the gate, the
   UI — treats them as ordinary tools.
@@ -49,8 +58,13 @@ The workspace is the current directory. Installed as the `acc` command.
   An approval is remembered per tool for the session, not per server.
 - One server failing to start does not stop the CLI or the others: it is recorded
   as failed with a reason, and its tool list is empty.
-- `/mcp` shows each server as ready with a tool count, or failed with the reason.
-  Connection happens at boot, so a settings change needs a restart.
+- `/mcp` shows one line per server: `ready` with a tool count, `6 of 45 tools`
+  when filtered, `disabled`, or `failed` with the reason. A pattern that matched
+  nothing is named on that server's line.
+- `/mcp <server>` prints that server's line and then the tool names it published,
+  which is where you read the names to write a `tools` allowlist with. An unknown
+  label names the servers that do exist.
+- Connection happens at boot, so a settings change needs a restart.
 
 ## Models
 
@@ -312,7 +326,8 @@ debugging transcript, todo panel, skills, memory.
 
 On MCP, deliberately: hosted/HTTP transport and the OAuth it needs; resources and
 prompts, which are the halves of the spec that are not tools; `mcp(...)` rules in
-`settings.json`, so session approval is the only memory an MCP call has;
+`settings.json`, so session approval is the only memory an MCP call has — the
+`tools` allowlist is a context-budget key and not a substitute for one;
 per-project servers, refused on purpose; and reconnect without a restart — a
 server that dies mid-session stays dead. `mcp.md` has the reason for each. Reacting to a provider's context-length rejection by compacting and
 retrying — the safety net under the 80% trigger — is also still open: the error
