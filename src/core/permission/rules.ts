@@ -65,12 +65,6 @@ function matchesAny(list: Rule[], text: string): boolean {
   return list.some((rule) => rule.tag === 'bash' && matchPattern(rule.pattern, text));
 }
 
-export function patternScore(pattern: string): number {
-  return pattern.split('*').join('').length;
-}
-
-const TIE_BREAK: Record<RuleVerdict, number> = {deny: 3, ask: 2, allow: 1};
-
 const WORST: Record<RuleVerdict | 'none', number> = {
   deny: 4,
   ask: 3,
@@ -88,20 +82,10 @@ function bestVerdict(rules: Rules, matches: (rule: Rule) => boolean): RuleVerdic
     ['ask', rules.ask],
     ['allow', rules.allow],
   ];
-  let best: RuleVerdict | null = null;
-  let bestScore = -1;
   for (const [verdict, list] of lists) {
-    for (const rule of list) {
-      if (!matches(rule)) continue;
-      const score = patternScore(rule.pattern);
-      if (score < bestScore) continue;
-      if (score > bestScore || best === null || TIE_BREAK[verdict] > TIE_BREAK[best]) {
-        best = verdict;
-        bestScore = score;
-      }
-    }
+    if (list.some(matches)) return verdict;
   }
-  return best;
+  return null;
 }
 
 export function stageVerdict(stage: string, rules: Rules): RuleVerdict | null {

@@ -607,11 +607,11 @@ test('a deny rule refuses a write the mode would have allowed', () => {
   assert.match(refused.reason, /settings\.json/);
 });
 
-test('deny every edit but one directory is the whole feature', () => {
+test('a narrow allow cannot carve a hole in a blanket deny', () => {
   const config = {deny: ['edit(**)'], allow: ['edit(plans/**)']};
 
   assert.equal(write('src/a.ts', config).decision, 'deny');
-  assert.equal(write('plans/05.md', config).decision, 'allow');
+  assert.equal(write('plans/05.md', config).decision, 'deny');
   assert.match(write('plans/05.md', config).reason, /settings\.json/);
 });
 

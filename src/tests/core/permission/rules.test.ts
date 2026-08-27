@@ -7,7 +7,6 @@ import {
   matchPath,
   matchPattern,
   normalizedStages,
-  patternScore,
   pathVerdict,
   relativeTo,
   ruleVerdict,
@@ -125,40 +124,27 @@ test('no rules never reach a verdict', () => {
   }
 });
 
-test('patternScore counts every character that is not a star', () => {
-  assert.equal(patternScore('*'), 0);
-  assert.equal(patternScore('git *'), 4);
-  assert.equal(patternScore('git push *'), 9);
-  assert.equal(patternScore('git * main'), 9);
-});
-
-test('the narrower pattern wins whichever list it sits in', () => {
+test('the list a rule sits in decides, however narrow the other list is', () => {
   const narrowAllow = rules({deny: ['*'], allow: ['git *']});
-  assert.equal(ruleVerdict('git status', narrowAllow), 'allow');
+  assert.equal(ruleVerdict('git status', narrowAllow), 'deny');
 
   const narrowDeny = rules({allow: ['*'], deny: ['git *']});
   assert.equal(ruleVerdict('git status', narrowDeny), 'deny');
 });
 
-test('ask on everything still lets the listed commands through', () => {
+test('ask on everything shadows every allow rule', () => {
   const config = rules({
     ask: ['*'],
     allow: ['git *', 'npm run *'],
     deny: ['git push *', 'rm *'],
   });
-  assert.equal(ruleVerdict('git status', config), 'allow');
-  assert.equal(ruleVerdict('npm run build', config), 'allow');
+  assert.equal(ruleVerdict('git status', config), 'ask');
+  assert.equal(ruleVerdict('npm run build', config), 'ask');
   assert.equal(ruleVerdict('curl example.com', config), 'ask');
   assert.equal(ruleVerdict('rm -rf x', config), 'deny');
 });
 
-test('an equal score is broken by the stricter verdict', () => {
-  const tied = rules({allow: ['git * main'], deny: ['git push *']});
-  assert.equal(patternScore('git * main'), patternScore('git push *'));
-  assert.equal(ruleVerdict('git push main', tied), 'deny');
-});
-
-test('the worst stage wins even when another stage matched something narrower', () => {
+test('the worst stage wins even when another stage had an allow rule of its own', () => {
   const mixed = rules({allow: ['git *'], ask: ['*']});
   assert.equal(ruleVerdict('git status && curl x', mixed), 'ask');
 });
@@ -261,6 +247,11 @@ test('a relative pattern still means inside the project and nothing more', () =>
     assert.equal(pathVerdict(target, root, rules({deny: [`edit(${pattern})`]})), null, pattern);
   }
   assert.equal(pathVerdict('src/a.ts', root, rules({deny: ['edit(**)']})), 'deny');
+});
+
+test('a bare deny on paths outranks a narrower allow', () => {
+  const shadowed = rules({deny: ['edit(**)'], allow: ['edit(src/**)']});
+  assert.equal(pathVerdict('src/a.ts', root, shadowed), 'deny');
 });
 
 test('a tilde pattern is expanded before an outside path is matched', () => {
