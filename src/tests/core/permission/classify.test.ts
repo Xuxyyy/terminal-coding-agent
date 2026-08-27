@@ -124,6 +124,25 @@ test('an angle bracket the shell would act on is still a redirect', () => {
   assert.equal(level("echo 'hi' > src/a.ts"), 'recoverable');
 });
 
+test('a quoted redirect target is judged by the name the shell uses', () => {
+  for (const command of [
+    'echo x > "/etc/passwd"',
+    "echo x > '/etc/passwd'",
+    'echo x > ""/etc/passwd',
+    'echo x > \\/etc/passwd',
+    'echo x >> "/etc/passwd"',
+    'echo x 2> "/etc/passwd"',
+    'echo x > "../out.txt"',
+    "echo x > '~/.zshrc'",
+    `cat secret > "${outside}/f.txt"`,
+  ]) {
+    assert.equal(level(command), 'escape', command);
+  }
+  assert.equal(level('echo x > ".git/config"'), 'protected');
+  assert.equal(level('echo x > "src/a.ts"'), 'recoverable');
+  assert.equal(level("echo x > 'src/a.ts'"), 'recoverable');
+});
+
 test('the project root itself cannot be destroyed', () => {
   assert.equal(level('rm -rf .'), 'escape');
   assert.equal(level(`rm -rf ${project}`), 'escape');

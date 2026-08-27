@@ -564,7 +564,11 @@ For one `bash` command:
    executable. Node has no `shlex`, so it is written, not imported. Failure → unclassified.
 4. **Escaping executable** — `sudo`, `mkfs*`, `dd of=`, `git push` → `escape`.
 5. **Write targets** — redirect targets (`>`, `>>`, after discarding `2>/dev/null` and
-   friends) plus the non-flag arguments of `cp ln mkdir mv rm rmdir tee touch`. If a stage has
+   friends) plus the non-flag arguments of `cp ln mkdir mv rm rmdir tee touch`. A redirect
+   target is matched out of the raw text, so `unquoteTarget` strips its quotes and backslash
+   escapes before anything looks at it: the gate has to resolve the name **the shell will
+   open**, and `> "/etc/passwd"` is not a relative path just because it starts with a quote.
+   The argument targets arrive through `commandParts` already unquoted. If a stage has
    write targets **and** contains `` ` ``, `$`, `(` or `)`, the target cannot be determined →
    `escape`. Otherwise resolve each against the root: outside → `escape`; the root itself with
    a destructive command → `escape`; protected → `protected`; a delete → `destroy`; else

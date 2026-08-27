@@ -50,6 +50,25 @@ export function maskQuotedRedirects(stage: string): string {
   return masked;
 }
 
+export function unquoteTarget(target: string): string {
+  let plain = '';
+  let quote: string | null = null;
+  let index = 0;
+  while (index < target.length) {
+    const character = target[index] as string;
+    if (character === '\\' && quote !== "'" && index + 1 < target.length) {
+      plain += target[index + 1];
+      index += 2;
+      continue;
+    }
+    if (quote === null && (character === "'" || character === '"')) quote = character;
+    else if (quote === character) quote = null;
+    else plain += character;
+    index += 1;
+  }
+  return plain;
+}
+
 function separatorAt(command: string, index: number): string | null {
   const character = command[index];
   const previous = command[index - 1];

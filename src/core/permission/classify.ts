@@ -6,6 +6,7 @@ import {
   discardNoiseRedirects,
   maskQuotedRedirects,
   splitStages,
+  unquoteTarget,
 } from './stages.js';
 
 export type Level = 'observe' | 'recoverable' | 'protected' | 'destroy' | 'escape';
@@ -113,7 +114,9 @@ function worst(items: Classification[]): Classification {
 
 function stageTargets(stage: string, parts: string[]): string[] {
   const cleaned = discardNoiseRedirects(maskQuotedRedirects(stage));
-  const targets = [...cleaned.matchAll(REDIRECT_TARGET_PATTERN)].map((match) => match[1]);
+  const targets = [...cleaned.matchAll(REDIRECT_TARGET_PATTERN)].map((match) =>
+    unquoteTarget(match[1]),
+  );
   const executable = executableOf(parts);
   const unsafeRead =
     READ_ONLY_COMMANDS.has(executable) &&
