@@ -52,3 +52,20 @@ test('appendCommandHistory creates the folder it writes into', () => {
     fs.rmSync(directory, {recursive: true});
   }
 });
+
+test('appendCommandHistory keeps the history private', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-coding-cli-'));
+  const home = path.join(directory, '.acc');
+  const historyPath = path.join(home, 'prompt-history');
+
+  try {
+    fs.mkdirSync(home, {mode: 0o755});
+    fs.writeFileSync(historyPath, '', {mode: 0o644});
+    appendCommandHistory('first task', historyPath);
+
+    assert.equal(fs.statSync(historyPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(home).mode & 0o777, 0o700);
+  } finally {
+    fs.rmSync(directory, {recursive: true});
+  }
+});

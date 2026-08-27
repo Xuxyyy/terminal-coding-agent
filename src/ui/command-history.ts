@@ -1,6 +1,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import {makeDir} from '../core/projects.js';
+
+const FILE_MODE = 0o600;
 
 export const ACC_HOME =
   process.env.ACC_HOME || path.join(os.homedir(), '.acc');
@@ -42,8 +45,11 @@ export function appendCommandHistory(
 ): void {
   const lines = command.split('\n').map((line) => `+${line}\n`).join('');
   try {
-    fs.mkdirSync(path.dirname(historyPath), {recursive: true});
-    fs.appendFileSync(historyPath, `\n# ${new Date().toISOString()}\n${lines}`);
+    makeDir(path.dirname(historyPath));
+    fs.appendFileSync(historyPath, `\n# ${new Date().toISOString()}\n${lines}`, {
+      mode: FILE_MODE,
+    });
+    fs.chmodSync(historyPath, FILE_MODE);
   } catch {
     return;
   }
