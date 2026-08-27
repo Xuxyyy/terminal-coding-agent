@@ -510,7 +510,7 @@ never less, because the only verdict that reaches an outside path is `deny`. It 
 `escape`, and the chain below keeps it that way.
 
 A path pattern is resolved by the same list order as a bash one — `pathVerdict` calls the
-same `bestVerdict` — so `deny: ["edit(**)"], allow: ["edit(plans/**)"]` denies `plans/` too:
+same `listVerdict` — so `deny: ["edit(**)"], allow: ["edit(plans/**)"]` denies `plans/` too:
 `edit(**)` matches, `deny` is scanned first, and the `allow` is never reached. Carving a hole
 in a blanket `deny` is not something this layer can express, for either tag. One order to
 learn for both is worth more than a second rule and the hole it would open.

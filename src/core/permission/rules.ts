@@ -76,7 +76,7 @@ function worstRank(verdict: RuleVerdict | null): number {
   return WORST[verdict ?? 'none'];
 }
 
-function bestVerdict(rules: Rules, matches: (rule: Rule) => boolean): RuleVerdict | null {
+function listVerdict(rules: Rules, matches: (rule: Rule) => boolean): RuleVerdict | null {
   const lists: [RuleVerdict, Rule[]][] = [
     ['deny', rules.deny],
     ['ask', rules.ask],
@@ -89,7 +89,7 @@ function bestVerdict(rules: Rules, matches: (rule: Rule) => boolean): RuleVerdic
 }
 
 export function stageVerdict(stage: string, rules: Rules): RuleVerdict | null {
-  return bestVerdict(
+  return listVerdict(
     rules,
     (rule) => rule.tag === 'bash' && matchPattern(rule.pattern, stage),
   );
@@ -102,13 +102,13 @@ export function pathVerdict(
 ): RuleVerdict | null {
   const relative = relativeTo(target, root);
   if (relative !== null) {
-    return bestVerdict(
+    return listVerdict(
       rules,
       (rule) => rule.tag === 'edit' && matchPath(rule.pattern, relative),
     );
   }
   const forms = pathForms(candidatePath(target, root));
-  return bestVerdict(
+  return listVerdict(
     rules,
     (rule) =>
       rule.tag === 'edit' &&
