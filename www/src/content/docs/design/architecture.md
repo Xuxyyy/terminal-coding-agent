@@ -167,7 +167,7 @@ before a release, not in CI.
 The design docs in the repo are the long version, and they are the canonical
 copy.
 
-- [`docs/agent-loop.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/agent-loop.md)
+- [`docs/agent-loop.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/agent-loop.md)
   — the seam, the turn, streaming tool calls, interrupts, and context pressure.
-- [`docs/sessions.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/sessions.md)
+- [`docs/sessions.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/sessions.md)
   — the on-disk layout, what every reader does at a compact record, resume, and rewind.

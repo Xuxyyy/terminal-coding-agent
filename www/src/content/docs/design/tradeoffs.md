@@ -100,6 +100,6 @@ where the boundary is.
 
 ## Full reasoning
 
-- [`docs/features.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/features.md)
+- [`docs/features.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/features.md)
   — what ships today, and the full "not built" list including the sandbox,
   network tools, and a debugging transcript.

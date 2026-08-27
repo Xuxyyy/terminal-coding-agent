@@ -214,6 +214,6 @@ length suggests.
 
 ## Full reasoning
 
-- [`docs/tools.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/tools.md)
+- [`docs/tools.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/tools.md)
   — every tool's arguments and return strings, all four read caps, path
   resolution, and the checklist for adding a tool.

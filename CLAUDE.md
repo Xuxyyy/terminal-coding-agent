@@ -1,4 +1,4 @@
-# coding-cli
+# terminal-coding-agent
 
 `acc` — a small coding agent CLI. The workspace is the current directory.
 

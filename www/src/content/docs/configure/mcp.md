@@ -162,6 +162,6 @@ server that dies mid-session stays dead until one.
 
 ## Full reasoning
 
-- [`docs/mcp.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/mcp.md)
+- [`docs/mcp.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/mcp.md)
   — the path from a line of JSON to a tool the model can call, the permission
   branch line by line, and how the round trip is tested against a real server.

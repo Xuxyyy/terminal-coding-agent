@@ -3,7 +3,7 @@
 ## Reporting a problem
 
 Report it privately through
-[GitHub's security advisories](https://github.com/Xuxyyy/coding-cli/security/advisories/new),
+[GitHub's security advisories](https://github.com/Xuxyyy/terminal-coding-agent/security/advisories/new),
 not as a public issue.
 
 `acc` is installed by cloning, so there are no released versions to support: the

@@ -24,8 +24,8 @@ npm registry yet, so there is no `npm install -g acc`.
 ## Install
 
 ```bash
-git clone https://github.com/Xuxyyy/coding-cli.git
-cd coding-cli
+git clone https://github.com/Xuxyyy/terminal-coding-agent.git
+cd terminal-coding-agent
 npm install
 npm link
 ```
@@ -139,7 +139,7 @@ not losing it.
 The link points at your clone, so updating is a pull and a rebuild:
 
 ```bash
-cd coding-cli
+cd terminal-coding-agent
 git pull
 npm install
 ```
@@ -147,7 +147,7 @@ npm install
 ## Uninstall
 
 ```bash
-npm unlink -g coding-cli
+npm unlink -g terminal-coding-agent
 ```
 
 That removes the global link. Delete the clone afterwards if you want it gone,

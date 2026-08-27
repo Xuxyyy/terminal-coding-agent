@@ -1,6 +1,6 @@
 # acc
 
-[![test](https://github.com/Xuxyyy/coding-cli/actions/workflows/test.yml/badge.svg)](https://github.com/Xuxyyy/coding-cli/actions/workflows/test.yml)
+[![test](https://github.com/Xuxyyy/terminal-coding-agent/actions/workflows/test.yml/badge.svg)](https://github.com/Xuxyyy/terminal-coding-agent/actions/workflows/test.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A small terminal coding agent that reads, edits, and runs code in the current
@@ -36,8 +36,8 @@ from. That is what it is for, and it is why every call goes through the gate.
 ## Quick start
 
 ```bash
-git clone https://github.com/Xuxyyy/coding-cli.git
-cd coding-cli
+git clone https://github.com/Xuxyyy/terminal-coding-agent.git
+cd terminal-coding-agent
 npm install   # prepare runs tsc, so there is no separate build step
 npm link
 cd ~/some-project

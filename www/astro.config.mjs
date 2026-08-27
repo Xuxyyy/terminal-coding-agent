@@ -10,7 +10,7 @@ export default defineConfig({
       title: "Coding CLI Docs",
       description: "A small terminal coding agent that reads, edits, and runs code in the current directory.",
       customCss: ["./src/styles/grayscale.css"],
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Xuxyyy/coding-cli" }],
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Xuxyyy/terminal-coding-agent" }],
       plugins: [starlightLinksValidator()],
       sidebar: [
         { label: "Start", autogenerate: { directory: "start" } },

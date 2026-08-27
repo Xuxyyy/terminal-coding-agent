@@ -294,6 +294,6 @@ asking.
 
 ## Full reasoning
 
-- [`docs/permissions.md`](https://github.com/Xuxyyy/coding-cli/blob/main/docs/permissions.md)
+- [`docs/permissions.md`](https://github.com/Xuxyyy/terminal-coding-agent/blob/main/docs/permissions.md)
   — the classifier's stages, `auto` mode's rubric and what it strips, the
   hardening pass, and what was deliberately not built.
