@@ -12,7 +12,7 @@ directory.
 
 ## What it is
 
-One TypeScript package — 6,683 lines and 722 tests. You start it inside a
+One TypeScript package — 6,711 lines and 724 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
