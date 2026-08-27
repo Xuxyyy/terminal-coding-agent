@@ -69,6 +69,19 @@ worktree; ask for them if they are missing.
 The project's **Root Directory is `www`** — left empty, the build runs at the
 repo root, finds no Astro project, and fails.
 
+The sidebar is **Start / Configure / Design**, and `Configure` is one page per
+module — `settings`, `permissions`, `tools`, `models`, `mcp`, `commands`. Titles
+are plain nouns. A module's reasoning and its reference belong on the same page,
+so do not re-split them; `design/` holds only what crosses every module —
+`architecture` and `tradeoffs`.
+
+A module page **leads with what happens**, then how to configure it. Keep a
+reason only where it changes what a reader predicts — one or two sentences at
+the top of the thing it explains, not a section of its own. The standalone
+argument goes in `docs/`, which every page links to at the bottom. A page that
+opens with a case for the design instead of the behaviour is the failure to
+avoid; so is stating the same rule in prose and again in a table.
+
 Verify anything under `www/` with `npm run build --prefix www`. `npm test` does
 not touch the site.
 
@@ -89,12 +102,13 @@ fact drift apart and the site is the one that gets updated.
 
 Architecture is the deliberate exception, and it now exists at three lengths.
 The README's *How it works* is the thirty-second version, for someone who landed
-on GitHub and will not click anything. The site's **Design** section is the
-version with the reasoning, for a reader who will give it ten minutes. `docs/`
-is the full argument, for whoever changes the code. That duplication is on
-purpose — a reader who stops at the first one should still have something true.
-Change architecture writing in all three, or say in the commit which length you
-chose not to touch.
+on GitHub and will not click anything. The site is the version with the
+reasoning, for a reader who will give it ten minutes — `design/architecture` for
+what crosses every module, and the opening sections of each `configure/` page
+for the rest. `docs/` is the full argument, for whoever changes the code. That
+duplication is on purpose — a reader who stops at the first one should still
+have something true. Change architecture writing in all three, or say in the
+commit which length you chose not to touch.
 
 ## Sessions
 
