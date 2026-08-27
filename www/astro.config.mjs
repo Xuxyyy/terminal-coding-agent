@@ -9,6 +9,7 @@ export default defineConfig({
     starlight({
       title: "Coding CLI Docs",
       description: "A small terminal coding agent that reads, edits, and runs code in the current directory.",
+      customCss: ["./src/styles/grayscale.css"],
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/Xuxyyy/coding-cli" }],
       plugins: [starlightLinksValidator()],
       sidebar: [

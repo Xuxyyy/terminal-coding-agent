@@ -1,0 +1,90 @@
+:root,
+::backdrop {
+	--sl-color-gray-1: hsl(0, 0%, 93.4%);
+	--sl-color-gray-2: hsl(0, 0%, 76.3%);
+	--sl-color-gray-3: hsl(0, 0%, 54.8%);
+	--sl-color-gray-4: hsl(0, 0%, 34.8%);
+	--sl-color-gray-5: hsl(0, 0%, 21.9%);
+	--sl-color-gray-6: hsl(0, 0%, 12.5%);
+	--sl-color-black: hsl(0, 0%, 9.5%);
+
+	--sl-color-orange-low: hsl(0, 0%, 25.8%);
+	--sl-color-orange: hsl(0, 0%, 76.9%);
+	--sl-color-orange-high: hsl(0, 0%, 91.5%);
+	--sl-color-green-low: hsl(0, 0%, 27.6%);
+	--sl-color-green: hsl(0, 0%, 83.6%);
+	--sl-color-green-high: hsl(0, 0%, 90.2%);
+	--sl-color-blue-low: hsl(0, 0%, 13.4%);
+	--sl-color-blue: hsl(0, 0%, 38.8%);
+	--sl-color-blue-high: hsl(0, 0%, 78.1%);
+	--sl-color-purple-low: hsl(0, 0%, 18.3%);
+	--sl-color-purple: hsl(0, 0%, 51.9%);
+	--sl-color-purple-high: hsl(0, 0%, 84.2%);
+	--sl-color-red-low: hsl(0, 0%, 19%);
+	--sl-color-red: hsl(0, 0%, 54.9%);
+	--sl-color-red-high: hsl(0, 0%, 82%);
+
+	--sl-color-accent-low: hsl(0, 0%, 15.8%);
+	--sl-color-accent: hsl(0, 0%, 46.3%);
+	--sl-color-accent-high: hsl(0, 0%, 78.3%);
+
+	--sl-color-backdrop-overlay: hsla(0, 0%, 9.4%, 0.66);
+
+	--sl-shadow-lg: 0px 25px 7px hsla(0, 0%, 0%, 0.03), 0px 16px 6px hsla(0, 0%, 0%, 0.1),
+		0px 9px 5px hsla(0, 0%, 9.4%, 0.33), 0px 4px 4px hsla(0, 0%, 0%, 0.75),
+		0px 4px 2px hsla(0, 0%, 0%, 0.25);
+}
+
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+	--sl-color-white: hsl(0, 0%, 9.5%);
+	--sl-color-gray-1: hsl(0, 0%, 15%);
+	--sl-color-gray-2: hsl(0, 0%, 21.9%);
+	--sl-color-gray-3: hsl(0, 0%, 34.8%);
+	--sl-color-gray-4: hsl(0, 0%, 54.8%);
+	--sl-color-gray-5: hsl(0, 0%, 76.3%);
+	--sl-color-gray-6: hsl(0, 0%, 91%);
+	--sl-color-gray-7: hsl(0, 0%, 95.5%);
+	--sl-color-black: hsl(0, 0%, 93.5%);
+	--sl-color-bg-nav: hsl(0, 0%, 89.5%);
+	--sl-color-bg-sidebar: hsl(0, 0%, 89.5%);
+
+	--sl-color-orange-high: hsl(0, 0%, 34.5%);
+	--sl-color-orange: hsl(0, 0%, 76.8%);
+	--sl-color-orange-low: hsl(0, 0%, 92.5%);
+	--sl-color-green-high: hsl(0, 0%, 34.5%);
+	--sl-color-green: hsl(0, 0%, 76.3%);
+	--sl-color-green-low: hsl(0, 0%, 95.1%);
+	--sl-color-blue-high: hsl(0, 0%, 18.1%);
+	--sl-color-blue: hsl(0, 0%, 40%);
+	--sl-color-blue-low: hsl(0, 0%, 83.9%);
+	--sl-color-purple-high: hsl(0, 0%, 24.9%);
+	--sl-color-purple: hsl(0, 0%, 49%);
+	--sl-color-purple-low: hsl(0, 0%, 85.7%);
+	--sl-color-red-high: hsl(0, 0%, 27.2%);
+	--sl-color-red: hsl(0, 0%, 52.9%);
+	--sl-color-red-low: hsl(0, 0%, 86.1%);
+
+	--sl-color-accent-high: hsl(0, 0%, 18.1%);
+	--sl-color-accent: hsl(0, 0%, 40%);
+	--sl-color-accent-low: hsl(0, 0%, 83.9%);
+
+	--sl-color-backdrop-overlay: hsla(0, 0%, 34.4%, 0.66);
+
+	--sl-shadow-lg: 0px 25px 7px hsla(0, 0%, 0%, 0.01), 0px 16px 6px hsla(0, 0%, 0%, 0.03),
+		0px 9px 5px hsla(0, 0%, 9.4%, 0.08), 0px 4px 4px hsla(0, 0%, 0%, 0.16),
+		0px 4px 2px hsla(0, 0%, 0%, 0.04);
+}
+
+.expressive-code {
+	filter: grayscale(1);
+}
+
+#starlight__sidebar a[aria-current='page'] {
+	color: var(--sl-color-white);
+	background-color: hsl(0, 0%, 22%);
+}
+
+:root[data-theme='light'] #starlight__sidebar a[aria-current='page'] {
+	background-color: hsl(0, 0%, 84%);
+}
