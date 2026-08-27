@@ -2,6 +2,11 @@
 
 `acc` — a small coding agent CLI. The workspace is the current directory.
 
+**This repo is never a workspace.** Everything in `src/` about "the workspace",
+`.acc/settings.json`, or the permission gate describes a *user's* project at
+runtime — never this folder. `CLAUDE.md`, `.claude/` and `docs/` configure the
+agent writing this code, and `acc` never reads them. The two never meet.
+
 ## Workflow
 
 Work lands as commits on `main` — do not open a pull request for it.
