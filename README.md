@@ -12,7 +12,7 @@ directory.
 
 ## What it is
 
-One TypeScript package — 6,699 lines and 723 tests. You start it inside a
+One TypeScript package — 6,683 lines and 722 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
@@ -81,7 +81,7 @@ into a new one, so a resumed run and its original stay a single session on disk.
 
 The longer version of all three, with the alternatives that were rejected, is
 [Architecture](https://coding-cli-docs.vercel.app/design/architecture/) on
-the docs site. Six design docs in [`docs/`](docs/) — about 2,300 lines — go one
+the docs site. Six design docs in [`docs/`](docs/) — about 2,400 lines — go one
 level deeper, one per subsystem: the code is the truth about *what*, those files
 are the truth about *why*.
 

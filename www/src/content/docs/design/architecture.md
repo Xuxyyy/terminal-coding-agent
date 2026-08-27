@@ -153,7 +153,7 @@ JSON argument, and a mid-stream disconnect all ordinary test cases.
 **No test spends money.** The model client is faked in every one of them; there
 is no API key in the suite and no network call.
 
-The suite is **641 tests across 35 files**, laid out as `src/tests/core` and
+The suite is **722 tests across 46 files**, laid out as `src/tests/core` and
 `src/tests/ui` mirroring the two halves of the seam. `npm test` is the whole
 check, and it **typechecks first** — the script is `tsc && node --test`, so a
 type error fails the run and nothing executes until it builds.
