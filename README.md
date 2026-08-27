@@ -21,7 +21,7 @@ before anything it cannot take back.
   `bash`.
 - MCP servers, declared in `~/.acc/settings.json` and started with `acc`. Their
   tools are published beside the built-in five, and no permission mode runs one
-  of them silently — [why](https://coding-cli-docs.vercel.app/design/mcp/).
+  of them silently — [why](https://coding-cli-docs.vercel.app/configure/mcp/).
 - Three providers — DeepSeek, GLM, and Kimi — six models behind one client.
 - One permission gate that every tool call passes through.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
@@ -58,7 +58,7 @@ root, so `cd` into a project folder first.
   back to shell `grep` — that works, but it is slower and ignores `.gitignore`.
 - One API key is enough. Copy `.env.example` to `.env` and fill in DeepSeek,
   GLM, or Kimi; `acc` picks a model from whichever key it finds. The six model
-  ids are on [Settings and models](https://coding-cli-docs.vercel.app/reference/settings/).
+  ids are on [Models](https://coding-cli-docs.vercel.app/configure/models/).
 
 ## How it works
 
@@ -80,7 +80,7 @@ reopens a session in the folder it already owns instead of copying its history
 into a new one, so a resumed run and its original stay a single session on disk.
 
 The longer version of all three, with the alternatives that were rejected, is
-[How it's built](https://coding-cli-docs.vercel.app/design/how-its-built/) on
+[Architecture](https://coding-cli-docs.vercel.app/design/architecture/) on
 the docs site. Six design docs in [`docs/`](docs/) — about 2,300 lines — go one
 level deeper, one per subsystem: the code is the truth about *what*, those files
 are the truth about *why*.
@@ -99,9 +99,9 @@ no way to test it without paying for a deliberate failure.
 Full documentation is at
 [coding-cli-docs.vercel.app](https://coding-cli-docs.vercel.app).
 
-- [Install and first run](https://coding-cli-docs.vercel.app/start/install/)
-- [How it's built](https://coding-cli-docs.vercel.app/design/how-its-built/)
-- [Commands](https://coding-cli-docs.vercel.app/reference/commands/)
+- [Install](https://coding-cli-docs.vercel.app/start/install/)
+- [Architecture](https://coding-cli-docs.vercel.app/design/architecture/)
+- [Commands](https://coding-cli-docs.vercel.app/configure/commands/)
 
 ## Contributing
 

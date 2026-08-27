@@ -1,5 +1,5 @@
 ---
-title: How it's built
+title: Architecture
 description: One seam between the agent and the terminal, the loop that runs a turn, what a run leaves on disk, and how all of it is tested without a terminal or an API key.
 sidebar:
   order: 1
@@ -38,8 +38,8 @@ What that buys shows up twice below — the loop runs with no terminal at all, a
 so does every test of it.
 
 The two pages that follow are about the core side of that line: [the permission
-gate](/design/permissions) that every tool passes through, and [the five
-tools](/design/tools) themselves.
+gate](/configure/permissions) that every tool passes through, and [the five
+tools](/configure/tools) themselves.
 
 ## The loop
 

@@ -14,8 +14,8 @@ export default defineConfig({
       plugins: [starlightLinksValidator()],
       sidebar: [
         { label: "Start", autogenerate: { directory: "start" } },
+        { label: "Configure", autogenerate: { directory: "configure" } },
         { label: "Design", autogenerate: { directory: "design" } },
-        { label: "Reference", autogenerate: { directory: "reference" } },
       ],
     }),
   ],

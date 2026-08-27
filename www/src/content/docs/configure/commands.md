@@ -2,7 +2,7 @@
 title: Commands
 description: Every slash command in acc, what it prints, and how to leave.
 sidebar:
-  order: 1
+  order: 6
 ---
 
 Type `/` in the input box to open the menu. It filters as you type, ↑↓ moves
@@ -87,7 +87,7 @@ stopped: the context is full and nothing more can be freed; send your next messa
 ```
 
 The 80% line is the default and `ACC_COMPACT_AT` moves it — see
-[Settings and models](/reference/settings).
+[Settings](/configure/settings).
 
 ## `/compact`
 
@@ -142,7 +142,7 @@ created readable only by you, and `ACC_HOME` moves all of it somewhere else.
 
 **Two things are not saved.** Approvals last for the run and no longer, so a
 resumed session starts asking again — to make one permanent, write it as a rule
-in [Settings and models](/reference/settings). And the permission mode is not
+in [Permissions](/configure/permissions). And the permission mode is not
 restored either: `/resume` reopens a conversation, not a configuration.
 
 Old sessions are evicted when `acc` starts. One is deleted only when it is
@@ -174,7 +174,7 @@ one brings that conversation back. If there is nothing to rewind to, it says
 
 Files changed by a shell command, or by you in your editor, are not restored —
 only writes that went through `edit_file` or `write_file`.
-[What I left out, and why](/design/tradeoffs) explains that boundary.
+[Trade-offs](/design/tradeoffs) explains that boundary.
 
 ## `/permission`
 
@@ -196,16 +196,11 @@ so: `switched to auto (not saved to settings.json)`.
 The choice takes effect from your next message and the conversation is not
 disturbed.
 
-| Mode | Runs without asking | Above that line |
-|---|---|---|
-| `ask-edits` | reads only | asks you |
-| `auto-edits` | reads and writes inside the project | asks you |
-| `auto` | reads and writes inside the project | asks a model |
-
 `auto-edits` is where a session starts. **No mode refuses anything by itself** —
 above its line a mode asks or delegates, and that is all a mode can do. To make
 `acc` unable to do something, write a `deny` rule instead, which names paths.
-[The permission gate](/design/permissions) is the reasoning behind the line.
+[Permissions](/configure/permissions) has what each mode runs without asking,
+and the rule behind the line.
 
 **The header keeps showing the mode you left.** After switching, the
 `permissions:` line at the top of the screen still reads the old name. This is a
@@ -240,7 +235,7 @@ for next time. If it could not be saved, the notice says so:
 
 The conversation carries over untouched — only the client changes. Earlier rows
 keep naming the model that answered them, and the new one picks up the context
-budget of its own window. [Settings and models](/reference/settings) lists the six.
+budget of its own window. [Models](/configure/models) lists the six.
 
 ## `/mcp`
 
@@ -263,7 +258,7 @@ or it did not answer within fifteen seconds — and the other servers keep their
 tools. One bad server never stops `acc` from starting.
 
 **`6 of 45 tools`** means that server has a
-[`tools` allowlist](/reference/settings): it offered forty-five and six were
+[`tools` allowlist](/configure/mcp): it offered forty-five and six were
 published. Without one the line reads plainly, `12 tools`, so a filtered server
 and a small server never look the same. A pattern that matched nothing is named
 in brackets on that line — a typo costs you a tool, and this is where you see it.
@@ -296,7 +291,7 @@ no MCP servers configured — add an "mcpServers" block to /Users/you/.acc/setti
 
 Servers connect once, at startup. Editing the block while `acc` is running
 changes nothing until you restart — the same rule the
-[settings files](/reference/settings) follow. `/mcp` reports what the *current*
+[settings files](/configure/settings) follow. `/mcp` reports what the *current*
 run connected to.
 
 ## Keys and leaving

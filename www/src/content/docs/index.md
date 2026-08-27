@@ -16,13 +16,13 @@ three providers work through one client, and one API key is enough.
 - **The permission rule is what git can undo, not which tool asked.** A write
   inside the repo runs silently whether it came from `edit_file` or an `echo >`
   in a shell command; a delete, a push, or anything outside the project stops
-  and asks. → [The permission gate](/design/permissions)
+  and asks. → [Permissions](/configure/permissions)
 - **Five tools, and editing matches an exact string.** Line numbers drift the
   moment the model makes its first edit; an exact match either applies or fails
-  loudly, and loud is recoverable. → [Designing the tools](/design/tools)
+  loudly, and loud is recoverable. → [Tools](/configure/tools)
 - **Resume reopens a session in place.** The history is seeded back into the
   live conversation rather than copied into a new folder, so a resumed run and
-  its original stay one session on disk. → [How it's built](/design/how-its-built)
+  its original stay one session on disk. → [Architecture](/design/architecture)
 
 ## What it can do
 
@@ -41,11 +41,11 @@ three providers work through one client, and one API key is enough.
 
 ## Where to start reading
 
-- **[How it's built](/design/how-its-built)** — the seam between the agent and
+- **[Architecture](/design/architecture)** — the seam between the agent and
   the terminal, the turn loop, what a run leaves on disk, and how all of it is
   tested without a terminal or an API key. Start here.
-- **[What I left out, and why](/design/tradeoffs)** — three features that are
+- **[Trade-offs](/design/tradeoffs)** — three features that are
   cheap to add and expensive to add wrong, and what each is waiting for.
 
-Want to run it instead? [Install and first run](/start/install) has the four
+Want to run it instead? [Install](/start/install) has the four
 commands and what the first screen shows.

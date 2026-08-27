@@ -1,5 +1,5 @@
 ---
-title: Install and first run
+title: Install
 description: Clone the repository, link the acc command onto your PATH, and understand what the first screen shows you.
 sidebar:
   order: 1
@@ -19,7 +19,7 @@ npm registry yet, so there is no `npm install -g acc`.
   Install ripgrep with `brew install ripgrep`, `apt install ripgrep`, or from
   [the ripgrep releases](https://github.com/BurntSushi/ripgrep/releases).
 - **An API key** for DeepSeek, GLM, or Kimi. One is enough — see
-  [Settings and models](/reference/settings).
+  [Models](/configure/models).
 
 ## Install
 
@@ -106,7 +106,7 @@ came back. While a tool is still running the row reads `running…`, and
 - **Shell output starts with its exit code**, like `[exit 0]`. Long output is
   cut in the middle and the cut is marked.
 
-[Tools](/reference/tools) describes all five tools and their limits.
+[Tools](/configure/tools) describes all five tools and their limits.
 
 ## When it asks
 
@@ -129,8 +129,8 @@ means the same as `n`.
 Refusing does not end the task. The agent is told not to retry, and carries on
 with the rest of what you asked.
 
-[The permission gate](/design/permissions) explains the rule that decides which
-actions stop, and [Commands](/reference/commands) covers the keys for
+[Permissions](/configure/permissions) explains the rule that decides which
+actions stop, and [Commands](/configure/commands) covers the keys for
 interrupting and leaving. Your conversation is saved as you go, so leaving is
 not losing it.
 
