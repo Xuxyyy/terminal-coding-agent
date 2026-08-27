@@ -108,26 +108,31 @@ A `bash` pattern is matched against the command after `acc` normalizes it, so
 
 ## Which rule wins
 
-**The most specific pattern wins**, not the list it sits in. Specificity is the
-count of characters in the pattern that are **not** `*`.
+**The list a pattern sits in wins.** The three lists are read in one fixed
+order — `deny`, then `ask`, then `allow` — and the first list with *any*
+matching pattern decides. How wide or narrow a pattern is never enters into it.
 
 So with:
 
 ```json
 {
   "permissions": {
-    "ask":   ["bash(*)"],
+    "deny":  ["bash(*)"],
     "allow": ["bash(git *)"]
   }
 }
 ```
 
-`bash(git *)` scores 4 and `bash(*)` scores 0, so this means *ask about
-everything except git* — which is what it looks like it means.
+`git status` is **denied**. `bash(*)` matches it, `deny` is read first, and the
+`allow` is never reached. A blanket `deny` is a wall, and no narrower `allow`
+written below it — or added later by someone who never read the `deny` — can
+cut a door in it.
 
-**A tie goes to the stricter verdict:** `deny` beats `ask` beats `allow`. When
-two patterns score the same, the safe answer wins, so a file can never be
-quietly more permissive than it reads.
+**`ask: ["bash(*)"]` means ask about everything.** It does *not* mean *ask about
+whatever is not listed below*. It matches every command and is read before
+`allow`, so it silences every `allow` rule in the file. To ask about the rest,
+write **no rule** and let the classifier decide — that is what the classifier is
+for.
 
 A command with several stages — `npm test && rm -rf build` — is judged by its
 **worst** stage. A stage matching no pattern at all counts as worse than

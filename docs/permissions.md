@@ -158,9 +158,10 @@ edits files without asking. The fallback constant is `DEFAULT_MODE`, which is a 
 is named as one.
 
 **A session that cannot write is configuration, not a mode.** `deny: ["edit(**)"]` in
-`settings.json` is how that is said, and `deny: ["edit(**)"], allow: ["edit(plans/**)"]` is
-narrower than a mode could ever express. A rule reaches where a cut point cannot, because it
-names paths.
+`settings.json` is how that is said, and `deny: ["edit(src/**)"], allow: ["edit(plans/**)"]`
+is narrower than a mode could ever express. A rule reaches where a cut point cannot, because
+it names paths. What it cannot do is carve an exception out of a wall: `deny` is scanned
+before `allow`, so the `deny` pattern has to stop short of the directory that stays writable.
 
 **It is not a seal, and the gap is known.** An `edit(...)` rule is consulted for a `write`
 request and — for `deny` only — a `read` one, but never for a `bash` command, so
@@ -442,25 +443,32 @@ A `bash` pattern is matched against the **hardened, normalized** command — sta
 `approvalKey` uses. So `npm  run   build` and `npm run build` are one rule, and what a rule
 matched is what actually runs.
 
-**Which list a pattern sits in no longer decides the race — its specificity does.** Every
-pattern matching a stage is collected across all three lists, and the one with the highest
-**score** wins, where the score is the count of characters in the pattern that are not `*`.
-So `bash(git *)` (4) beats `bash(*)` (0), and `"ask": ["bash(*)"]` finally means what it looks
-like: ask about everything not listed elsewhere. A score, rather than file order or key order,
-because both of those are properties of a file the user hand-edits and neither should be
-something they have to think about.
+**The list a pattern sits in decides, and how wide the pattern is never enters into it.**
+The three lists are scanned in one fixed order — `deny`, then `ask`, then `allow` — and the
+first list holding *any* pattern that matches the stage produces the verdict. Nothing further
+is compared: not the length of the pattern, not where it sits in its list, not which list the
+other matches landed in. This is Claude Code's order, copied deliberately, and it is one
+sentence to learn.
 
-**A tie is broken by the verdict: `deny` > `ask` > `allow`.** `bash(git * main)` and
-`bash(git push *)` both score 9, and `git push main` must be denied — when the score cannot
-separate two patterns the strict answer wins, which is the only tie-break that cannot make a
-file quietly more permissive than it reads.
+The order runs `deny` first for the reason the whole file exists: it is the only order in
+which a broad `deny` cannot be punched through by a narrow `allow` written elsewhere in the
+file, or added to it later by someone who never read the `deny`. **A future change must not
+break that** — the moment a narrow pattern can reach past a broad `deny`, a wall a user wrote
+has a hole in it that nothing on the page mentions, and a permission file that fails open is
+worse than none.
+
+**The cost is that `ask: ["bash(*)"]` means what it says: ask about everything.** It matches
+every command, sits above `allow`, and so silences every `allow` rule in the file. It does
+**not** mean *ask about whatever is not listed below*. The way to say *ask about the rest* is
+to write no rule at all and let the classifier decide — that is exactly what the classifier is
+for. A startup warning for this shape is worth having and does not exist yet.
 
 A command's verdict is the **worst of its stages**, ranking `deny` > `ask` > *no verdict* >
 `allow`. *No verdict* sits above `allow` on purpose: it is what stops `bash(git status*)` from
 allowing `git status && rm -rf x` — the second stage matches nothing, so the command falls
 through to the classifier instead of being carried by the first stage. A command that fails to
-parse can never be allowed; scoring does not apply to it at all, and only a `deny` pattern may
-match its raw text.
+parse can never be allowed; the list order does not apply to it at all, and only a `deny`
+pattern may match its raw text.
 
 Two special cases in a path pattern, and one reason behind both — a rule the user believes is
 active and is not is the failure this file refuses:
@@ -501,13 +509,13 @@ canonicalized and the glob tail is kept as written. Matching more can only ever 
 never less, because the only verdict that reaches an outside path is `deny`. It is still an
 `escape`, and the chain below keeps it that way.
 
-Specificity scores a path pattern the same way it scores a bash one: the count of characters
-that are not `*`. So `edit(plans/**)` (6) beats `edit(**)` (0). The score does not care
-*where* those characters sit, so a pattern anchored at the root and one anchored at the
-extension can tie — the same prefix-versus-suffix asymmetry the bash matcher has. One scoring
-rule for both tags is worth more here than a second rule to learn.
+A path pattern is resolved by the same list order as a bash one — `pathVerdict` calls the
+same `bestVerdict` — so `deny: ["edit(**)"], allow: ["edit(plans/**)"]` denies `plans/` too:
+`edit(**)` matches, `deny` is scanned first, and the `allow` is never reached. Carving a hole
+in a blanket `deny` is not something this layer can express, for either tag. One order to
+learn for both is worth more than a second rule and the hole it would open.
 
-Precedence: the rule layer produces **one** verdict by the scoring above, and that verdict
+Precedence: the rule layer produces **one** verdict by the list order above, and that verdict
 enters the chain **`deny` rule > escape > `ask` rule > `allow` rule > classifier.** A file write walks that chain link for link with a `bash` command — `decide()`
 resolves `pathVerdict(path, root, rules)` for a `write` and hands it to `fileOutcome`, which
 is now the command path's shape exactly, with no exception left. Two things it
@@ -518,9 +526,9 @@ because naming a path is exactly how a user says *I mean this file*. The escape 
 above every allow rule on purpose. `escape` is exactly the set of irreversible or
 project-escaping actions, and a session approval for one is already never remembered; a file
 that could silence it would make that guarantee false. The accepted cost is that there is no
-way to stop `acc` asking about `git push`. Specificity did not change this: `bash(git *)` may
-outscore every other pattern and still not stop `git push` asking, which is why a file that
-wants that command gone writes `bash(git push *)` into `deny` explicitly.
+way to stop `acc` asking about `git push`. No `allow` pattern changes this, however exactly it
+names the command, which is why a file that wants that command gone writes `bash(git push *)`
+into `deny` explicitly.
 
 A broken file **refuses to start**: bad JSON, a rule that is not a string, an unknown key
 inside `permissions`, an unknown `permission_mode`, or any other tag prints the file and the
