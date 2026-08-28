@@ -2,8 +2,8 @@
 
 Status: v5, 2026-08-26. A list of shipped features, not a design doc.
 Read when: you want to know what exists before planning what is next.
-See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`
-for *why* each part looks the way it does.
+See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`,
+`headless.md` for *why* each part looks the way it does.
 
 ## Shape
 
@@ -180,6 +180,32 @@ typo anywhere in the file stops `acc` at startup with the file named. See
   connection errors, 429, 5xx). After output it reports the error instead, so
   no half-answer is printed twice.
 - A failed session write warns once and the run continues.
+
+## Print mode
+
+`acc -p "<task>"` runs one turn with no terminal and exits — no Ink, no
+keyboard, no TTY needed. It is a second implementation of `Host`, in
+`src/core/headless/`; the loop, the tools and the permission gate below the seam
+are unchanged. The evals reach the same code by importing `runHeadless` instead
+of starting the binary.
+
+- stdout is the answer and nothing else, so `acc -p "…" > out.txt` is useful.
+  Tool lines, the prompts with their decisions, and the stop reason go to
+  stderr. `--json` moves the whole event stream to stdout instead: one object
+  per event, then a `{kind: 'result', stopped, usage, prompts, steps}` line.
+- Exit 0 when the turn finished, 1 when it stopped early — a denial, a cap, or
+  an error. A non-zero exit means the run did not complete, not that the answer
+  was bad.
+- **Confirms are denied by default.** `--yes` answers `once`, never `session`,
+  so nothing is remembered and the gate keeps asking. Every confirm is recorded
+  either way, approved or refused — a silent auto-approve would make a prompt
+  count a lie.
+- Bounded on both axes: the 20-step checkpoint is always denied, so it becomes a
+  real ceiling, and `--max-seconds` (default 300) aborts between steps.
+- No session is written to `~/.acc`, so running dozens back to back leaves
+  nothing behind, and a print run cannot be reopened with `/resume`.
+- `--json`, `--yes` and `--max-seconds` throw without `-p`. Interactive mode
+  still refuses to start without a TTY. See `headless.md`.
 
 ## Terminal UI
 

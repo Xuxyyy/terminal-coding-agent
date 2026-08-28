@@ -32,6 +32,13 @@ They meet at one interface, `Host` (`confirm`, `onEvent`, `signal`) in
 lives in `src/core/session.ts` and `src/ui/events.ts` re-exports it for the
 components. No import points the other way.
 
+`Host` has two implementations. `src/ui/agent.ts` is the terminal one;
+`src/core/headless/` is a policy-driven one that runs a turn with no terminal —
+`acc -p "<task>"`, and the evals importing `runHeadless`. It is in core because
+it implements a core interface and imports no React, not because of who calls
+it, and it never imports from `src/ui`: `cli.tsx` parses the flags and passes
+them down.
+
 `src/evals` is neither. It is a dev tool for this repo — it measures the agent,
 it is never shipped inside it, and nothing in `src/core` or `src/ui` may import
 it. It lives under `src/` only so `tsc` typechecks it with everything else and
