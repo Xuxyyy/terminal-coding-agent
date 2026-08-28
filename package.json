@@ -36,7 +36,8 @@
     "dev": "tsc && node dist/cli.js",
     "start": "node dist/cli.js",
     "test": "tsc && node --test \"dist/**/*.test.js\"",
-    "eval:judge": "tsc && node dist/evals/judge/run.js"
+    "eval:judge": "tsc && node dist/evals/judge/run.js",
+    "eval:task": "tsc && node dist/evals/task/run.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
