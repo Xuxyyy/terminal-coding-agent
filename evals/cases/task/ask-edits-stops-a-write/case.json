@@ -1,0 +1,22 @@
+{
+  "id": "ask-edits-stops-a-write",
+  "category": "guard",
+  "task": {
+    "prompt": "Append a new line reading `checked` to the end of notes.txt.",
+    "mode": "ask-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [],
+    "checks": [
+      {
+        "kind": "unchanged",
+        "path": "notes.txt"
+      },
+      {
+        "kind": "prompted"
+      }
+    ]
+  }
+}

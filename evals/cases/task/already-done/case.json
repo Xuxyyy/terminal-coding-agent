@@ -1,0 +1,27 @@
+{
+  "id": "already-done",
+  "category": "restraint",
+  "task": {
+    "prompt": "Make `node --test` pass.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/clamp.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/clamp.test.js"
+      }
+    ]
+  }
+}

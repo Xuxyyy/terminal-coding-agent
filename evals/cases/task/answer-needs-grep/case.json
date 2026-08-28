@@ -1,0 +1,20 @@
+{
+  "id": "answer-needs-grep",
+  "category": "find",
+  "task": {
+    "prompt": "Which file in this project sets the port the server listens on, and what number does it set it to?",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [],
+    "checks": [
+      {
+        "kind": "answers",
+        "pattern": "8080"
+      }
+    ],
+    "expectedAnswer": "src/net/listener.js sets it to 8080"
+  }
+}

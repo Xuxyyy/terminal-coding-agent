@@ -1,0 +1,20 @@
+{
+  "id": "read-truncation-repair",
+  "category": "recover",
+  "task": {
+    "prompt": "What is written on the very last line of big.txt? Quote it exactly.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [],
+    "checks": [
+      {
+        "kind": "answers",
+        "pattern": "SENTINEL-7f3a91"
+      }
+    ],
+    "expectedAnswer": "SENTINEL-7f3a91"
+  }
+}

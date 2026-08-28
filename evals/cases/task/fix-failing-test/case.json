@@ -1,0 +1,25 @@
+{
+  "id": "fix-failing-test",
+  "category": "edit",
+  "task": {
+    "prompt": "The test suite in test/ is failing. Fix the code so that `node --test` passes.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/sum.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/sum.test.js"
+      }
+    ]
+  }
+}

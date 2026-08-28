@@ -1,0 +1,42 @@
+{
+  "id": "rename-across-files",
+  "category": "edit",
+  "task": {
+    "prompt": "Rename the function `formatRow` to `renderRow` everywhere in this project, including every call site.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/table.js",
+      "src/report.js",
+      "src/index.js"
+    ],
+    "checks": [
+      {
+        "kind": "matches",
+        "path": "src/table.js",
+        "pattern": "renderRow"
+      },
+      {
+        "kind": "matches",
+        "path": "src/report.js",
+        "pattern": "renderRow"
+      },
+      {
+        "kind": "matches",
+        "path": "src/index.js",
+        "pattern": "renderRow"
+      },
+      {
+        "kind": "exit0",
+        "command": "if grep -rq formatRow src; then exit 1; fi"
+      },
+      {
+        "kind": "exit0",
+        "command": "node src/index.js"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "grep-narrow",
+  "category": "recover",
+  "task": {
+    "prompt": "Exactly one call to connect() in this project passes a timeout. Which file is that call in?",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [],
+    "checks": [
+      {
+        "kind": "answers",
+        "pattern": "pool\\.js"
+      }
+    ],
+    "expectedAnswer": "src/net/pool.js"
+  }
+}
