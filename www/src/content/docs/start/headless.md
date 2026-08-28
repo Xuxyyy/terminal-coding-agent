@@ -2,7 +2,7 @@
 title: Print mode
 description: Running acc without a terminal — the -p flag, what lands on stdout and stderr, the exit code, why confirms are denied by default, and the two caps that bound an unattended run.
 sidebar:
-  order: 7
+  order: 2
 ---
 
 `acc -p "list the files you can see"` runs one turn and exits. There is no
@@ -56,15 +56,22 @@ What the policy does catch: protected paths, deletes, anything reaching outside
 the project, escapes like `sudo` or `git push`, commands it cannot classify, and
 every MCP call.
 
-For a run that truly cannot write, say so in `~/.acc/settings.json`:
+For a run that truly cannot write, move the line down in `~/.acc/settings.json`:
 
 ```json
-{"permissions": {"deny": ["edit(**)"]}}
+{"permission_mode": "ask-edits"}
 ```
 
-A `deny` rule outranks every mode. Setting `"permission_mode": "ask-edits"`
-also works — it moves the line down so every write asks, and print mode then
-refuses it.
+Every write is now above the line, so it becomes a prompt, and a print run
+refuses it — a `bash` write as much as an `edit_file` one.
+
+A [`deny` rule](/configure/permissions) is **not** a second way to get there,
+though it looks like one. `{"permissions": {"deny": ["edit(**)"]}}` stops
+`edit_file` and `write_file`, but `bash` is a different tag, and under
+`auto-edits` a shell write is still below the line. Asked to add a line to a
+file with that rule set, the agent had its edit refused and then appended it
+with `printf 'hello\n' >> notes.txt` instead. The rule also denies **reads**,
+which is rarely the intent behind `edit(**)`.
 
 ## It cannot run forever
 

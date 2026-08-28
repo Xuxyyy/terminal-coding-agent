@@ -56,6 +56,11 @@ This key is read from **your** `~/.acc/settings.json` only. A project you cloned
 does not get to choose how much of itself runs unattended, so the key in a
 project's `.acc/settings.json` is a startup error.
 
+In [print mode](/start/headless) there is nobody at the keyboard, so everything
+above the line is answered for you — refused by default, approved with `--yes`.
+The line itself does not move, which is why a print run still edits files that
+sit below it.
+
 ## Risk levels
 
 `acc` ranks every call by **how hard it would be to reverse**. It judges the
@@ -101,18 +106,30 @@ A rule is one string, written `tag(pattern)`. There are exactly two tags:
 - **`edit(...)`** matches a file path, and covers **both** `edit_file` and
   `write_file`. There is no `write(...)` tag; writing one is a startup error.
 
+The two tags do not overlap. An `edit` rule never matches a shell command, so
+`deny: ["edit(**)"]` leaves `echo hi >> notes.txt` untouched — under `auto-edits`
+that write is below the line and simply runs. Sealing a path means writing both
+rules. And a **`deny`** on a path refuses `read_file` there as well, not only
+writes; `allow` and `ask` do not apply to reads, which are below the line in
+every mode already.
+
 ```json
 {
   "permissions": {
-    "deny":  ["edit(**)"],
+    "deny":  ["edit(src/**)"],
     "ask":   ["bash(npm run deploy*)"],
     "allow": ["edit(plans/**)", "bash(npm run *)"]
   }
 }
 ```
 
-That is a session that may write under `plans/` and nowhere else — narrower than
-any mode can express, because it names paths.
+That is a session that can never write under `src/`, writes under `plans/`
+without asking, and stops before a deploy — narrower than any mode can express,
+because it names paths.
+
+Widening that `deny` to `edit(**)` would **not** leave `plans/` writable. A
+blanket `deny` swallows every `allow` below it, for the reason in
+[Rule precedence](#rule-precedence).
 
 Inside `permissions` the only keys are `allow`, `ask`, and `deny`, each a list of
 strings. Any other key is a startup error. Unlike the mode, rules are read from

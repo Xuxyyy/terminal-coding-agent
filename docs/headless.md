@@ -92,11 +92,23 @@ terminal app does without asking. The policy only ever sees what sits above the
 cut — protected paths, deletes, anything reaching outside the project, escapes,
 unclassified commands, and every MCP call.
 
-A genuinely read-only run has to be configured, not assumed. Either
-`"permission_mode": "ask-edits"`, which cuts at `observe` so every write asks,
-or a rule, `{"permissions": {"deny": ["edit(**)"]}}`, which is narrower and
-outranks every mode. An eval must set this deliberately — inheriting whatever is
-in the user's `~/.acc/settings.json` would make a score depend on who ran it.
+A genuinely read-only run has to be configured, not assumed, and there is only
+one setting that does it: `"permission_mode": "ask-edits"`, which cuts at
+`observe` so every write asks — a `bash` write included.
+
+**A `deny` rule is not a second way there**, though it reads like one. Step 7 ran
+`{"permissions": {"deny": ["edit(**)"]}}` against a real model: `read_file` and
+`edit_file` were both refused, and the model then appended the line with
+`bash: printf 'hello\n' >> notes.txt`. That command is still `recoverable`, so
+`auto-edits` allows it outright and the rule never sees it. A rule tagged `edit`
+governs the path-taking tools; it does not govern the shell. It also denies
+**reads**, which is rarely what someone writing `edit(**)` intends.
+
+An eval must set this deliberately — inheriting whatever is in the user's
+`~/.acc/settings.json` would make a score depend on who ran it. `ACC_HOME`
+(`projects.ts:16`) is how to pin it: it redirects the settings file and the
+session store, but not `~/.acc/.env` (`env.ts:5-10`), so the API key still
+loads.
 
 `--yes` answers `'once'`. **Never `'session'`** — nothing is remembered, so
 `permitted()` keeps asking on every call and every ask is recorded.

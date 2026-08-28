@@ -43,10 +43,13 @@ which acc
 
 That should print a path ending in `bin/acc`.
 
-`acc` takes **no command-line arguments and no flags** — not even `--help`.
-Anything you pass it is an error, because the folder you are standing in is the
-only input it needs. If you try `acc --help`, you will get
-`error: unknown option: --help`, which means the install is fine.
+Launched on its own, `acc` takes **no arguments** — the folder you are standing
+in is the only input it needs. The one thing it accepts is
+[print mode](/start/headless): `acc -p "your task"` runs a single turn without a
+terminal and exits, for scripts and pipelines.
+
+There is still no `--help`. Anything else you pass is an error, so `acc --help`
+gives you `error: unknown option: --help`, which means the install is fine.
 
 ## The workspace is the current directory
 
