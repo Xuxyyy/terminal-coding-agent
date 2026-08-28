@@ -76,8 +76,27 @@ clock alone lets a fast model loop hundreds of times inside it.
 ## Deny is the default, and silence is forbidden
 
 The policy is `'deny'` unless `--yes` is passed. Fail closed is what the product
-does everywhere else, and a script that quietly gained write access to a
-workspace is the worst thing this feature could do.
+does everywhere else.
+
+**What the policy governs is narrower than it sounds, and this is the thing to
+get right.** It answers confirms; it does not decide which actions produce one.
+An ordinary edit inside the workspace classifies as `recoverable`
+(`classify.ts:101`), the default mode `auto-edits` cuts at `recoverable`
+(`mode.ts:11`), `withinCut` compares with `<=` (`mode.ts:26`), so `decide`
+returns `allow` (`decide.ts:36`) and `permitted()` returns before it ever calls
+`host.confirm` (`registry.ts:92`).
+
+So **a headless run under `'deny'` still edits files in its workspace, and
+reports `prompts: 0` while doing it.** That is correct: it is the same thing the
+terminal app does without asking. The policy only ever sees what sits above the
+cut — protected paths, deletes, anything reaching outside the project, escapes,
+unclassified commands, and every MCP call.
+
+A genuinely read-only run has to be configured, not assumed. Either
+`"permission_mode": "ask-edits"`, which cuts at `observe` so every write asks,
+or a rule, `{"permissions": {"deny": ["edit(**)"]}}`, which is narrower and
+outranks every mode. An eval must set this deliberately — inheriting whatever is
+in the user's `~/.acc/settings.json` would make a score depend on who ran it.
 
 `--yes` answers `'once'`. **Never `'session'`** — nothing is remembered, so
 `permitted()` keeps asking on every call and every ask is recorded.

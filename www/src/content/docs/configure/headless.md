@@ -23,14 +23,9 @@ Tool lines, every confirm with the decision it got, and the reason a run stopped
 early all go to stderr. Nothing else is on stdout — no welcome header, no MCP
 warnings, no notices.
 
-## It refuses to change anything, unless you say so
+## It answers every permission prompt with no
 
-A print run answers every permission prompt with **no**. The model can read and
-search; the moment it tries a write, a delete, or a command that reaches outside
-the workspace, the gate asks, print mode denies, and the tool comes back
-refused.
-
-`--yes` flips that to yes:
+A print run refuses whatever the gate asks it about. `--yes` approves instead:
 
 ```sh
 acc -p "add a CHANGELOG entry for v2" --yes
@@ -41,8 +36,35 @@ asked again the next time and every ask is recorded. The count of prompts a run
 made comes back in `--json` output, approved or refused — approving is not the
 same as not asking.
 
-Deny is the default because a script that quietly gained write access to your
-workspace is worse than a script that stopped and told you it needed one.
+Deny is the default because a script that quietly gained approval for something
+irreversible is worse than a script that stopped and told you it needed one.
+
+### This is not a read-only mode
+
+**A print run can still edit files in your workspace, with no `--yes` and no
+prompt.** That is not a bug, and it is worth understanding before you point one
+at a folder you care about.
+
+The gate only *asks* about what sits above the line your
+[permission mode](/configure/permissions) draws. In the default mode,
+`auto-edits`, that line is at "recoverable" — an ordinary edit inside the
+project is allowed outright, because git can undo it. It never becomes a
+prompt, so the policy never sees it. Print mode changes **the answer to a
+question**, not the question.
+
+What the policy does catch: protected paths, deletes, anything reaching outside
+the project, escapes like `sudo` or `git push`, commands it cannot classify, and
+every MCP call.
+
+For a run that truly cannot write, say so in `~/.acc/settings.json`:
+
+```json
+{"permissions": {"deny": ["edit(**)"]}}
+```
+
+A `deny` rule outranks every mode. Setting `"permission_mode": "ask-edits"`
+also works — it moves the line down so every write asks, and print mode then
+refuses it.
 
 ## It cannot run forever
 

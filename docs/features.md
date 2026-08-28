@@ -199,7 +199,10 @@ of starting the binary.
 - **Confirms are denied by default.** `--yes` answers `once`, never `session`,
   so nothing is remembered and the gate keeps asking. Every confirm is recorded
   either way, approved or refused — a silent auto-approve would make a prompt
-  count a lie.
+  count a lie. This is not a read-only mode: in `auto-edits` an ordinary project
+  edit is allowed without a confirm, exactly as in the terminal app, so a print
+  run can write without `--yes`. A `deny` rule or `ask-edits` is what makes a
+  run read-only.
 - Bounded on both axes: the 20-step checkpoint is always denied, so it becomes a
   real ceiling, and `--max-seconds` (default 300) aborts between steps.
 - No session is written to `~/.acc`, so running dozens back to back leaves
