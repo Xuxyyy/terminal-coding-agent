@@ -32,6 +32,14 @@ They meet at one interface, `Host` (`confirm`, `onEvent`, `signal`) in
 lives in `src/core/session.ts` and `src/ui/events.ts` re-exports it for the
 components. No import points the other way.
 
+`src/evals` is neither. It is a dev tool for this repo — it measures the agent,
+it is never shipped inside it, and nothing in `src/core` or `src/ui` may import
+it. It lives under `src/` only so `tsc` typechecks it with everything else and
+`npm test` picks up its unit tests. The eval itself is not part of `npm test`:
+it reaches the network, so it has its own script, `npm run eval:judge`. Its
+cases are tracked at `evals/cases/`; its results are gitignored at
+`evals/results/`. `docs/evals.md` has the rest.
+
 ## Design docs
 
 One doc per subsystem, in `docs/`. Each opens with what it covers and when to
@@ -43,6 +51,7 @@ read it. They record *why*; the code is the truth about *what*.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
 - `docs/mcp.md` — read before changing `src/core/mcp/`.
 - `docs/features.md` — what ships today; read before planning what is next.
+- `docs/evals.md` — read before changing `JUDGE_RUBRIC` or adding an eval.
 
 A doc describes the code as it is now. When a decision is reversed, **rewrite the
 part it changed** — do not leave the old version behind with a dated note next to
