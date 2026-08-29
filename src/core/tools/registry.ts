@@ -1,6 +1,6 @@
 import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
-import type {DiffPayload, Host} from '../host.js';
+import {INTERRUPTED, type DiffPayload, type Host} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
 import type {Mode} from '../permission/mode.js';
 import type {Rules} from '../settings.js';
@@ -75,7 +75,7 @@ export const DENIED =
   'another way to do the same thing. carry on with the rest of the task ' +
   'if there is one, then tell the user what you could not do.';
 
-type Permission = {denied?: string; args: unknown};
+type Permission = {denied?: string; interrupted?: true; args: unknown};
 
 function approved(request: Request, args: unknown, command?: string): Permission {
   return {args: request.kind === 'command' && command ? {...(args as object), command} : args};
@@ -86,6 +86,7 @@ async function permitted(
   args: unknown,
   ctx: ToolContext,
 ): Promise<Permission> {
+  if (ctx.host.signal.aborted) return {interrupted: true, args};
   if (!tool.request) return {args};
   const request = tool.request(args);
   const outcome = decide(request, ctx.root, ctx.rules, ctx.mode);
@@ -97,6 +98,7 @@ async function permitted(
     const verdict = await ctx
       .judge(judged(request, outcome.command), outcome.reason)
       .catch(() => 'ask' as const);
+    if (ctx.host.signal.aborted) return {interrupted: true, args};
     if (verdict === 'allow') return approved(request, args, outcome.command);
   }
   const decision = await ctx.host.confirm({
@@ -104,6 +106,7 @@ async function permitted(
     reason: outcome.reason,
     suppressible: outcome.suppressible,
   });
+  if (ctx.host.signal.aborted) return {interrupted: true, args};
   if (decision === 'deny') {
     ctx.denied?.push(outcome.command ?? describe(request));
     return {denied: DENIED, args};
@@ -148,6 +151,7 @@ export async function runTool(
   }
   try {
     const permission = await permitted(tool, parsed.data, ctx);
+    if (permission.interrupted) return {text: INTERRUPTED};
     if (permission.denied) return {text: `Error: ${permission.denied}`};
     if (ctx.backup && tool.request) {
       try {
@@ -157,6 +161,7 @@ export async function runTool(
     }
     return await tool.run(permission.args, ctx);
   } catch (error) {
+    if (ctx.host.signal.aborted) return {text: INTERRUPTED};
     return {text: `Error: ${(error as Error).message}`};
   }
 }

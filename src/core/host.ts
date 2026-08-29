@@ -31,6 +31,8 @@ export type AgentEvent =
   | {type: 'compact_end'; replaced: number; before: number; after: number}
   | {type: 'error'; message: string; hint?: string};
 
+export const INTERRUPTED = '[interrupted by the user]';
+
 export type ConfirmDecision = 'once' | 'session' | 'deny';
 
 export type ConfirmRequest = {

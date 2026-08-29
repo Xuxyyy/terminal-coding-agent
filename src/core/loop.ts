@@ -7,7 +7,7 @@ import {
   streamStep,
   type ModelChoice,
 } from './client.js';
-import type {Host, Usage} from './host.js';
+import {INTERRUPTED, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
 import {clearRecoverable} from './clear.js';
 import {compactSession, withoutText} from './compact.js';
@@ -27,7 +27,7 @@ import {askJudge, judgeMessages} from './permission/judge.js';
 
 export const MAX_STEPS = 20;
 
-export const INTERRUPTED = '[interrupted by the user]';
+export {INTERRUPTED};
 
 function aborted(error: unknown, host: Host): boolean {
   return (
