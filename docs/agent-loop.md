@@ -49,8 +49,10 @@ interface Host {
 - The Ink app implements `confirm` by storing the promise's `resolve` and rendering
   `Confirm.tsx`. When the user presses a key, it calls `resolve('once')`.
 - Tests use a fake `Host` that always returns `'once'`, so the core is testable with no terminal.
-- Esc → `abortController.abort()`; the signal goes to both the OpenAI request and
-  `child_process`.
+- Esc → `abortController.abort()`; the signal goes to the OpenAI request,
+  `child_process`, the judge call and every MCP request. Esc means *stop the turn*
+  wherever it is pressed — including inside the approval box. `n` is the only key
+  that refuses one command.
 
 ### The turn
 
@@ -59,7 +61,8 @@ tool end leaves through `host.onEvent`, so `src/ui` and a test's `Host` see the 
 
 `MAX_STEPS` (20, `loop.ts`) is a **checkpoint, not a ceiling**: every 20 steps without
 finishing, the loop asks to continue. `'session'` turns the checkpoint off for the rest of
-the run, `'deny'` stops with a message.
+the run, `'deny'` stops with a message. Esc there is neither: it is a stop, so the
+loop returns silently and the UI's own `stopped` notice says what happened.
 
 ### Streaming tool calls
 
@@ -82,20 +85,54 @@ output cap and the loop says so.
 
 ### What an interrupt leaves behind
 
+**The rule: every `await` in the loop observes the signal, and the loop never waits on a
+promise the signal cannot break.** Esc ends the turn from anywhere inside it — while the
+model streams, while a command runs, while the approval box is open, while the judge is
+thinking, and while an MCP server is slow. The checks that keep that true:
+
+- `loop.ts`, at the top of each step, and again after the `MAX_STEPS` checkpoint's
+  `confirm` returns.
+- `loop.ts`, at the top of each call in a tool batch.
+- `registry.ts`, in `permitted()`, three times: on entry, after the judge answers, and
+  after `host.confirm` returns. That last one is what lets the UI abort the controller and
+  *then* resolve the open confirm with `'deny'` — `permitted()` re-reads the signal first
+  and answers `INTERRUPTED`, so an interrupt never reaches `session.denied` and never
+  reaches the judge's prompt as a refusal the user did not make.
+- `registry.ts`, in `runTool`'s `catch` — a tool that threw *because* it was aborted reads
+  as `INTERRUPTED`, not `Error: The operation was aborted`.
+
+**The honest limit: work that already started is not undone.** A file already written stays
+written; a command that already ran stays run. A tool that finished keeps its real result —
+a killed `bash` reports `[exit 130] stopped by the user` and still emits `tool_end`. The
+work happened, and hiding it would make the next turn wrong.
+
 **Cancel means keep, with the gaps filled in.** A killed `bash` may already have changed
 files, so dropping the round is the more dangerous of the two — `/resume` would hand the
 model a workspace it cannot explain. Two places in `loop.ts` do this:
 
-- In the tool loop, an aborted call is not skipped, it is answered with `INTERRUPTED`. Every
-  `tool_call` keeps a matching `tool` reply, which is the only shape the API will replay. The
-  `save()` at the end of the round then runs as usual, and the abort check at the top of the
-  loop stops the run.
+- In the tool loop, an aborted call is not skipped, it is answered with `INTERRUPTED`, and
+  the batch answers its *remaining* calls rather than breaking out. Every `tool_call` keeps
+  a matching `tool` reply, which is the only shape the API will replay. The `save()` at the
+  end of the round then runs as usual, and the abort check at the top of the loop stops the
+  run.
 - In the `catch`, `save()` happens before the abort check, so a stream cut in the middle keeps
   its partial text. Only the text — `partial.toolCalls` can hold calls with truncated JSON
   args, and writing those would create the dangling calls the rule above exists to prevent.
 
+**And the turn says it was interrupted.** The last thing every abort path appends is a `user`
+message holding `INTERRUPTED_TURN` — `[the user interrupted this turn]`. Without it a
+text-only step just stops mid-sentence and the next turn can read that as *I finished*; the
+`INTERRUPTED` tool replies only imply it, and on a step with no tool calls there is nothing
+to imply it from. It is a `user` message and not a `system` one because every provider behind
+the OpenAI-compatible endpoint (DeepSeek, GLM, Kimi) accepts a `user` message anywhere, while
+a mid-conversation `system` message is handled inconsistently. Two `user` messages in a row
+are legal, and are exactly what the next turn should see. The helper appends nothing when the
+marker is already last, so no path can double it, and `appendStep` writes only messages it has
+not written yet, so the marker lands on disk as its own record and `/resume` replays it.
+
 The transcript stays honest either way: a killed command reports `[exit 130] stopped by the
-user`, and a call that never started says `[interrupted by the user]`.
+user`, a call that never started says `[interrupted by the user]`, and the turn ends with the
+marker that says why.
 
 ### What a failed turn says
 

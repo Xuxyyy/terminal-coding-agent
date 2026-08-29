@@ -298,8 +298,8 @@ run connected to.
 
 | Input | What it does |
 |---|---|
-| **Esc** while working | Stops the model and any running shell command. |
-| **Esc** in an approval box | The same as `n` — refuses that one action. |
+| **Esc** while working | Stops the turn — the model, any running shell command, and any waiting MCP call. |
+| **Esc** in an approval box | Stops the turn too. Use `n` to refuse just that one action. |
 | **↑ / ↓** in the input box | Walks your previous prompts, saved to `~/.acc/prompt-history` and kept between runs. While the slash menu is open, they move through it instead. |
 | `exit`, `quit`, `q` | Closes `acc`. |
 

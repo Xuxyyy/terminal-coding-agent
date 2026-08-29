@@ -124,10 +124,11 @@ The second line is the exact command, and the third says why it stopped.
 Press `y` to allow it once, `a` to stop being asked about that command for the
 rest of the session, or `n` to refuse. `a` is not always offered — for anything
 that cannot be taken back, one-time approval is the only choice. Esc in that box
-means the same as `n`.
+stops the whole turn, the same as it does anywhere else.
 
 Refusing does not end the task. The agent is told not to retry, and carries on
-with the rest of what you asked.
+with the rest of what you asked. Stopping does end it — that is the difference
+between `n` and Esc.
 
 [Permissions](/configure/permissions) explains the rule that decides which
 actions stop, and [Commands](/configure/commands) covers the keys for

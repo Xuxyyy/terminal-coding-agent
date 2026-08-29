@@ -65,9 +65,12 @@ same action in a different costume — `rm`, then `rm && ls`, then `unlink` — 
 decision into three boxes. Where a genuine alternative does exist the user is at the keyboard
 and can name it in a sentence, and that beats the model guessing.
 
-**`n` refuses one command, not the goal.** The rest of a multi-step task still runs. Nothing
-means *stop the whole turn* from inside the box: `esc` there is a second name for `n`, though
-everywhere else in the app it interrupts.
+**`n` refuses one command, not the goal.** The rest of a multi-step task still runs. To stop
+the whole turn from inside the box, press `esc` — it means the same there as it does
+everywhere else in the app, and it is the only key that ends the turn. A call stopped that way
+is answered with `INTERRUPTED`, never `DENIED`, and it never enters `session.denied`: an
+interrupt says nothing about the command, so it must not teach the judge anything about it
+either.
 
 ## Whose actions the gate governs
 

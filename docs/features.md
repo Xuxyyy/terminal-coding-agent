@@ -30,7 +30,9 @@ The workspace is the current directory. Installed as the `acc` command.
 - `edit_file` and `write_file` return a diff, drawn in the scrollback.
 - Every path is confined to the workspace root before a tool runs.
 - Broken tool-call JSON comes back as a tool error, not a crash.
-- Esc aborts the model request and any running command.
+- Esc stops the turn from anywhere inside it — while the model streams, while a
+  command runs, while the approval box is open, while the judge is thinking, and
+  while an MCP server is slow.
 - System prompt carries an environment block: cwd, OS, git, file tree.
 
 ## MCP servers
