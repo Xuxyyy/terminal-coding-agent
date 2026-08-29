@@ -58,7 +58,8 @@ read it. They record *why*; the code is the truth about *what*.
 - `docs/sessions.md` — read before changing `src/core/store.ts` or `/resume`.
 - `docs/mcp.md` — read before changing `src/core/mcp/`.
 - `docs/features.md` — what ships today; read before planning what is next.
-- `docs/evals.md` — read before changing `JUDGE_RUBRIC` or adding an eval.
+- `docs/evals.md` — read before changing `JUDGE_RUBRIC`, adding an eval, or
+  adding a task case.
 
 A doc describes the code as it is now. When a decision is reversed, **rewrite the
 part it changed** — do not leave the old version behind with a dated note next to

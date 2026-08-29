@@ -1,15 +1,15 @@
 # What `acc` can do today
 
-Status: v5, 2026-08-26. A list of shipped features, not a design doc.
+Status: v6, 2026-08-28. A list of shipped features, not a design doc.
 Read when: you want to know what exists before planning what is next.
 See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`,
 `headless.md` for *why* each part looks the way it does.
 
 ## Shape
 
-One TypeScript package, 6,711 lines outside the tests. `src/core` runs the
+One TypeScript package, 8,766 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 724 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 907 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.
@@ -209,6 +209,31 @@ of starting the binary.
   nothing behind, and a print run cannot be reopened with `/resume`.
 - `--json`, `--yes` and `--max-seconds` throw without `-p`. Interactive mode
   still refuses to start without a TTY. See `headless.md`.
+
+## Task eval
+
+`npm run eval:task` runs ten small tasks against a real model, three times each,
+in a fresh temp workspace per trial, and grades the files the agent left behind.
+It is dev tooling for this repo, not something `acc` ships — the second eval
+beside `npm run eval:judge`, and neither is part of `npm test`.
+
+- It drives the same `runHeadless` that `acc -p` does, so it measures the real
+  loop, the real tools and the real permission gate.
+- The grader is code, never a model: run a command, file present or absent,
+  file contains or matches, file untouched, the reply carries an exact value,
+  the gate asked.
+- Two numbers, never added: `solved` (every check passed) and `clean` (nothing
+  written outside the files the case allows). A run that makes the test pass by
+  deleting the test is solved and not clean.
+- The headline is `pass^3` — cases where all three trials passed. The cases are
+  easy on purpose, so saturation is the intended resting state; steps, tool
+  errors and tokens are what keep the report informative once it is there.
+- Reference solutions make every grader testable offline, inside `npm test`,
+  with no model and no network.
+- Cases run one at a time. There is no `--concurrency` flag, because
+  `loadSettings` writes module-level state that `createSession` reads later.
+- Baseline: 30/30 solved, 30/30 clean, `pass^3` 10/10, 0 errors. See
+  `evals.md`.
 
 ## Terminal UI
 
