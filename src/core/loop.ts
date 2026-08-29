@@ -133,6 +133,7 @@ export async function runAgent(
           reason: `${step} steps without finishing`,
           suppressible: true,
         });
+        if (host.signal.aborted) return;
         if (answer === 'deny') {
           host.onEvent({
             type: 'error',

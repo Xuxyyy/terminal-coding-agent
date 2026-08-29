@@ -89,6 +89,35 @@ test('answering no at the checkpoint stops the run', async () => {
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
 
+test('answering no at the checkpoint says how many steps ran', async () => {
+  const {choice} = keepsCalling();
+  const {host, events} = fakeHost(() => 'deny');
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.deepEqual(errors(events), [
+    `stopped after ${MAX_STEPS} steps without finishing`,
+  ]);
+});
+
+test('escaping at the checkpoint stops without reporting a refusal', async () => {
+  const {choice, calls} = keepsCalling();
+  const {host, events, controller} = fakeHost(() => {
+    controller.abort();
+    return 'deny';
+  });
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.equal(calls(), MAX_STEPS);
+  assert.deepEqual(
+    events.filter(
+      (event) => event.type === 'error' || event.type === 'turn_end',
+    ),
+    [],
+  );
+});
+
 test('answering always does not ask again this run', async () => {
   const {choice, calls} = finishesAt(65);
   const {host, asked} = fakeHost(() => 'session');
