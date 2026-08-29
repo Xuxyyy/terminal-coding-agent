@@ -11,7 +11,11 @@ export type ContentBlock = {type: string; text?: string};
 
 export type CallResult = {content?: ContentBlock[]; isError?: boolean};
 
-export type CallTool = (name: string, args: unknown) => Promise<CallResult>;
+export type CallTool = (
+  name: string,
+  args: unknown,
+  signal?: AbortSignal,
+) => Promise<CallResult>;
 
 export const NO_OUTPUT = '(no output)';
 
@@ -38,8 +42,8 @@ export function adaptTool(
     schema: z.record(z.unknown()),
     parameters: remote.inputSchema,
     request: () => ({kind: 'mcp', server: label, tool: remote.name}),
-    run: async (args) => {
-      const result = await call(remote.name, args);
+    run: async (args, ctx) => {
+      const result = await call(remote.name, args, ctx.host.signal);
       const text = flatten(result.content);
       if (result.isError) throw new Error(text);
       return {text};

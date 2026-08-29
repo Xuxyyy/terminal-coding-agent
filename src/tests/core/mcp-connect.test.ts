@@ -3,7 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test, {type TestContext} from 'node:test';
-import type {ConfirmDecision, ConfirmRequest, Host} from '../../core/host.js';
+import {
+  INTERRUPTED,
+  type ConfirmDecision,
+  type ConfirmRequest,
+  type Host,
+} from '../../core/host.js';
 import {
   connectedTools,
   connectServers,
@@ -24,6 +29,11 @@ const FIXTURE = path.join(
 const MANY = path.join(
   import.meta.dirname,
   '../../../src/tests/fixtures/many-tools-server.js',
+);
+
+const HANGING = path.join(
+  import.meta.dirname,
+  '../../../src/tests/fixtures/hanging-server.js',
 );
 
 function workspace(): string {
@@ -68,6 +78,17 @@ function echoServer(env: Record<string, string> = {}): StdioServer {
 
 function manyServer(tools: string[] | null = null): StdioServer {
   return server({command: process.execPath, args: [MANY], tools});
+}
+
+function hangingServer(): StdioServer {
+  return server({command: process.execPath, args: [HANGING]});
+}
+
+function interruptibleSession(...answers: ConfirmDecision[]) {
+  const control = new AbortController();
+  const {host, asked} = hostThatAnswers(...answers);
+  const ctx = context(workspace(), {...host, signal: control.signal});
+  return {ctx, asked, control};
 }
 
 function statusOf(label: string): ServerStatus {
@@ -291,3 +312,49 @@ test('disconnecting drops every tool and every status', async () => {
     ['read_file', 'grep', 'edit_file', 'write_file', 'bash'],
   );
 });
+
+test('the hanging server fixture sits where the compiled test looks for it', () => {
+  assert.equal(fs.existsSync(HANGING), true, `no fixture at ${HANGING}`);
+});
+
+test(
+  'a call the server never answers rejects when the signal aborts',
+  {timeout: 30_000},
+  async (t) => {
+    await connect(t, {hang: hangingServer()});
+    const {ctx, control} = interruptibleSession('once');
+    const [tool] = connectedTools();
+    const timer = setTimeout(() => control.abort(), 100);
+    t.after(() => clearTimeout(timer));
+    const started = Date.now();
+
+    await assert.rejects(() => tool.run({text: 'hello'}, ctx));
+
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 5_000, `the call waited ${elapsed}ms`);
+  },
+);
+
+test(
+  'a hung call interrupted mid-flight reads back as interrupted, not as an error',
+  {timeout: 30_000},
+  async (t) => {
+    await connect(t, {hang: hangingServer()});
+    const {ctx, asked, control} = interruptibleSession('once');
+    const timer = setTimeout(() => control.abort(), 100);
+    t.after(() => clearTimeout(timer));
+    const started = Date.now();
+
+    const output = await runTool(
+      connectedTools(),
+      'mcp__hang__hang',
+      JSON.stringify({text: 'hello'}),
+      ctx,
+    );
+
+    const elapsed = Date.now() - started;
+    assert.equal(asked.length, 1);
+    assert.equal(output.text, INTERRUPTED);
+    assert.ok(elapsed < 5_000, `the call waited ${elapsed}ms`);
+  },
+);

@@ -173,3 +173,19 @@ test('a remote tool with no description gets an empty one', () => {
 
   assert.equal(tool.description, '');
 });
+
+test('the call is handed the host signal, so a stopped turn can cancel it', async () => {
+  const control = new AbortController();
+  const {host} = hostThatAnswers('once');
+  const ctx = context(workspace(), {...host, signal: control.signal});
+  const seen: Array<AbortSignal | undefined> = [];
+  const tool = adaptTool('notion', SEARCH, async (_name, _args, signal) => {
+    seen.push(signal);
+    return {};
+  });
+
+  await tool.run({query: 'x'}, ctx);
+
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0], control.signal);
+});

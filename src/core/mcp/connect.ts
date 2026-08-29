@@ -75,11 +75,16 @@ async function connectOne(
       timeout,
       () => void close(),
     );
-    const call = async (name: string, args: unknown): Promise<CallResult> =>
-      (await client.callTool({
-        name,
-        arguments: (args ?? {}) as Record<string, unknown>,
-      })) as CallResult;
+    const call = async (
+      name: string,
+      args: unknown,
+      signal?: AbortSignal,
+    ): Promise<CallResult> =>
+      (await client.callTool(
+        {name, arguments: (args ?? {}) as Record<string, unknown>},
+        undefined,
+        {signal},
+      )) as CallResult;
     const offered = listed.tools as RemoteTool[];
     const allow = server.tools;
     const published =
