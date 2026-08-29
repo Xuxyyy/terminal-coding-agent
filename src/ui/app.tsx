@@ -198,7 +198,7 @@ export function App({
       <Box flexDirection="column" marginTop={1}>
         {visibleStream ? <Markdown text={visibleStream} /> : null}
         {phase.kind === 'confirming' ? (
-          <Confirm request={phase.request} onRespond={respond} />
+          <Confirm request={phase.request} onRespond={respond} onStop={interrupt} />
         ) : phase.kind === 'picking' ? (
           <SessionPicker rows={rows} onPick={resume} onCancel={cancelPick} />
         ) : phase.kind === 'rewinding' ? (

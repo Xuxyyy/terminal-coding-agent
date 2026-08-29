@@ -4,10 +4,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {render} from 'ink';
+import {INTERRUPTED} from '../../core/host.js';
 import {listSessions, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
 import {loadSettings, modeOf, modelOf, settingsFiles} from '../../core/settings.js';
 import {loadSession} from '../../core/store.js';
+import {DENIED} from '../../core/tools/registry.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import type {
   ContextItem,
@@ -1302,4 +1304,53 @@ test('a client that refuses to build leaves the model where it was', async () =>
   assert.match(notice.text, /GLM_API_KEY is not set/);
   assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
+});
+
+function deleting(command: string): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk('call-1', 'bash', JSON.stringify({command})),
+    finishChunk('tool_calls'),
+    usageChunk(10, 5),
+  );
+}
+
+async function stoppedAtConfirm(): Promise<{
+  agent: Ref;
+  stored: ReturnType<typeof loadSession>;
+  calls: () => number;
+}> {
+  const root = workspace();
+  loadSettings([]);
+  const home = process.env.ACC_HOME!;
+  const {choice, calls} = fakeModel(() => deleting('rm build.log'));
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('clear the build log');
+  await until(
+    () => agent.current!.phase.kind === 'confirming',
+    'the agent never asked for approval',
+  );
+  agent.current!.interrupt();
+  await settle(agent);
+  unmount();
+
+  return {agent, stored: loadSession(root, null, home), calls};
+}
+
+test('esc at a command approval ends the turn and commits the stopped notice', async () => {
+  const {agent, calls} = await stoppedAtConfirm();
+
+  assert.equal(agent.current!.phase.kind, 'idle');
+  const notice = agent.current!.committed.at(-1) as NoticeItem;
+  assert.equal(notice.kind, 'notice');
+  assert.equal(notice.text, 'stopped');
+  assert.equal(calls(), 1);
+});
+
+test('the interrupted command is answered as interrupted, never as refused', async () => {
+  const {stored} = await stoppedAtConfirm();
+
+  const tools = stored.messages.filter((message) => message.role === 'tool');
+  assert.equal(tools.at(-1)!.content, INTERRUPTED);
+  assert.equal(JSON.stringify(stored.messages).includes(DENIED), false);
 });

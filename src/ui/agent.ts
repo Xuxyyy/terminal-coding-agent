@@ -198,6 +198,7 @@ export function useAgent(
 
   const interrupt = () => {
     controllerRef.current?.abort();
+    resolveConfirmRef.current?.('deny');
   };
 
   const clear = () => {

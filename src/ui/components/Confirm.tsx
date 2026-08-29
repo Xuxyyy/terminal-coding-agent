@@ -12,13 +12,15 @@ const KEY_COLORS: Record<ConfirmDecision, string> = {
 export function Confirm({
   request,
   onRespond,
+  onStop,
 }: {
   request: ConfirmRequest;
   onRespond: (decision: ConfirmDecision) => void;
+  onStop: () => void;
 }) {
   useInput((input, key) => {
     if (key.escape) {
-      onRespond('deny');
+      onStop();
       return;
     }
     const decision = confirmDecisionForKey(input, request.suppressible);
@@ -43,6 +45,7 @@ export function Confirm({
           </Text>
         ))}
       </Text>
+      <Text color={theme.muted}>esc to stop the turn</Text>
     </Box>
   );
 }
