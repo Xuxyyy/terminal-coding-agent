@@ -19,7 +19,12 @@ import {
   usageChunk,
 } from '../fakes.js';
 import type {AgentEvent} from '../../core/host.js';
-import {INTERRUPTED, MAX_STEPS, runAgent} from '../../core/loop.js';
+import {
+  INTERRUPTED,
+  INTERRUPTED_TURN,
+  MAX_STEPS,
+  runAgent,
+} from '../../core/loop.js';
 import {filesDir} from '../../core/history.js';
 import {createSession, type Session} from '../../core/session.js';
 import {startSession} from '../../core/store.js';
@@ -63,6 +68,12 @@ function errors(events: AgentEvent[]): string[] {
   return events.flatMap((event) =>
     event.type === 'error' ? [event.message] : [],
   );
+}
+
+function markers(active: Session): number {
+  return active.messages.filter(
+    (message) => message.role === 'user' && message.content === INTERRUPTED_TURN,
+  ).length;
 }
 
 test('the agent asks to keep going instead of giving up', async () => {
@@ -197,7 +208,12 @@ test('an interrupted step is saved complete', async () => {
 
   await runAgent(session(), choice, host, [stopper], store);
 
-  assert.equal(saved.length, 1);
+  assert.equal(saved.length, 2);
+  const marked = saved[1]!;
+  assert.deepEqual(marked[marked.length - 1], {
+    role: 'user',
+    content: INTERRUPTED_TURN,
+  });
   const messages = saved[0]!;
   const assistant = messages.find(
     (message): message is OpenAI.ChatCompletionAssistantMessageParam =>
@@ -230,13 +246,115 @@ test('an interrupted stream keeps what arrived', async () => {
 
   await runAgent(session(), choice, host, [noop], store);
 
-  assert.equal(saved.length, 1);
+  assert.equal(saved.length, 2);
+  const marked = saved[1]!;
+  assert.deepEqual(marked[marked.length - 1], {
+    role: 'user',
+    content: INTERRUPTED_TURN,
+  });
   const messages = saved[0]!;
   assert.deepEqual(messages[messages.length - 1], {
     role: 'assistant',
     content: 'half an answer',
   });
   assert.equal(errors(events).length, 0);
+});
+
+test('an interrupted stream ends with the marker after the partial text', async () => {
+  const {host, controller} = fakeHost();
+  const {choice} = fakeModel(() => {
+    controller.abort();
+    return streamOf(textChunk('half an answer'), abortError());
+  });
+  const active = session();
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.deepEqual(active.messages.slice(-2), [
+    {role: 'assistant', content: 'half an answer'},
+    {role: 'user', content: INTERRUPTED_TURN},
+  ]);
+});
+
+test('an interrupted tool batch puts the marker after the tool replies', async () => {
+  const {host, controller} = fakeHost();
+  const {choice} = fakeModel(() =>
+    streamOf(
+      toolCallChunk('call-a', 'stopper', '{}', 0),
+      toolCallChunk('call-b', 'stopper', '{}', 1),
+      finishChunk('tool_calls'),
+      usageChunk(10, 2),
+    ),
+  );
+  const stopper: Tool = {
+    name: 'stopper',
+    description: 'stops the run',
+    schema: z.object({}),
+    async run() {
+      controller.abort();
+      return {text: 'ran before the stop'};
+    },
+  };
+  const active = session();
+
+  await runAgent(active, choice, host, [stopper]);
+
+  assert.deepEqual(active.messages.slice(-3), [
+    {role: 'tool', tool_call_id: 'call-a', content: 'ran before the stop'},
+    {role: 'tool', tool_call_id: 'call-b', content: INTERRUPTED},
+    {role: 'user', content: INTERRUPTED_TURN},
+  ]);
+});
+
+test('escaping at the checkpoint leaves the marker as the last message', async () => {
+  const {choice} = keepsCalling();
+  const {host, controller} = fakeHost(() => {
+    controller.abort();
+    return 'deny';
+  });
+  const active = session();
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.deepEqual(active.messages[active.messages.length - 1], {
+    role: 'user',
+    content: INTERRUPTED_TURN,
+  });
+});
+
+test('a turn that ends on its own is not marked as interrupted', async () => {
+  const {choice} = finishesAt(3);
+  const {host} = fakeHost();
+  const active = session();
+
+  await runAgent(active, choice, host, [noop]);
+
+  assert.equal(markers(active), 0);
+});
+
+test('an interrupted turn carries the marker exactly once', async () => {
+  const {host, controller} = fakeHost();
+  const {choice} = fakeModel(() =>
+    streamOf(
+      toolCallChunk('call-a', 'stopper', '{}', 0),
+      finishChunk('tool_calls'),
+      usageChunk(10, 2),
+    ),
+  );
+  const stopper: Tool = {
+    name: 'stopper',
+    description: 'stops the run',
+    schema: z.object({}),
+    async run() {
+      controller.abort();
+      return {text: 'ran before the stop'};
+    },
+  };
+  const active = session();
+
+  await runAgent(active, choice, host, [stopper]);
+
+  assert.equal(markers(active), 1);
 });
 
 function tempDir(prefix: string): string {

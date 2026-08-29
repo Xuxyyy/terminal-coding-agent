@@ -33,6 +33,8 @@ export type AgentEvent =
 
 export const INTERRUPTED = '[interrupted by the user]';
 
+export const INTERRUPTED_TURN = '[the user interrupted this turn]';
+
 export type ConfirmDecision = 'once' | 'session' | 'deny';
 
 export type ConfirmRequest = {

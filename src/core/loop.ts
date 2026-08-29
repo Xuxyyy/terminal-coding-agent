@@ -7,7 +7,7 @@ import {
   streamStep,
   type ModelChoice,
 } from './client.js';
-import {INTERRUPTED, type Host, type Usage} from './host.js';
+import {INTERRUPTED, INTERRUPTED_TURN, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
 import {clearRecoverable} from './clear.js';
 import {compactSession, withoutText} from './compact.js';
@@ -27,7 +27,7 @@ import {askJudge, judgeMessages} from './permission/judge.js';
 
 export const MAX_STEPS = 20;
 
-export {INTERRUPTED};
+export {INTERRUPTED, INTERRUPTED_TURN};
 
 function aborted(error: unknown, host: Host): boolean {
   return (
@@ -124,16 +124,29 @@ export async function runAgent(
     }
   };
 
+  const markInterrupted = (): void => {
+    const last = session.messages[session.messages.length - 1];
+    if (last?.role === 'user' && last.content === INTERRUPTED_TURN) return;
+    session.messages.push({role: 'user', content: INTERRUPTED_TURN});
+    save(NO_USAGE);
+  };
+
   try {
     for (let step = 0; ; step += 1) {
-      if (host.signal.aborted) return;
+      if (host.signal.aborted) {
+        markInterrupted();
+        return;
+      }
       if (checkpoints && step > 0 && step % MAX_STEPS === 0) {
         const answer = await host.confirm({
           command: 'continue',
           reason: `${step} steps without finishing`,
           suppressible: true,
         });
-        if (host.signal.aborted) return;
+        if (host.signal.aborted) {
+          markInterrupted();
+          return;
+        }
         if (answer === 'deny') {
           host.onEvent({
             type: 'error',
@@ -283,7 +296,10 @@ export async function runAgent(
       session.messages.push(assistantMessage(partial.content, []));
     }
     save(partial?.usage ?? NO_USAGE);
-    if (aborted(error, host)) return;
+    if (aborted(error, host)) {
+      markInterrupted();
+      return;
+    }
     const explained = explainError(error, choice.model);
     host.onEvent({type: 'error', ...explained});
     host.onEvent({type: 'turn_end', usage: total});
