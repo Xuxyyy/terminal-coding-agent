@@ -217,8 +217,10 @@ usage and survives a `/resume`; the parts are estimated from character count
 (`src/core/tokens.ts`) and are marked with a `~`. The parts always add up to the
 total exactly.
 
-The estimator is `chars / 4` and runs **low** — measured against a real turn on
-2026-08-13 it read 882 where the API charged 1,222, about 28% under. Most of the
+The estimator charges CJK text a token per character and everything else
+`chars / 4`, plus a fixed overhead per message and per tool call
+(`src/core/tokens.ts`). On English it runs **low** — measured against a real turn
+on 2026-08-13 it read 882 where the API charged 1,222, about 28% under. Most of the
 gap is the tool definitions: they are JSON schema, and punctuation tokenizes far
 closer to one token per character than to four. This is why the readout prefers
 the measured total wherever it has one, and why anything that acts on the
@@ -230,13 +232,28 @@ The spinner reads `Compacting…` while the summary is in flight. A summary that
 fails, or that comes back too short or carrying tool-call markup, is retried
 once and then changes nothing.
 
-The agent watches its own context and says when it passes 80% of the window. It
-prints `compaction threshold reached` once per run and keeps going; shrinking the
-conversation is yours to do with `/compact`. It used to summarize itself at that
-point, and that was removed on 2026-08-14: auto and manual compaction shared one
-function, and the automatic path re-triggered itself because it carried the task
-across the summary and the model redid the work. Compaction is being redesigned;
-until then the trigger only reports.
+Past 80% of the window the agent frees context itself, in two steps, cheapest
+first.
+
+- **Clearing** runs every turn over the line and costs nothing, because it loses
+  nothing. A `read_file` result is a cache, not a record — the file is still on
+  disk — so `clearRecoverable` (`src/core/clear.ts`) replaces recoverable tool
+  output in place, oldest first: a read or a search becomes a marker naming the
+  call to repeat, `bash` keeps its `[exit N]` line and drops the output, and a
+  `write_file` call keeps its path and loses its content. It aims at the
+  threshold, not at zero, so recent reads survive when they can, and it never
+  touches the round in flight.
+- **Compacting** runs at the start of a turn, and only when clearing was not
+  enough or found nothing left to take. The task message is lifted off the list
+  before the summarizer is asked and pushed back after, so the summary is never
+  aimed at the work about to start — that was the bug that made the first
+  automatic compaction re-trigger itself and the model redo the work. A summary
+  that comes back too short or carrying tool-call markup is asked for once more
+  with a firmer prompt, then abandoned with the history intact.
+
+`compaction threshold reached` prints once per run, at the point where clearing
+finds nothing left to free. Clearing itself is drawn nowhere — it is bookkeeping,
+and a line per turn would bury the work.
 
 Since 2026-08-14 the trigger reads a **projection**, not the last measurement:
 the measured total plus the estimate of whatever was pushed since it was taken.
@@ -250,15 +267,16 @@ enters the projection, so the estimator's 28% shortfall applies to the messages
 added since the measurement, never to the whole conversation.
 
 Below the trigger sits a floor: if the next request plus a 32,000-token reply
-would not fit in the window, the run stops with `the context is full and cannot
-be reduced further; start a new session` rather than sending a request the
-provider will refuse. At that point summarizing cannot help either — a compaction
-request carries every message plus the instruction, so it is larger than the
-request that just failed. With the automatic summary gone, this floor is what
-keeps a long unattended run from dying on a provider error.
+would not fit in the window, the run stops with `the context is full and nothing
+more can be freed; send your next message and it will compact first` rather than
+sending a request the provider will refuse. Summarizing cannot help inside that
+turn — a compaction request carries every message plus the instruction, so it is
+larger than the request that just failed — but the next turn starts at step 0,
+which is where compaction is allowed to run. The floor is a handoff, not a dead
+end.
 
-It announces itself with **one line**, `compaction threshold reached`, and
-nothing else: the `Compacting…` spinner underneath already says what is being
+The threshold announces itself with **one line**, `compaction threshold
+reached`, and nothing else: the `Compacting…` spinner underneath already says what is being
 done, and the task resuming says it worked. An earlier version printed the
 percentage that was hit and a second line counting the messages dropped and
 tokens freed; both were cut on 2026-08-13 as noise mid-task. The percentage in
@@ -266,8 +284,8 @@ particular was a trap — it reads `165%` whenever a single turn overshoots the
 window, which is honest and looks broken. `/compact` keeps its freed-tokens
 notice, because there the command *is* the result.
 
-If the summary fails, the run keeps going with one `✖` line and the trigger
-stays off for the rest of the run. See `agent-loop.md` for both guards and
+If the summary fails, the run keeps going with one `✖` line and the conversation
+is left exactly as it was. See `agent-loop.md` for the three lines and
 `ACC_COMPACT_AT`.
 
 It does **not** print a `/context` readout afterwards, though it did at first.
