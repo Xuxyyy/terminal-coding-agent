@@ -7,9 +7,9 @@ See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`
 
 ## Shape
 
-One TypeScript package, 8,766 lines outside the tests. `src/core` runs the
+One TypeScript package, 8,805 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 907 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 929 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.

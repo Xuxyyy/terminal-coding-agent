@@ -8,7 +8,7 @@ project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
 
-It is one npm package, 724 tests, and no dependency on a hosted service:
+It is one npm package, 929 tests, and no dependency on a hosted service:
 three providers work through one client, and one API key is enough.
 
 ## Three decisions worth defending
