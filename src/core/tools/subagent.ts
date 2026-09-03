@@ -50,15 +50,18 @@ export function childHost(host: Host): {host: Host; events: AgentEvent[]} {
 }
 
 export function report(events: AgentEvent[]): ToolOutput {
-  let said = '';
+  const turns: string[] = [''];
   let usage: Usage | undefined;
   const errors: string[] = [];
   for (const event of events) {
-    if (event.type === 'text_delta') said += event.text;
+    if (event.type === 'text_delta') turns[turns.length - 1] += event.text;
+    if (event.type === 'tool_start') turns.push('');
     if (event.type === 'turn_end') usage = event.usage;
     if (event.type === 'error') errors.push(event.message);
   }
-  const text = [said.trim(), ...errors].filter(Boolean).join('\n');
+  const spoken = turns.map((turn) => turn.trim()).filter(Boolean);
+  const said = spoken[spoken.length - 1] ?? '';
+  const text = [said, ...errors].filter(Boolean).join('\n');
   return {text: text || NOTHING, usage};
 }
 

@@ -79,6 +79,26 @@ test('the parent is given the final message and none of the tool output', async 
   assert.doesNotMatch(output.text, /notes\.txt/);
 });
 
+test('narration before a tool call is not glued to the final message', async () => {
+  const root = workspace();
+  fs.writeFileSync(path.join(root, 'notes.txt'), `${SECRET}\n`);
+  const {host} = fakeHost();
+  const {choice} = fakeModel((nth) =>
+    nth === 1
+      ? streamOf(
+          textChunk('Let me read the note first.'),
+          toolCallChunk('call-1', 'read_file', JSON.stringify({path: 'notes.txt'})),
+          finishChunk('tool_calls'),
+          usageChunk(10, 2),
+        )
+      : streamOf(textChunk(ANSWER), finishChunk('stop'), usageChunk(3, 4)),
+  );
+
+  const output = await subagent.run(job, context(root, host, choice));
+
+  assert.equal(output.text, ANSWER);
+});
+
 test('the usage the parent sees is the whole child turn', async () => {
   const root = workspace();
   const {host} = fakeHost();
