@@ -125,6 +125,14 @@ test('formatArgs makes file-tool paths relative to the workspace', () => {
   );
 });
 
+test('formatArgs names the job a sub-agent was handed', () => {
+  assert.equal(formatArgs('agent', {description: 'find auth'}), 'find auth');
+});
+
+test('an agent call with no description summarizes as nothing', () => {
+  assert.equal(formatArgs('agent', {prompt: 'find where auth lives'}), '');
+});
+
 test('formatResult keeps useful shell status', () => {
   assert.equal(formatResult('bash', '[exit 0]\npassed\n'), 'passed');
   assert.equal(formatResult('bash', '[exit 2]\nfailed\n'), 'exit 2\nfailed');

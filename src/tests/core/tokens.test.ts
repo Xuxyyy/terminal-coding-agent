@@ -67,7 +67,7 @@ test('mixed text charges each script its own rate', () => {
   assert.ok(estimateTokens('上下文用量') > estimateTokens('context'));
 });
 
-test('the four tool definitions cost several hundred tokens on every request', () => {
+test('the five tool definitions cost several hundred tokens on every request', () => {
   const estimate = estimateTools(toolDefinitions(tools));
 
   assert.equal(estimateTools([]), 0);

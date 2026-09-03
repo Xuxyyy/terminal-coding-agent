@@ -81,6 +81,7 @@ const ARG_KEY: Record<string, string> = {
   write_file: 'path',
   edit_file: 'path',
   bash: 'command',
+  agent: 'description',
 };
 
 export function toolDescription(name: string, args: unknown): string {

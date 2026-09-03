@@ -213,7 +213,7 @@ test('with no server configured the model is offered the built-ins alone', async
 
   assert.deepEqual(
     toolsFor('auto-edits').map((tool) => tool.name),
-    ['read_file', 'grep', 'edit_file', 'write_file', 'bash'],
+    ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'],
   );
 });
 
@@ -309,7 +309,7 @@ test('disconnecting drops every tool and every status', async () => {
   assert.deepEqual(serverStatus(), []);
   assert.deepEqual(
     toolsFor('auto-edits').map((tool) => tool.name),
-    ['read_file', 'grep', 'edit_file', 'write_file', 'bash'],
+    ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'],
   );
 });
 

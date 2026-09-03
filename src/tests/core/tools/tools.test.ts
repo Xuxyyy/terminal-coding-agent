@@ -660,10 +660,24 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
 });
 
 test('every mode is offered every tool', () => {
-  const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash'];
+  const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'];
 
   assert.deepEqual(toolsFor('auto-edits').map((tool) => tool.name), full);
   assert.deepEqual(toolsFor('ask-edits').map((tool) => tool.name), full);
+});
+
+test('the sub-agent tool is offered with a schema for the job and the prompt', () => {
+  const offered = toolsFor('auto-edits').filter((tool) => tool.name === 'agent');
+  const parameters = toolDefinitions(offered)[0]?.function.parameters as {
+    type: string;
+    properties: Record<string, unknown>;
+    required: string[];
+  };
+
+  assert.equal(offered.length, 1);
+  assert.equal(parameters.type, 'object');
+  assert.deepEqual(Object.keys(parameters.properties), ['description', 'prompt']);
+  assert.deepEqual(parameters.required, ['description', 'prompt']);
 });
 
 const RAW_SCHEMA = {
