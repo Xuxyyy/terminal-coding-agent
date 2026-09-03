@@ -5,13 +5,13 @@ sidebar:
   order: 5
 ---
 
-`acc` ships with five tools. An MCP server is how you give it more without
+`acc` ships with six tools. An MCP server is how you give it more without
 touching its code: you name a command in your settings file, `acc` spawns it at
-startup, and the tools it offers join the [built-in five](/configure/tools) for
+startup, and the tools it offers join the [built-in six](/configure/tools) for
 the rest of the session, named `mcp__<server>__<tool>`.
 
 `acc` is the **client** half of the [Model Context Protocol](https://modelcontextprotocol.io)
-only — it uses other people's servers and never exposes its own five tools to
+only — it uses other people's servers and never exposes its own six tools to
 anything else. Servers are reached over stdio, meaning a local process it
 spawns; [hosted servers over HTTP](#not-built-yet) are not built.
 

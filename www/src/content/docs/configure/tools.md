@@ -1,14 +1,15 @@
 ---
 title: Tools
-description: The five tools acc gives the model — what read_file, grep, edit_file, write_file, and bash each take, what they return, where they cap their output, and what happens before any of them runs.
+description: The six tools acc gives the model — what read_file, grep, edit_file, write_file, bash and agent each take, what they return, where they cap their output, and what happens before any of them runs.
 sidebar:
   order: 3
 ---
 
-The model gets five tools: read a file, search with ripgrep, edit one exact
-piece of text, write a whole file, run a shell command. They are all it has
-until you add a server. None of them reaches the network, none opens a browser,
-and none reaches a file outside the workspace without asking you first.
+The model gets six tools: read a file, search with ripgrep, edit one exact
+piece of text, write a whole file, run a shell command, and hand a job to a
+sub-agent. They are all it has until you add a server. None of them reaches the
+network, none opens a browser, and none reaches a file outside the workspace
+without asking you first.
 
 | Tool | What it does |
 |---|---|
@@ -17,8 +18,9 @@ and none reaches a file outside the workspace without asking you first.
 | [`edit_file`](#edit_file) | Replaces one exact, unique piece of text in a file. |
 | [`write_file`](#write_file) | Creates a file, or replaces everything in one. |
 | [`bash`](#bash) | Runs a shell command in the workspace root — tests, git, deletes. |
+| [`agent`](#agent) | Hands one self-contained job to a sub-agent and waits for its answer. |
 
-Five, and not fifteen, because every tool is a slot in the model's attention: it
+Six, and not fifteen, because every tool is a slot in the model's attention: it
 re-reads the whole list on every step, and two tools that overlap make the wrong
 pick *plausible* rather than loud. Anything else a task needs is a shell command
 away, and `bash` is one slot rather than twenty.
@@ -175,11 +177,45 @@ outside the project, and anything `acc` cannot classify all need your
 approval — [Permissions](/configure/permissions) has the rule, and the `allow`
 list is how you stop being asked about a command you trust.
 
+## `agent`
+
+Hands one job to a sub-agent — a second `acc` loop, in the same workspace, on
+the same model — and waits for it to finish.
+
+```
+ • agent find where auth lives
+```
+
+That one row is all you see. The sub-agent reads files, runs commands and asks
+you for permission exactly as `acc` does, but none of its steps are drawn: no
+second spinner, no tool rows of its own, no running text. When it stops, its
+final message becomes the tool's result and the conversation carries on.
+
+Takes `description`, the few words in that row, and `prompt`, the whole job.
+
+**It is for saving your context, not for speed.** Nothing runs in parallel. A
+sub-agent that reads twenty files to answer one question spends those twenty
+reads in its own context window, which is thrown away when it returns — what
+comes back to your session is the paragraph. That is also its limit: the answer
+is one message, so a job whose *working* you need to see is one to run yourself.
+
+**You are still asked about everything it does.** The `agent` call itself never
+prompts, but every file it writes and every command it runs reaches
+[the gate](/configure/permissions) the same way yours do. Those prompts read
+`sub-agent: …`, so you can tell whose call you are approving. A "yes, this
+session" you have already given is not asked again.
+
+Its tokens are counted in the turn and in the session total, and deliberately
+left out of the context bar — they were never in your context.
+
+A sub-agent is given every tool except `agent`, so it cannot start one of its
+own.
+
 ## MCP tools
 
-An [MCP server](/configure/mcp) adds more tools, published beside these five and
+An [MCP server](/configure/mcp) adds more tools, published beside these six and
 named `mcp__<server>__<tool>`. You never call one by name — the model picks it
-the way it picks these five, from the description the server sent at startup.
+the way it picks these six, from the description the server sent at startup.
 
 What those tools can reach is the server's business, not this page's, which is
 why **every one of their calls asks before it runs**. No mode and no rule

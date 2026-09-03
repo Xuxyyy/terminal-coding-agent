@@ -38,7 +38,7 @@ What that buys shows up twice below — the loop runs with no terminal at all, a
 so does every test of it.
 
 The two pages that follow are about the core side of that line: [the permission
-gate](/configure/permissions) that every tool passes through, and [the five
+gate](/configure/permissions) that every tool passes through, and [the six
 tools](/configure/tools) themselves.
 
 ## The loop

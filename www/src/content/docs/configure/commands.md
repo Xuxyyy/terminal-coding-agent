@@ -43,7 +43,7 @@ free                  220,936
 - **system prompt** — the instructions `acc` sends every turn, including a
   description of your project.
 - **system tools** — the definitions of the tools the model is offered: the
-  five built-ins, plus any an MCP server added.
+  six built-ins, plus any an MCP server added.
 - **messages** — everything you and the model have said, plus every file read
   and every command's output.
 - **free** — what is left.

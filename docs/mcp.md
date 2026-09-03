@@ -19,7 +19,7 @@ MCP — the Model Context Protocol — is an open spec with two halves. A **serv
 offers tools over a transport; a **client** connects to one and uses what it
 offers. `acc` implements the **client** half, and only that. It is the same
 category as Claude Code or Cursor: a thing that consumes servers. It does not
-serve its own five tools to anyone, and nothing here is a step toward that.
+serve its own six tools to anyone, and nothing here is a step toward that.
 
 What follows are client-side decisions only. What a server's tools are called,
 what they do, and whether they are any good is the server's problem. `acc` has
@@ -35,7 +35,7 @@ Five files, in order, from a line of JSON to a tool the model can call.
 | connect | `src/core/mcp/connect.ts:55-121` | `connectOne` spawns the command over `StdioClientTransport` and calls `listTools()` |
 | filter | `src/core/mcp/connect.ts:83-92` | the `tools` allowlist drops every listed tool it does not match |
 | adapt | `src/core/mcp/adapt.ts:30-47` | `adaptTool` reshapes each surviving tool into the `Tool` shape `tools.md` describes |
-| publish | `src/core/tools/index.ts:13` | the adapted tools are appended to the built-in five, and the model is offered one flat list |
+| publish | `src/core/tools/index.ts:14` | the adapted tools are appended to the built-in six, and the model is offered one flat list |
 
 Every published name is `mcp__<label>__<tool>` (`adapt.ts:18-20`), where `label`
 is the key you wrote in `mcpServers`. **That scheme is what stops two servers

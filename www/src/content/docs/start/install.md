@@ -109,7 +109,7 @@ came back. While a tool is still running the row reads `running…`, and
 - **Shell output starts with its exit code**, like `[exit 0]`. Long output is
   cut in the middle and the cut is marked.
 
-[Tools](/configure/tools) describes all five tools and their limits.
+[Tools](/configure/tools) describes all six tools and their limits.
 
 ## When it asks
 

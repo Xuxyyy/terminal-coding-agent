@@ -1,13 +1,13 @@
 # Tools
 
 Status: built.
-Covers: `src/core/tools/` — the five tools the model can call, their arguments,
+Covers: `src/core/tools/` — the six tools the model can call, their arguments,
 their caps, and the exact text they fail with
 Read when: adding a tool, changing a schema, or changing what a tool returns
 See also: `permissions.md` (the gate a tool passes on its way to the disk),
 `agent-loop.md` (where `runTool` is called from), `features.md` (what ships today)
 
-## The five tools
+## The six tools
 
 In the order `src/core/tools/index.ts` registers them, which is the order the
 model sees them in.
@@ -19,6 +19,7 @@ model sees them in.
 | `edit_file` | `path`, `old_string`, `new_string` | Replaces one exact, unique piece of text. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `write_file` | `path`, `content` | Creates a file or replaces all of it. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
+| `agent` | `description`, `prompt` | Hands one self-contained job to a sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
 
 That column is the `auto-edits` mode, which is the one a session starts in: an
 ordinary write inside the project runs silently, because it classifies as
@@ -44,14 +45,23 @@ and the chain.
 
 **The list comes from one place.** `toolsFor(mode)` in
 `src/core/tools/index.ts` is the single source of what is offered. Both modes get
-all five today; the parameter is the seam a mode with its own list would use. It
+all six today; the parameter is the seam a mode with its own list would use. It
 is the default argument of both `runAgent` and `contextStatus`, so what the model
 is offered and what the context readout counts can never drift apart.
 
+`agent` is the one tool `toolsFor` adds inside the function rather than through
+the exported `tools` array, and that is load-bearing. `index.ts` and
+`subagent.ts` import each other — the tool needs the registry to work out what
+to hand its child — so reading `subagent` while `index.ts` is still evaluating
+throws `Cannot access 'subagent' before initialization` the moment anything
+imports `subagent.js` first. Reading it inside a function body defers that to
+call time, when both modules are built. Moving it into the array to tidy the
+list up is the change that breaks.
+
 ## Tools an MCP server adds
 
-Five is what ships built in, not what the model is offered. `toolsFor(mode)`
-returns the five plus `connectedTools()` (`src/core/tools/index.ts:13`) — every
+Six is what ships built in, not what the model is offered. `toolsFor(mode)`
+returns the six plus `connectedTools()` (`src/core/tools/index.ts:14`) — every
 tool listed by an MCP server that connected at boot, named
 `mcp__<label>__<tool>`.
 
@@ -228,6 +238,59 @@ Three exits are synthesized, not returned by the command:
   `stopped by the user`;
 - **1** — the process could not spawn at all, carrying the spawn error.
 
+## `agent`
+
+`description`, a few words the terminal row shows, and `prompt`, the whole job.
+Returns the child's final message and nothing else.
+
+It starts a second agent loop in the same workspace: a fresh `Session` on the
+parent's model, the parent's mode, `subagentPrompt` instead of `systemPrompt`,
+and `runAgent` again. The parent blocks until the child stops, then gets one
+string back — the concatenated text of the child's last turn, plus any error it
+hit. A child that says nothing comes back as `the sub-agent returned nothing`,
+because an empty tool result reads to the model as a bug rather than an answer.
+
+**The point is the context, not the parallelism.** Nothing runs at the same
+time. What the child spends — twenty reads to find one line — is spent in its
+own window and thrown away, and only the paragraph comes back. That is why the
+prompt tells it its final message is the whole report: every file it read and
+every command it ran is gone the moment it returns.
+
+Four things it deliberately does not do.
+
+**It does not forward a single event.** `childHost` swallows all of them into a
+local array. This is stronger than `withoutText` (`src/core/compact.ts:42`),
+which only drops `text_delta`, and it has to be: a forwarded `turn_end` would
+tell the terminal the parent's turn had ended, and a forwarded `tool_start`
+would break the one-row promise. The parent draws one `agent` row, exactly like
+`bash`.
+
+**It does not get the store.** No `SessionStore` is passed, so nothing the child
+says is written to the parent's `session.jsonl`. Passing one would append the
+child's messages as if the parent had said them, and `/resume` would replay them
+into the parent's context — which is the one thing a sub-agent exists to avoid.
+
+**It cannot spawn one of its own.** `childTools` is `toolsFor(mode)` minus
+`agent`. Without that filter the recursion has no floor.
+
+**It never asks on its own behalf.** The tool carries no `request`, so it does
+not reach the gate. Its child's calls do, one at a time, against the parent's
+`allowed` set — a "yes, this session" the user already gave is not asked for
+twice — and each reason arrives prefixed `sub-agent: `, so a prompt appearing
+mid-run is not mistaken for the parent's own.
+
+Its tokens count toward the turn total and the session total, through
+`ToolOutput.usage` and `recordToolUsage`. They are kept out of the context
+measurement on purpose; `agent-loop.md` has why.
+
+`childTools(mode, allow?)` and `subagentPrompt(root, mode, role?)` each carry one
+parameter nothing sets yet. Named agent types are configuration flowing into
+exactly those two places, and a definition may **narrow, never widen**: `allow`
+is intersected with `toolsFor(mode)`, so a config file cannot invent a tool, and
+what survives still passes `permitted()`. The same for the mode — a definition
+may pick a stricter one, never `auto`, or a file in the workspace could upgrade
+its own permissions.
+
 ## Paths
 
 `resolveTarget` runs before every file tool (`src/core/tools/paths.ts`). It
@@ -257,8 +320,10 @@ nothing more; what stops it is the permission gate, not a path check.
    can outrun the compaction trigger, and say in the marker what repair to try.
 4. Fail with a sentence that names the fix, not just the problem. Every error in
    this file is written for a reader that has one chance to repair the call.
-5. Register it in `src/core/tools/index.ts`, in the `tools` array. The array
-   order is the order the model sees, and MCP tools are appended after it. This
+5. Register it in `src/core/tools/index.ts`, in the `tools` array — unless it
+   imports the registry back, as `agent` does, in which case it goes into
+   `toolsFor` for the reason above. The array order is the order the model sees,
+   and MCP tools are appended after it. This
    step is what "built-in" means — an MCP server is the other route to a tool,
    and it needs none of these six (`mcp.md`).
 6. Decide how `src/ui/events.ts` draws its row — see `features.md`.

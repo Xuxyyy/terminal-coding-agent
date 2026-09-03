@@ -59,6 +59,16 @@ interface Host {
 `messages → model → tool calls? → run → append → repeat`. Every text delta, tool start and
 tool end leaves through `host.onEvent`, so `src/ui` and a test's `Host` see the same run.
 
+**A tool may report tokens it spent.** `ToolOutput` carries an optional `usage`, and
+the loop folds it into the turn total and into `session.usage` — but through
+`recordToolUsage`, never `recordUsage`. The difference is the one that matters:
+`recordUsage` also calls `setMeasured`, which is what drives the context bar, and
+those tokens are not in this session's context. `agent` (`tools.md`) is what spends
+them — a sub-agent burns its own window and returns one paragraph — so counting
+them against the parent's context would show a bar climbing toward a compaction
+that nothing in the conversation justifies. The money is real and is counted; the
+context is not and is not.
+
 `MAX_STEPS` (20, `loop.ts`) is a **checkpoint, not a ceiling**: every 20 steps without
 finishing, the loop asks to continue. `'session'` turns the checkpoint off for the rest of
 the run, `'deny'` stops with a message. Esc there is neither: it is a stop, so the

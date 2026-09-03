@@ -17,7 +17,7 @@ three providers work through one client, and one API key is enough.
   inside the repo runs silently whether it came from `edit_file` or an `echo >`
   in a shell command; a delete, a push, or anything outside the project stops
   and asks. → [Permissions](/configure/permissions)
-- **Five tools, and editing matches an exact string.** Line numbers drift the
+- **Six tools, and editing matches an exact string.** Line numbers drift the
   moment the model makes its first edit; an exact match either applies or fails
   loudly, and loud is recoverable. → [Tools](/configure/tools)
 - **Resume reopens a session in place.** The history is seeded back into the
@@ -26,8 +26,9 @@ three providers work through one client, and one API key is enough.
 
 ## What it can do
 
-- **Five tools.** It reads files, searches them with ripgrep, edits one exact
-  piece of text, writes whole files, and runs shell commands.
+- **Six tools.** It reads files, searches them with ripgrep, edits one exact
+  piece of text, writes whole files, runs shell commands, and hands a
+  self-contained job to a sub-agent.
 - **Three providers, six models.** DeepSeek, GLM, and Kimi all work through one
   client. One API key is enough — `acc` picks a model from the key it finds.
 - **One permission gate.** Everything the agent does passes through it. Changes

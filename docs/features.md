@@ -17,8 +17,13 @@ The workspace is the current directory. Installed as the `acc` command.
 ## The agent loop
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
-- Five built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
-  `write_file`, `bash`. MCP servers add more — see below.
+- Six built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
+  `write_file`, `bash`, `agent`. MCP servers add more — see below.
+- `agent` hands one self-contained job to a sub-agent: a second turn loop on the
+  same model, in the same workspace, with every tool but `agent` itself. The
+  parent blocks, draws one row, and gets back the child's final message alone —
+  nothing the child read or ran is written to the session or added to the
+  parent's context.
 - `grep` shells out to `rg` on `PATH`. It returns matching paths only unless
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
@@ -52,7 +57,7 @@ The workspace is the current directory. Installed as the `acc` command.
   expanded here. A pattern matching nothing is reported in `/mcp`, not a startup
   error. This is a context-budget control, **not** a permission — an allowlisted
   tool still asks.
-- Their tools are published beside the built-in five as
+- Their tools are published beside the built-in six as
   `mcp__<server>__<tool>`, and everything downstream — the loop, the gate, the
   UI — treats them as ordinary tools.
 - **Every MCP call reaches the permission gate and is never allowed outright.**
