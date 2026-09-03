@@ -357,6 +357,33 @@ test('an interrupted turn carries the marker exactly once', async () => {
   assert.equal(markers(active), 1);
 });
 
+test('a tool is handed the same model the run was started with', async () => {
+  const {choice} = fakeModel((nth) =>
+    nth === 1
+      ? streamOf(
+          toolCallChunk('call-a', 'recorder', '{}'),
+          finishChunk('tool_calls'),
+          usageChunk(10, 2),
+        )
+      : finalResponse(),
+  );
+  const {host} = fakeHost();
+  let seen: unknown;
+  const recorder: Tool = {
+    name: 'recorder',
+    description: 'records the model it was given',
+    schema: z.object({}),
+    async run(_args, ctx) {
+      seen = ctx.choice;
+      return {text: 'ok'};
+    },
+  };
+
+  await runAgent(session(), choice, host, [recorder]);
+
+  assert.strictEqual(seen, choice);
+});
+
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }

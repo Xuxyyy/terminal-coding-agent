@@ -1,5 +1,6 @@
 import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
+import type {ModelChoice} from '../client.js';
 import {INTERRUPTED, type DiffPayload, type Host} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
 import type {Mode} from '../permission/mode.js';
@@ -16,6 +17,7 @@ export type ToolContext = {
   allowed: Set<string>;
   rules: Rules;
   mode: Mode;
+  choice?: ModelChoice;
   backup?: (path: string) => void;
   judge?: Judge;
   denied?: string[];

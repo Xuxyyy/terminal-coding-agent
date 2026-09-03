@@ -271,6 +271,7 @@ export async function runAgent(
           allowed: session.allowed,
           rules: session.rules,
           mode: session.mode,
+          choice,
           backup,
           judge,
           denied: session.denied,
