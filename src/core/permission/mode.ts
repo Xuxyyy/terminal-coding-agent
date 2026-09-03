@@ -6,6 +6,12 @@ export const MODES: Mode[] = ['ask-edits', 'auto-edits', 'auto'];
 
 export const DEFAULT_MODE: Mode = 'auto-edits';
 
+const STRICTNESS: Record<Mode, number> = {
+  'ask-edits': 2,
+  'auto-edits': 1,
+  auto: 0,
+};
+
 const CUTS: Record<Mode, Level> = {
   'ask-edits': 'observe',
   'auto-edits': 'recoverable',
@@ -28,4 +34,8 @@ export function withinCut(level: Level | null, mode: Mode): boolean {
 
 export function isMode(value: unknown): value is Mode {
   return typeof value === 'string' && (MODES as string[]).includes(value);
+}
+
+export function stricterMode(parent: Mode, configured: Mode): Mode {
+  return STRICTNESS[parent] >= STRICTNESS[configured] ? parent : configured;
 }

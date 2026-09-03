@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
+import {AgentDefinitionError, agentsOf} from '../../core/agents.js';
 import {MODEL_IDS} from '../../core/models.js';
 import {
   loadSettings,
@@ -151,6 +152,72 @@ test('loadSettings refuses to continue when one file is broken', () => {
   fs.writeFileSync(broken, '{bad');
 
   assert.throws(() => loadSettings([broken]), SettingsError);
+});
+
+test('loadSettings reads global agents and keeps project settings behavior', () => {
+  withHome((home) => {
+    const directory = path.join(home, 'agents');
+    const file = path.join(directory, 'explorer.md');
+    fs.mkdirSync(directory);
+    fs.writeFileSync(
+      file,
+      '---\ndescription: Explores code\n---\n\nRead without editing.\n',
+    );
+
+    const rules = loadSettings(
+      settingsIn(
+        home,
+        {permissions: {allow: ['bash(ls *)']}},
+        {permissions: {deny: ['edit(secrets/**)']}},
+      ),
+    );
+
+    assert.deepEqual(rules, {
+      allow: bash('ls *'),
+      ask: [],
+      deny: [{tag: 'edit', pattern: 'secrets/**'}],
+    });
+    assert.deepEqual(agentsOf(), [
+      {
+        name: 'explorer',
+        description: 'Explores code',
+        prompt: 'Read without editing.',
+        file,
+      },
+    ]);
+  });
+});
+
+test('loadSettings clears global agents when their files disappear', () => {
+  withHome((home) => {
+    const directory = path.join(home, 'agents');
+    const file = path.join(directory, 'explorer.md');
+    fs.mkdirSync(directory);
+    fs.writeFileSync(file, '---\ndescription: Explores code\n---\n\nRead code.\n');
+    const files = settingsIn(home, {});
+
+    loadSettings(files);
+    assert.deepEqual(agentsOf().map(({name}) => name), ['explorer']);
+
+    fs.unlinkSync(file);
+    loadSettings(files);
+    assert.deepEqual(agentsOf(), []);
+  });
+});
+
+test('loadSettings propagates a broken global agent with its path', () => {
+  withHome((home) => {
+    const directory = path.join(home, 'agents');
+    const file = path.join(directory, 'broken.md');
+    fs.mkdirSync(directory);
+    fs.writeFileSync(file, 'no front matter');
+
+    assert.throws(
+      () => loadSettings(settingsIn(home, {})),
+      (error: unknown) =>
+        error instanceof AgentDefinitionError && error.message.startsWith(file),
+    );
+  });
 });
 
 test('settingsFiles looks in the acc home and then the workspace', () => {

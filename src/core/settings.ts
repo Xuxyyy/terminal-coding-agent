@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {agentFiles, loadAgents} from './agents.js';
 import {MODEL_IDS, MODELS} from './models.js';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome, makeDir} from './projects.js';
@@ -300,6 +301,7 @@ export function loadSettings(
   cachedMode = mode;
   cachedModel = model;
   cachedServers = servers;
+  loadAgents(agentFiles());
   return merged;
 }
 

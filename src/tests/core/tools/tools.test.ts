@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import {z} from 'zod';
+import {loadAgents} from '../../../core/agents.js';
 import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js';
 import {bash} from '../../../core/tools/bash.js';
 import {editFile} from '../../../core/tools/edit.js';
@@ -666,7 +667,8 @@ test('every mode is offered every tool', () => {
   assert.deepEqual(toolsFor('ask-edits').map((tool) => tool.name), full);
 });
 
-test('the sub-agent tool is offered with a schema for the job and the prompt', () => {
+test('the sub-agent tool keeps its original schema when no definitions exist', () => {
+  loadAgents([]);
   const offered = toolsFor('auto-edits').filter((tool) => tool.name === 'agent');
   const parameters = toolDefinitions(offered)[0]?.function.parameters as {
     type: string;
@@ -678,6 +680,33 @@ test('the sub-agent tool is offered with a schema for the job and the prompt', (
   assert.equal(parameters.type, 'object');
   assert.deepEqual(Object.keys(parameters.properties), ['description', 'prompt']);
   assert.deepEqual(parameters.required, ['description', 'prompt']);
+});
+
+test('a loaded definition adds its type and description to the generated agent tool', () => {
+  const root = workspace();
+  const directory = path.join(root, 'agents');
+  const file = path.join(directory, 'explorer.md');
+  fs.mkdirSync(directory);
+  fs.writeFileSync(
+    file,
+    '---\ndescription: Explores code without edits\n---\n\nRead carefully.\n',
+  );
+  loadAgents([file]);
+
+  try {
+    const offered = toolsFor('auto-edits').filter((tool) => tool.name === 'agent');
+    const definition = toolDefinitions(offered)[0]?.function;
+    const parameters = definition?.parameters as {
+      properties: {agent: {enum: string[]}};
+      required: string[];
+    };
+
+    assert.deepEqual(parameters.properties.agent.enum, ['explorer']);
+    assert.deepEqual(parameters.required, ['description', 'prompt']);
+    assert.match(definition?.description ?? '', /explorer: Explores code without edits/);
+  } finally {
+    loadAgents([]);
+  }
 });
 
 const RAW_SCHEMA = {
