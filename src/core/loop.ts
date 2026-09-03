@@ -14,6 +14,7 @@ import {compactSession, withoutText} from './compact.js';
 import {
   contextThreshold,
   projectedTokens,
+  recordToolUsage,
   recordUsage,
   overThreshold,
   type Session,
@@ -276,6 +277,10 @@ export async function runAgent(
           judge,
           denied: session.denied,
         });
+        if (output.usage) {
+          addUsage(total, output.usage);
+          recordToolUsage(session, output.usage);
+        }
         session.messages.push({
           role: 'tool',
           tool_call_id: call.id,

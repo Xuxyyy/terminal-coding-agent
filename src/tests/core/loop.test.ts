@@ -18,7 +18,7 @@ import {
   toolCallChunk,
   usageChunk,
 } from '../fakes.js';
-import type {AgentEvent} from '../../core/host.js';
+import type {AgentEvent, Usage} from '../../core/host.js';
 import {
   INTERRUPTED,
   INTERRUPTED_TURN,
@@ -382,6 +382,66 @@ test('a tool is handed the same model the run was started with', async () => {
   await runAgent(session(), choice, host, [recorder]);
 
   assert.strictEqual(seen, choice);
+});
+
+const TOOL_USAGE: Usage = {prompt: 100, completion: 20, total: 120};
+
+const reporter: Tool = {
+  name: 'reporter',
+  description: 'reports tokens of its own',
+  schema: z.object({}),
+  async run() {
+    return {text: 'ok', usage: TOOL_USAGE};
+  },
+};
+
+function callsReporter(answer: () => AsyncIterable<unknown>) {
+  return fakeModel((nth) =>
+    nth === 1
+      ? streamOf(
+          toolCallChunk('call-a', 'reporter', '{}'),
+          finishChunk('tool_calls'),
+          usageChunk(10, 2),
+        )
+      : answer(),
+  );
+}
+
+function endUsage(events: AgentEvent[]): Usage | null {
+  const end = events.find((event) => event.type === 'turn_end');
+  return end?.type === 'turn_end' ? end.usage : null;
+}
+
+test('the tokens a tool reports are part of the turn total', async () => {
+  const {choice} = callsReporter(finalResponse);
+  const {host, events} = fakeHost();
+
+  await runAgent(session(), choice, host, [reporter]);
+
+  assert.deepEqual(endUsage(events), {prompt: 120, completion: 24, total: 144});
+});
+
+test('the tokens a tool reports are part of the session total', async () => {
+  const {choice} = callsReporter(finalResponse);
+  const {host} = fakeHost();
+  const active = session();
+
+  await runAgent(active, choice, host, [reporter]);
+
+  assert.deepEqual(active.usage, {prompt: 120, completion: 24, total: 144});
+});
+
+test('the tokens a tool reports do not move the context bar', async () => {
+  const {choice} = callsReporter(() =>
+    streamOf(textChunk('done'), finishChunk('stop')),
+  );
+  const {host} = fakeHost();
+  const active = session();
+
+  await runAgent(active, choice, host, [reporter]);
+
+  assert.equal(active.usage.total, 132);
+  assert.equal(active.lastContextTokens, 12);
 });
 
 function tempDir(prefix: string): string {

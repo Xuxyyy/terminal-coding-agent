@@ -76,6 +76,12 @@ export function recordUsage(session: Session, usage: Usage): void {
   if (usage.total) setMeasured(session, usage.total);
 }
 
+export function recordToolUsage(session: Session, usage: Usage): void {
+  session.usage.prompt += usage.prompt;
+  session.usage.completion += usage.completion;
+  session.usage.total += usage.total;
+}
+
 function userText(message: OpenAI.ChatCompletionMessageParam): string | null {
   if (message.role !== 'user') return null;
   const {content} = message;

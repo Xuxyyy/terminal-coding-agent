@@ -1,7 +1,7 @@
 import type {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import type {ModelChoice} from '../client.js';
-import {INTERRUPTED, type DiffPayload, type Host} from '../host.js';
+import {INTERRUPTED, type DiffPayload, type Host, type Usage} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
 import type {Mode} from '../permission/mode.js';
 import type {Rules} from '../settings.js';
@@ -23,7 +23,7 @@ export type ToolContext = {
   denied?: string[];
 };
 
-export type ToolOutput = {text: string; diff?: DiffPayload | null};
+export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage};
 
 export type Tool = {
   name: string;
