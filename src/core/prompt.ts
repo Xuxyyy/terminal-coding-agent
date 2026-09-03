@@ -74,3 +74,18 @@ export function environmentBlock(root: string): string {
 export function systemPrompt(root: string, mode: Mode = DEFAULT_MODE): string {
   return `${INSTRUCTIONS}\n\n${environmentBlock(root)}`;
 }
+
+const SUBAGENT = `You are a sub-agent. Another agent handed you one self-contained job and is blocked until you answer.
+
+You cannot ask the user anything — there is nobody there to answer. Decide with what you can find, and say in your report what you were unsure about.
+
+Your final message is the whole report. Nothing else you do reaches the caller: not the files you read, not the commands you ran, not a single tool result. Put every fact the caller needs into that last message, with the paths and line numbers you found.`;
+
+export function subagentPrompt(
+  root: string,
+  mode: Mode = DEFAULT_MODE,
+  role?: string,
+): string {
+  const base = `${systemPrompt(root, mode)}\n\n${SUBAGENT}`;
+  return role ? `${base}\n\n${role}` : base;
+}
