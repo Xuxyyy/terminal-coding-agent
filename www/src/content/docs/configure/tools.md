@@ -179,8 +179,9 @@ list is how you stop being asked about a command you trust.
 
 ## `agent`
 
-Hands one job to a sub-agent — a second `acc` loop, in the same workspace, on
-the same model — and waits for it to finish.
+Hands one job to a sub-agent — a second `acc` loop in the same workspace — and
+waits for it to finish. It can use the general child or an optional named global
+type.
 
 ```
  • agent find where auth lives
@@ -191,7 +192,10 @@ you for permission exactly as `acc` does, but none of its steps are drawn: no
 second spinner, no tool rows of its own, no running text. When it stops, its
 final message becomes the tool's result and the conversation carries on.
 
-Takes `description`, the few words in that row, and `prompt`, the whole job.
+Takes `description`, the few words in that row, `prompt`, the whole job, and
+optional `agent`, the named type to use. When no type is selected, the child
+inherits the parent's model, permission mode, and every available tool except
+`agent`.
 
 **It is for saving your context, not for speed.** Nothing runs in parallel. A
 sub-agent that reads twenty files to answer one question spends those twenty
@@ -208,8 +212,10 @@ session" you have already given is not asked again.
 Its tokens are counted in the turn and in the session total, and deliberately
 left out of the context bar — they were never in your context.
 
-A sub-agent is given every tool except `agent`, so it cannot start one of its
-own.
+A sub-agent is never given `agent`, so it cannot start one of its own. A named
+type can choose another model, append role instructions, limit tools exactly,
+and request a stricter permission mode. See [Agents](/configure/agents) for the
+definition format, defaults, and failure behavior.
 
 ## MCP tools
 

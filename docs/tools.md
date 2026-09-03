@@ -19,7 +19,7 @@ model sees them in.
 | `edit_file` | `path`, `old_string`, `new_string` | Replaces one exact, unique piece of text. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `write_file` | `path`, `content` | Creates a file or replaces all of it. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
-| `agent` | `description`, `prompt` | Hands one self-contained job to a sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
+| `agent` | `description`, `prompt`, `agent?` | Hands one self-contained job to a general or named sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
 
 That column is the `auto-edits` mode, which is the one a session starts in: an
 ordinary write inside the project runs silently, because it classifies as
@@ -44,19 +44,18 @@ it: asked about, every time, never remembered. `permissions.md` has the matcher
 and the chain.
 
 **The list comes from one place.** `toolsFor(mode)` in
-`src/core/tools/index.ts` is the single source of what is offered. Both modes get
-all six today; the parameter is the seam a mode with its own list would use. It
-is the default argument of both `runAgent` and `contextStatus`, so what the model
-is offered and what the context readout counts can never drift apart.
+`src/core/tools/index.ts` is the single source of what is offered. Every mode
+gets all six today; the parameter is the seam a mode with its own list would
+use. It is the default argument of both `runAgent` and `contextStatus`, so what
+the model is offered and what the context readout counts can never drift apart.
 
-`agent` is the one tool `toolsFor` adds inside the function rather than through
-the exported `tools` array, and that is load-bearing. `index.ts` and
-`subagent.ts` import each other — the tool needs the registry to work out what
-to hand its child — so reading `subagent` while `index.ts` is still evaluating
-throws `Cannot access 'subagent' before initialization` the moment anything
-imports `subagent.js` first. Reading it inside a function body defers that to
-call time, when both modules are built. Moving it into the array to tidy the
-list up is the change that breaks.
+`agent` is the one tool `toolsFor` creates inside the function rather than
+keeping in the exported `tools` array, and that is load-bearing. Each call to
+`makeSubagent()` reads the definitions loaded during startup, so every new run
+gets the current schema and routing descriptions. `index.ts` and `subagent.ts`
+also import each other because the child needs the registry; delaying creation
+until call time keeps that cycle away from module initialization. Moving one
+constructed instance into the array would freeze an empty or stale cache.
 
 ## Tools an MCP server adds
 
@@ -240,15 +239,36 @@ Three exits are synthesized, not returned by the command:
 
 ## `agent`
 
-`description`, a few words the terminal row shows, and `prompt`, the whole job.
-Returns the child's final message and nothing else.
+`description`, a few words the terminal row shows, `prompt`, the whole job, and
+optional `agent`, the name of a global definition. Returns the child's final
+message and nothing else. When definitions exist, their sorted names are an
+enum in the schema and each `name: description` line is appended to the tool
+description, so the parent model has the routing information.
 
-It starts a second agent loop in the same workspace: a fresh `Session` on the
-parent's model, the parent's mode, `subagentPrompt` instead of `systemPrompt`,
-and `runAgent` again. The parent blocks until the child stops, then gets one
-string back — the concatenated text of the child's last turn, plus any error it
-hit. A child that says nothing comes back as `the sub-agent returned nothing`,
-because an empty tool result reads to the model as a bug rather than an answer.
+Definitions are direct regular `<ACC_HOME>/agents/*.md` files loaded once at
+startup. They are global because choosing a model or a tool set is user policy,
+not something a cloned workspace may impose. Invocation still uses the
+parent's current workspace. The Markdown body is appended to the fixed
+`subagentPrompt`; it cannot replace the isolation and reporting rules.
+
+It starts a second agent loop with a fresh `Session`. An unnamed call, or a
+missing field in a named definition, keeps the existing defaults: the exact
+parent `ModelChoice`, all currently available tools except `agent`, and the
+parent mode. A configured model client is created only when that type runs. A
+configured tool list is exact and keeps its written order after intersection
+with the live built-in and MCP registry. A configured mode resolves to the
+stricter of it and the parent mode: `ask-edits` > `auto-edits` > `auto`.
+
+Missing provider keys and configured tools that are unavailable because an MCP
+server is disabled or failed are invocation errors naming the agent and missing
+dependency. They do not stop startup. Invalid files do stop startup, because
+silently dropping a type would leave the parent routing against a different
+tool schema.
+
+The parent blocks until the child stops, then gets one string back — the
+concatenated text of the child's last turn, plus any error it hit. A child that
+says nothing comes back as `the sub-agent returned nothing`, because an empty
+tool result reads to the model as a bug rather than an answer.
 
 **The point is the context, not the parallelism.** Nothing runs at the same
 time. What the child spends — twenty reads to find one line — is spent in its
@@ -283,13 +303,12 @@ Its tokens count toward the turn total and the session total, through
 `ToolOutput.usage` and `recordToolUsage`. They are kept out of the context
 measurement on purpose; `agent-loop.md` has why.
 
-`childTools(mode, allow?)` and `subagentPrompt(root, mode, role?)` each carry one
-parameter nothing sets yet. Named agent types are configuration flowing into
-exactly those two places, and a definition may **narrow, never widen**: `allow`
-is intersected with `toolsFor(mode)`, so a config file cannot invent a tool, and
-what survives still passes `permitted()`. The same for the mode — a definition
-may pick a stricter one, never `auto`, or a file in the workspace could upgrade
-its own permissions.
+`childTools(mode, allow?)` and `subagentPrompt(root, mode, role?)` are the two
+runtime seams named definitions use. A definition may **narrow, never widen**:
+the allowlist is checked against `toolsFor(mode)`, so it cannot invent a tool,
+and what survives still passes `permitted()`. `stricterMode` prevents a type
+from upgrading its parent's permission mode. `agent` is removed even if an
+in-memory caller bypasses file validation, so recursion has two defenses.
 
 ## Paths
 

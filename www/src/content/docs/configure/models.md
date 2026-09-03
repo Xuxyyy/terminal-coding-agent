@@ -2,7 +2,7 @@
 title: Models
 description: Three providers and six model ids behind one client, the model key, where your API key is read from, and the order acc uses to pick a model.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 `acc` talks to three providers through one OpenAI-compatible client. You need a

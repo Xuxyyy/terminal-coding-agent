@@ -2,7 +2,7 @@
 title: Commands
 description: Every slash command in acc, what it prints, and how to leave.
 sidebar:
-  order: 6
+  order: 7
 ---
 
 Type `/` in the input box to open the menu. It filters as you type, ↑↓ moves

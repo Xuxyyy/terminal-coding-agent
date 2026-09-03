@@ -1,15 +1,15 @@
 # What `acc` can do today
 
-Status: v6, 2026-08-28. A list of shipped features, not a design doc.
+Status: v7, 2026-09-03. A list of shipped features, not a design doc.
 Read when: you want to know what exists before planning what is next.
 See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`,
 `headless.md` for *why* each part looks the way it does.
 
 ## Shape
 
-One TypeScript package, 8,805 lines outside the tests. `src/core` runs the
+One TypeScript package, about 11,800 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 929 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 975 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.
@@ -19,11 +19,14 @@ The workspace is the current directory. Installed as the `acc` command.
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
 - Six built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
   `write_file`, `bash`, `agent`. MCP servers add more — see below.
-- `agent` hands one self-contained job to a sub-agent: a second turn loop on the
-  same model, in the same workspace, with every tool but `agent` itself. The
-  parent blocks, draws one row, and gets back the child's final message alone —
-  nothing the child read or ran is written to the session or added to the
-  parent's context.
+- `agent` hands one self-contained job to a sub-agent. Files in
+  `<ACC_HOME>/agents/*.md` define optional global types with a routing
+  description, appended role prompt, model, exact tool list, and permission
+  mode. Missing fields inherit the parent's model, all tools except `agent`,
+  and its mode; a configured mode can only make the child stricter. The child
+  still runs in the current workspace. The parent blocks, draws one row, and
+  gets back the child's final message alone — nothing the child read or ran is
+  written to the session or added to the parent's context.
 - `grep` shells out to `rg` on `PATH`. It returns matching paths only unless
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
@@ -402,6 +405,11 @@ A byte cap on the copies a write stores, and a git-backed snapshot that would
 catch what `bash` changes — both wait for numbers from real use (see
 `sessions.md`). The sandbox, network tools, a
 debugging transcript, todo panel, skills, memory.
+
+For sub-agents, deliberately: project-local definitions, parallel or background
+work, nested agents, persistent child sessions, inherited parent conversation,
+live child progress, hot reload, and per-agent token, turn, timeout,
+temperature, or reasoning settings.
 
 On MCP, deliberately: hosted/HTTP transport and the OAuth it needs; resources and
 prompts, which are the halves of the spec that are not tools; `mcp(...)` rules in

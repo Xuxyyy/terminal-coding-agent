@@ -2,7 +2,7 @@
 title: MCP
 description: How acc spawns MCP servers, the mcpServers block and its five keys, the tools allowlist that keeps a big server from spending your context window, and why every MCP call asks before it runs.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 `acc` ships with six tools. An MCP server is how you give it more without

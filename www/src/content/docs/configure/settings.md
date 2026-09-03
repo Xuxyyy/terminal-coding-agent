@@ -11,7 +11,8 @@ sidebar:
 2. `<workspace>/.acc/settings.json` — the project's
 
 Both are optional and both are hand-written. Neither is reloaded while `acc`
-runs, so a change needs a restart. Setting `ACC_HOME` moves the first one.
+runs, so a change needs a restart. Setting `ACC_HOME` moves the first one and
+the global [`agents/` directory](/configure/agents).
 
 A project's file can only ever make `acc` stricter. The three keys that could
 make it more permissive — `permission_mode`, `model`, and `mcpServers` — are
@@ -57,7 +58,7 @@ was active.
 | Variable | What it does |
 |---|---|
 | `ACC_MODEL` | Forces one model id instead of letting `acc` choose. See [Models](/configure/models). |
-| `ACC_HOME` | Moves the `acc` folder off `~/.acc` — sessions, settings, and `.env` all follow it. |
+| `ACC_HOME` | Moves the `acc` folder off `~/.acc` — sessions, settings, `.env`, and [agent definitions](/configure/agents) all follow it. |
 | `ACC_COMPACT_AT` | The fraction of the context window at which `acc` starts shrinking the conversation. Defaults to `0.8`. |
 
 `ACC_COMPACT_AT` is only accepted when it reads as a number greater than 0 and
