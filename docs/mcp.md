@@ -31,10 +31,10 @@ Five files, in order, from a line of JSON to a tool the model can call.
 
 | Step | Where | What happens |
 |---|---|---|
-| parse | `src/core/settings.ts:121-227` | `parseServer`/`parseServers` turn the `mcpServers` block into `{command, args, env, enabled, tools}` per server |
-| connect | `src/core/mcp/connect.ts:55-121` | `connectOne` spawns the command over `StdioClientTransport` and calls `listTools()` |
-| filter | `src/core/mcp/connect.ts:83-92` | the `tools` allowlist drops every listed tool it does not match |
-| adapt | `src/core/mcp/adapt.ts:30-47` | `adaptTool` reshapes each surviving tool into the `Tool` shape `tools.md` describes |
+| parse | `src/core/settings.ts:122-228` | `parseServer`/`parseServers` turn the `mcpServers` block into `{command, args, env, enabled, tools}` per server |
+| connect | `src/core/mcp/connect.ts:55-126` | `connectOne` spawns the command over `StdioClientTransport` and calls `listTools()` |
+| filter | `src/core/mcp/connect.ts:88-98` | the `tools` allowlist drops every listed tool it does not match |
+| adapt | `src/core/mcp/adapt.ts:34-52` | `adaptTool` reshapes each surviving tool into the `Tool` shape `tools.md` describes |
 | publish | `src/core/tools/index.ts:14` | the adapted tools are appended to the built-in six, and the model is offered one flat list |
 
 Every published name is `mcp__<label>__<tool>` (`adapt.ts:18-20`), where `label`

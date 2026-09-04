@@ -67,7 +67,7 @@ first, so `Esc` still stops instantly.
       files/<sha256>               the bytes of a file before a write, if any
 ```
 
-Three streams interleave in the one file:
+Six record types interleave in the one file:
 
 | record | written when | holds |
 |---|---|---|

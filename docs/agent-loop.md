@@ -404,5 +404,6 @@ A stop is honest: the workspace is in a known state and recovery is one message.
 
 ## Permission
 
-Not here. `permitted()` in `src/core/tools/registry.ts` is the single gate every tool passes
-through, and `permissions.md` is the doc.
+Not here. `permitted()` in `src/core/tools/registry.ts` is the single gate for every tool that
+carries a permission request. `agent` deliberately skips the gate for the parent call; every
+tool its child calls still uses it. `permissions.md` is the doc.

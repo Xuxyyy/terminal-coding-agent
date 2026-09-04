@@ -179,7 +179,7 @@ quietly leave the denominator:
 - **`fail`** — the agent ran and did not deliver. **A timeout is a `fail`, not an
   `error`** (`resultOf`, `src/evals/task/run.ts:66`). So is hitting the 20-step
   checkpoint, which print mode always denies (`MAX_STEPS`,
-  `src/core/loop.ts:28`). The agent looped or was too slow; that is a real
+  `src/core/loop.ts:29`). The agent looped or was too slow; that is a real
   result about the agent, not about the harness.
 - **`pass`** — solved and clean.
 
@@ -214,7 +214,7 @@ eager, nor by one that is always timid.
 Steps, tool calls, failed tool calls, tokens and prompt count are recorded per
 trial and printed as trend columns. A failed tool call is one whose result
 starts with `Error: ` — the exact prefix every failure path in `runTool` returns
-(`src/core/tools/registry.ts:133-160`), so the rule is exact rather than a guess.
+(`src/core/tools/registry.ts:130-168`), so the rule is exact rather than a guess.
 
 **Nothing in the grader looks at how many tool calls a trial made, or in what
 order.** Grade what the agent produced, not the path it took: an agent that
@@ -234,7 +234,7 @@ two numbers would notice if that got worse.
 This is a finding, not an omission.
 
 `loadSettings` writes module-level state — `cached`, `cachedMode` and friends at
-`src/core/settings.ts:273-276` — and `createSession` (`src/core/session.ts:35`)
+`src/core/settings.ts:274-277` — and `createSession` (`src/core/session.ts:35`)
 reads it back through `rulesOf()` and `modeOf()` at construction time. With two
 cases in flight, case B's `loadSettings` can land between case A's
 `loadSettings` and its `createSession`, and A then silently runs under B's

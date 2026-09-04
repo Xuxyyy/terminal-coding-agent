@@ -64,7 +64,7 @@ returns the six plus `connectedTools()` (`src/core/tools/index.ts:14`) — every
 tool listed by an MCP server that connected at boot, named
 `mcp__<label>__<tool>`.
 
-They are not a second kind of tool. `adaptTool` (`src/core/mcp/adapt.ts:30-47`)
+They are not a second kind of tool. `adaptTool` (`src/core/mcp/adapt.ts:34-52`)
 builds each one into the same `Tool` this file describes below, so `runTool`
 validates, runs, and caps it exactly as it does `bash`, and `permitted()` gates it
 from the same `request` field. The only differences: the schema is
@@ -96,12 +96,13 @@ mostly punctuation it tokenizes far closer to one token per character than to
 four — a long `.describe()` costs more than its length suggests.
 
 **A tool with no `request` never reaches the gate.** `permitted()` returns
-immediately when `tool.request` is absent. Every tool here carries one, so that
-early exit never fires today — give a new tool a `request` and keep it that way.
-`read_file` and `grep` still never prompt, but now because `decide()` says so: a
-read inside the project is `observe`, a read outside it is denied. `grep` passes
-`path ?? '.'`, which is what it actually searches. The rule for what a `request`
-should be is `permissions.md`'s.
+immediately when `tool.request` is absent. The five file and command tools, plus
+every MCP tool, carry one. `agent` deliberately does not: starting a child is
+not itself an action on the workspace, while every tool the child calls still
+has its own permission decision. `read_file` and `grep` do not prompt for an
+inside-project read because `decide()` classifies it as `observe`; an outside
+read still asks. `grep` passes `path ?? '.'`, which is what it actually searches.
+The rule for what a `request` should be is `permissions.md`'s.
 
 ### What `runTool` does before `run`
 

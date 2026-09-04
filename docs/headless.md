@@ -19,7 +19,7 @@ Key names, so a search finds this file: `createHeadlessHost`, `HeadlessPolicy`,
 `acc -p "list the files you can see"` runs one turn and exits. No Ink, no
 keyboard, no TTY.
 
-It is a second **implementation** of `Host` (`src/core/host.ts:42`), never a
+It is a second **implementation** of `Host` (`src/core/host.ts:46`), never a
 change to what the loop does with one. The terminal `Host` is built inside a
 React component (`src/ui/agent.ts`) and its `confirm` only resolves when a human
 presses a key. The headless one answers from a policy instead. Everything below
@@ -58,16 +58,16 @@ down, so the arrow points one way only.
 An unattended run has nobody watching it, so it is bounded on **both** axes.
 
 **Steps.** `MAX_STEPS = 20` is a checkpoint, not a ceiling: the loop asks for
-permission to keep going (`src/core/loop.ts:130`). Print mode always denies that
+permission to keep going (`src/core/loop.ts:141`). Print mode always denies that
 request, under `--yes` too. A run that answers yes to its own checkpoint has no
 upper bound at all, and denying gives the step cap for free with no new
 machinery. A larger cap is a flag someone can add later; it is not a default.
 
 **Wall clock.** `--max-seconds`, default 300, is a timer that aborts the
-controller. The loop checks `host.signal.aborted` at the top of every step, so
-an abort is honoured between steps — not mid-request. A run that stalls inside
-one long tool call overruns the deadline and stops at the next step boundary. A
-`maxSeconds` of zero or less aborts before the first model call, rather than
+controller. The same signal reaches the model request, `bash`, the permission
+judge, an open confirmation and every MCP request, so the deadline stops work
+that is already in flight. Work that completed before the abort is not undone.
+A `maxSeconds` of zero or less aborts before the first model call, rather than
 racing a timer.
 
 Either cap alone leaves a hole: 20 steps can still take an hour, and a wall
@@ -123,7 +123,7 @@ clean run.
 ## No session is written
 
 `runHeadless` passes no store, which `runAgent` already allows —
-`src/core/loop.ts:96` takes `store` as optional. So a print run leaves nothing
+`src/core/loop.ts:97` takes `store` as optional. So a print run leaves nothing
 under `~/.acc/projects/`, and cannot be reopened with `/resume`.
 
 An eval runs dozens of these back to back and would otherwise flood the store

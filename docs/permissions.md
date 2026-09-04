@@ -729,11 +729,13 @@ Session memory is keyed on the **normalized whole command**, stage by stage, joi
 ago must not be waiting after a restart. `/clear` clears it; `/rewind` does not, because a
 rewind is not a new session and the approvals were granted in this run.
 
-Every tool carries a `request`, so `permitted()` has no early exit that skips one. Path
-confinement in `paths.ts` is the second layer, inside each tool's `run`. It stays because the
-two fail differently: the gate judges the argument the model sent, the resolver resolves what
-is actually on disk. A symlink pointing out of the project is refused by both, and that is the
-point — neither is asked to be right alone.
+The five file and command tools, plus every MCP tool, carry a `request`. `agent` is the
+deliberate exception: starting a child is not itself an action on the workspace, so the parent
+call takes `permitted()`'s early exit. Each tool the child calls still reaches the gate in the
+normal way. Path confinement in `paths.ts` is the second layer for path-taking tools. It stays
+because the two fail differently: the gate judges the argument the model sent, the resolver
+resolves what is actually on disk. A symlink pointing out of the project is refused by both,
+and that is the point — neither is asked to be right alone.
 
 ## Not built
 
