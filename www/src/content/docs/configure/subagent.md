@@ -1,11 +1,11 @@
 ---
-title: Agents
-description: Define global named sub-agents with their own model, prompt, tool list, and stricter permission mode.
+title: Subagent
+description: Define global named subagents with their own model, prompt, tool list, and stricter permission mode.
 sidebar:
   order: 4
 ---
 
-Named agents let the parent choose a prepared kind of sub-agent for one job.
+Named subagents let the parent choose a prepared kind of subagent for one job.
 Each type has a routing description and role instructions. It may also choose a
 model, an exact tool list, and a permission mode that is no wider than the
 parent's.
@@ -54,7 +54,7 @@ Report exact file paths and line numbers. Do not modify files.
 ```
 
 The opening YAML front matter configures the type. The Markdown body is added
-after `acc`'s fixed sub-agent rules. Those rules still require an isolated job,
+after `acc`'s fixed subagent rules. Those rules still require an isolated job,
 no questions to the user, and a complete final report.
 
 | Field | Required | Default | What it does |
@@ -117,7 +117,7 @@ without changing a valid definition, so they fail only when that type is used.
 
 ## Not built
 
-Definitions are not read from `<workspace>/.acc/agents`. Named agents do not
+Definitions are not read from `<workspace>/.acc/agents`. Named subagents do not
 run in parallel or in the background, spawn nested agents, inherit the parent's
 conversation, persist a child session, or show live child progress. There is no
 agent editor, picker, `/agents` command, hot reload, or per-agent token, turn,

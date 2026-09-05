@@ -214,7 +214,7 @@ left out of the context bar — they were never in your context.
 
 A sub-agent is never given `agent`, so it cannot start one of its own. A named
 type can choose another model, append role instructions, limit tools exactly,
-and request a stricter permission mode. See [Agents](/configure/agents) for the
+and request a stricter permission mode. See [Subagent](/configure/subagent) for the
 definition format, defaults, and failure behavior.
 
 ## MCP tools
