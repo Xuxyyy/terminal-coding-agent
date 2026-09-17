@@ -35,7 +35,9 @@ test('a run with no tool calls counts no steps, no calls, and no errors', () => 
     steps: 0,
     toolCalls: 0,
     toolErrors: 0,
-    tokens: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
     prompts: 0,
   });
 });
@@ -91,19 +93,31 @@ test('steps is the same number as tool calls', () => {
   assert.equal(metrics.steps, 3);
 });
 
-test('tokens is read off the turn_end usage total, and is zero without one', () => {
+test('the token split is read from turn_end and is zero without one', () => {
   const events: AgentEvent[] = [
     {type: 'text_delta', text: 'done'},
     ...call('1', 'read', {}, 'the file'),
   ];
 
-  assert.equal(metricsOf(events, []).tokens, 0);
-  assert.equal(
-    metricsOf(
-      [...events, {type: 'turn_end', usage: {prompt: 90, completion: 30, total: 120}}],
-      [],
-    ).tokens,
-    120,
+  assert.deepEqual(
+    {
+      prompt: metricsOf(events, []).promptTokens,
+      completion: metricsOf(events, []).completionTokens,
+      total: metricsOf(events, []).totalTokens,
+    },
+    {prompt: 0, completion: 0, total: 0},
+  );
+  const metrics = metricsOf(
+    [...events, {type: 'turn_end', usage: {prompt: 90, completion: 30, total: 120}}],
+    [],
+  );
+  assert.deepEqual(
+    {
+      prompt: metrics.promptTokens,
+      completion: metrics.completionTokens,
+      total: metrics.totalTokens,
+    },
+    {prompt: 90, completion: 30, total: 120},
   );
 });
 
@@ -117,7 +131,10 @@ test('a later turn_end replaces the tokens of an earlier one', () => {
     [],
   );
 
-  assert.equal(metrics.tokens, 100);
+  assert.deepEqual(
+    [metrics.promptTokens, metrics.completionTokens, metrics.totalTokens],
+    [60, 40, 100],
+  );
 });
 
 test('prompts is the number of recorded prompts', () => {

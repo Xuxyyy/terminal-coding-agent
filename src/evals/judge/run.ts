@@ -1,3 +1,4 @@
+import {spawnSync} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -10,7 +11,13 @@ import {
 } from '../../core/permission/judge.js';
 import {withRetry, type RetryOptions} from '../../core/retry.js';
 import {parseCases, toJudgeInput, type EvalCase} from './cases.js';
-import {formatReport, score, type Outcome, type Report} from './score.js';
+import {
+  formatReport,
+  score,
+  type Outcome,
+  type Report,
+  type RunMetadata,
+} from './score.js';
 
 export const DEFAULT_CASES = 'evals/cases/judge.jsonl';
 export const DEFAULT_MODEL = 'deepseek-v4-flash';
@@ -181,6 +188,44 @@ function writeResults(path: string, outcomes: Outcome[], report: Report): void {
   writeFileSync(path, `${lines.join('\n')}\n`);
 }
 
+export function gitState(cwd = process.cwd()): RunMetadata['git'] {
+  const revision = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=normal'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  return {
+    revision:
+      revision.status === 0 && revision.stdout.trim().length > 0
+        ? revision.stdout.trim()
+        : 'unknown',
+    dirty: status.status !== 0 || status.stdout.trim().length > 0,
+  };
+}
+
+export function runMetadata(
+  choice: ModelChoice,
+  args: Args,
+  caseCount: number,
+  startedAt: Date,
+  elapsedMs: number,
+  cwd = process.cwd(),
+): RunMetadata {
+  return {
+    requestedModel: {id: choice.model, label: choice.label},
+    startedAt: startedAt.toISOString(),
+    elapsedMs,
+    git: gitState(cwd),
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    repeats: args.repeats,
+    caseCount,
+  };
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   let args: Args;
   let cases: EvalCase[];
@@ -204,6 +249,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       `to ${choice.model} at concurrency ${args.concurrency}`,
   );
 
+  const startedAt = new Date();
   const started = Date.now();
   const outcomes = await runAll(
     choice,
@@ -213,7 +259,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   );
   const elapsed = (Date.now() - started) / 1_000;
 
-  const report = score(outcomes);
+  const report = score(
+    outcomes,
+    runMetadata(choice, args, cases.length, startedAt, Date.now() - started),
+  );
   const path = resultPath(new Date());
   writeResults(path, outcomes, report);
 

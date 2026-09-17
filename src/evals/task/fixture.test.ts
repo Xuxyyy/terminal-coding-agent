@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import test, {type TestContext} from 'node:test';
 import type {TaskCase} from './cases.js';
 import {
+  applyOverlay,
   applySolution,
   buildFixture,
   changes,
@@ -34,6 +35,7 @@ function tree(t: TestContext, files: Files): string {
 function taskCase(dir: string): TaskCase {
   return {
     id: 'fixture-case',
+    suite: 'smoke',
     category: 'edit',
     task: {
       prompt: 'rename the greeting',
@@ -49,12 +51,20 @@ function taskCase(dir: string): TaskCase {
   };
 }
 
-function caseWith(t: TestContext, workspace: Files, solution?: Files): TaskCase {
+function caseWith(
+  t: TestContext,
+  workspace: Files,
+  solution?: Files,
+  counterexample?: Files,
+): TaskCase {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-case-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   fs.mkdirSync(path.join(dir, 'workspace'), {recursive: true});
   write(path.join(dir, 'workspace'), workspace);
   if (solution !== undefined) write(path.join(dir, 'solution'), solution);
+  if (counterexample !== undefined) {
+    write(path.join(dir, 'counterexample'), counterexample);
+  }
   return taskCase(dir);
 }
 
@@ -194,6 +204,35 @@ test('a case with no solution directory leaves the fixture exactly as built', (t
 
   applySolution(c, root);
 
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('solution and counterexample overlays are isolated reusable copies', (t) => {
+  const c = caseWith(
+    t,
+    {'a.txt': 'original\n', 'keep.txt': 'untouched\n'},
+    {'a.txt': 'correct\n'},
+    {'a.txt': 'wrong\n'},
+  );
+  const solved = fixture(t, c);
+  const wrong = fixture(t, c);
+
+  assert.equal(applyOverlay(c, solved, 'solution'), true);
+  assert.equal(applyOverlay(c, wrong, 'counterexample'), true);
+  assert.equal(fs.readFileSync(path.join(solved, 'a.txt'), 'utf8'), 'correct\n');
+  assert.equal(fs.readFileSync(path.join(wrong, 'a.txt'), 'utf8'), 'wrong\n');
+  assert.equal(
+    fs.readFileSync(path.join(c.dir, 'workspace', 'a.txt'), 'utf8'),
+    'original\n',
+  );
+});
+
+test('a missing overlay reports false without changing the fixture', (t) => {
+  const c = caseWith(t, {'a.txt': 'original\n'});
+  const root = fixture(t, c);
+  const before = snapshot(root);
+
+  assert.equal(applyOverlay(c, root, 'counterexample'), false);
   assert.deepEqual(snapshot(root), before);
 });
 

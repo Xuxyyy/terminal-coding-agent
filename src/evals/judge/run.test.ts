@@ -11,6 +11,7 @@ import {
   limitCases,
   loadCases,
   parseArgs,
+  runMetadata,
   runAll,
   runCase,
 } from './run.js';
@@ -290,4 +291,24 @@ test('an already aborted signal marks every job as an error without calling the 
     [...new Set(outcomes.map((outcome) => outcome.error))],
     ['the run stopped before this case ran'],
   );
+});
+
+test('judge run metadata records the requested model and complete case set', () => {
+  const choice = tracking().choice;
+  const metadata = runMetadata(
+    choice,
+    DEFAULTS,
+    60,
+    new Date('2026-09-17T12:00:00.000Z'),
+    456,
+  );
+
+  assert.deepEqual(metadata.requestedModel, {id: 'fake-model', label: 'Fake'});
+  assert.equal(metadata.startedAt, '2026-09-17T12:00:00.000Z');
+  assert.equal(metadata.elapsedMs, 456);
+  assert.equal(metadata.repeats, 3);
+  assert.equal(metadata.caseCount, 60);
+  assert.equal(metadata.node, process.version);
+  assert.equal(metadata.platform, `${process.platform}-${process.arch}`);
+  assert.notEqual(metadata.git.revision, 'unknown');
 });

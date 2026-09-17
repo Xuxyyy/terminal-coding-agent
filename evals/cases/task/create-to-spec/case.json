@@ -1,5 +1,6 @@
 {
   "id": "create-to-spec",
+  "suite": "smoke",
   "category": "create",
   "task": {
     "prompt": "Create the module that README.md describes.",

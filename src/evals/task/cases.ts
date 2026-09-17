@@ -14,6 +14,10 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+export const SUITES = ['smoke', 'focused', 'workflow'] as const;
+
+export type TaskSuite = (typeof SUITES)[number];
+
 export const POLICIES: HeadlessPolicy[] = ['deny', 'yes'];
 
 export const CHECK_KINDS = [
@@ -25,6 +29,7 @@ export const CHECK_KINDS = [
   'unchanged',
   'answers',
   'prompted',
+  'tool',
 ] as const;
 
 export type Check =
@@ -35,10 +40,17 @@ export type Check =
   | {kind: 'matches'; path: string; pattern: string}
   | {kind: 'unchanged'; path: string}
   | {kind: 'answers'; pattern: string}
-  | {kind: 'prompted'};
+  | {kind: 'prompted'}
+  | {
+      kind: 'tool';
+      name: string;
+      argsPattern?: string;
+      resultPattern?: string;
+    };
 
 export type TaskCase = {
   id: string;
+  suite: TaskSuite;
   category: Category;
   task: {
     prompt: string;
@@ -50,6 +62,7 @@ export type TaskCase = {
     allowedWrites: string[];
     checks: Check[];
     expectedAnswer?: string;
+    counterexampleAnswer?: string;
   };
   dir: string;
 };
@@ -115,6 +128,29 @@ function parseCheck(where: string, raw: unknown, index: number): Check {
       throw new CaseError(at, `pattern is not a regex — ${(error as Error).message}`);
     }
     return {kind, pattern};
+  }
+  if (kind === 'tool') {
+    const check: Extract<Check, {kind: 'tool'}> = {
+      kind,
+      name: stringField(at, source, 'name'),
+    };
+    for (const key of ['argsPattern', 'resultPattern'] as const) {
+      const value = source[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new CaseError(at, `${key} must be a non-empty string`);
+      }
+      try {
+        new RegExp(value);
+      } catch (error) {
+        throw new CaseError(
+          at,
+          `${key} is not a regex — ${(error as Error).message}`,
+        );
+      }
+      check[key] = value;
+    }
+    return check;
   }
   if (kind === 'prompted') {
     return {kind};
@@ -190,12 +226,26 @@ function parseGrade(where: string, raw: unknown): TaskCase['grade'] {
     }
     grade.expectedAnswer = expected;
   }
+  const counterexample = source['counterexampleAnswer'];
+  if (counterexample !== undefined) {
+    if (typeof counterexample !== 'string' || counterexample.length === 0) {
+      throw new CaseError(
+        where,
+        'grade.counterexampleAnswer must be a non-empty string',
+      );
+    }
+    grade.counterexampleAnswer = counterexample;
+  }
   return grade;
 }
 
 export function parseCase(where: string, raw: unknown, dir: string): TaskCase {
   const source = object(where, raw, 'a case');
   const id = stringField(where, source, 'id');
+  const suite = source['suite'];
+  if (typeof suite !== 'string' || !(SUITES as readonly string[]).includes(suite)) {
+    throw new CaseError(where, `suite must be one of ${SUITES.join(', ')}`);
+  }
   const category = source['category'];
   if (
     typeof category !== 'string' ||
@@ -205,6 +255,7 @@ export function parseCase(where: string, raw: unknown, dir: string): TaskCase {
   }
   return {
     id,
+    suite: suite as TaskSuite,
     category: category as Category,
     task: parseTask(where, source['task']),
     grade: parseGrade(where, source['grade']),

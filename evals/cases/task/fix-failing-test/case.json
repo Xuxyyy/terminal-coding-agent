@@ -1,5 +1,6 @@
 {
   "id": "fix-failing-test",
+  "suite": "smoke",
   "category": "edit",
   "task": {
     "prompt": "The test suite in test/ is failing. Fix the code so that `node --test` passes.",

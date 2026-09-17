@@ -1,3 +1,4 @@
+import {spawnSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
@@ -10,7 +11,12 @@ import {
   type StopReason,
 } from '../../core/headless/run.js';
 import {loadSettings, settingsFiles} from '../../core/settings.js';
-import {loadCases, type TaskCase} from './cases.js';
+import {
+  loadCases,
+  SUITES,
+  type TaskCase,
+  type TaskSuite,
+} from './cases.js';
 import {
   buildFixture,
   changes,
@@ -26,6 +32,7 @@ import {
   type Outcome,
   type Report,
   type Result,
+  type RunMetadata,
 } from './score.js';
 
 export const DEFAULT_CASES = 'evals/cases/task';
@@ -36,6 +43,7 @@ export const HOME_PREFIX = 'acc-task-home-';
 export type Args = {
   cases: string;
   repeats: number;
+  suite: TaskSuite | 'all';
   limit: number | null;
   maxSeconds: number | null;
 };
@@ -43,6 +51,7 @@ export type Args = {
 export const DEFAULTS: Args = {
   cases: DEFAULT_CASES,
   repeats: 3,
+  suite: 'all',
   limit: null,
   maxSeconds: null,
 };
@@ -57,7 +66,9 @@ const NO_METRICS: Metrics = {
   steps: 0,
   toolCalls: 0,
   toolErrors: 0,
-  tokens: 0,
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
   prompts: 0,
 };
 
@@ -87,6 +98,12 @@ export function parseArgs(argv: string[]): Args {
       args.cases = value;
     } else if (flag === '--repeats') {
       args.repeats = positive(flag, value);
+    } else if (flag === '--suite') {
+      if (value === undefined) throw new Error('--suite needs a name');
+      if (value !== 'all' && !(SUITES as readonly string[]).includes(value)) {
+        throw new Error(`--suite must be one of all, ${SUITES.join(', ')}, got '${value}'`);
+      }
+      args.suite = value as TaskSuite | 'all';
     } else if (flag === '--limit') {
       args.limit = positive(flag, value);
     } else if (flag === '--max-seconds') {
@@ -101,6 +118,15 @@ export function parseArgs(argv: string[]): Args {
 
 export function limitCases(cases: TaskCase[], limit: number | null): TaskCase[] {
   return limit === null ? cases : cases.slice(0, limit);
+}
+
+export function selectCases(
+  cases: TaskCase[],
+  suite: TaskSuite | 'all',
+  limit: number | null,
+): TaskCase[] {
+  const selected = suite === 'all' ? cases : cases.filter((c) => c.suite === suite);
+  return limitCases(selected, limit);
 }
 
 export function messageOf(error: unknown): string {
@@ -132,6 +158,7 @@ export function outcomeOf(
   const transcript = transcriptOf(result.events);
   return {
     id: c.id,
+    suite: c.suite,
     category: c.category,
     result: resultOf(result.stopped, solved, clean),
     solved,
@@ -151,6 +178,7 @@ export function outcomeOf(
 export function errorTrial(c: TaskCase, error: string): Trial {
   return {
     id: c.id,
+    suite: c.suite,
     category: c.category,
     result: 'error',
     solved: false,
@@ -187,7 +215,15 @@ export async function runOne(
       maxSeconds: maxSeconds ?? c.task.maxSeconds,
     });
     const after = snapshot(root);
-    const checks = runChecks(c, root, result.text, before, result.prompts);
+    const transcript = transcriptOf(result.events);
+    const checks = runChecks(
+      c,
+      root,
+      result.text,
+      before,
+      result.prompts,
+      transcript.calls,
+    );
     return outcomeOf(c, result, before, after, checks);
   } catch (error) {
     return errorTrial(c, messageOf(error));
@@ -213,7 +249,7 @@ export async function runAll(
       console.log(
         `[${trials.length + 1}/${planned}] ${c.id} trial ${repeat} — ` +
           `${trial.result} (${trial.metrics.steps} steps, ` +
-          `${trial.metrics.tokens} tokens, ${seconds}s)` +
+          `${trial.metrics.totalTokens} tokens, ${seconds}s)` +
           (trial.error === undefined ? '' : ` — ${trial.error}`),
       );
       trials.push(trial);
@@ -236,13 +272,58 @@ export function writeResults(path: string, trials: Trial[], report: Report): voi
   writeFileSync(path, `${lines.join('\n')}\n`);
 }
 
+export function gitState(cwd = process.cwd()): RunMetadata['git'] {
+  const revision = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=normal'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  return {
+    revision:
+      revision.status === 0 && revision.stdout.trim().length > 0
+        ? revision.stdout.trim()
+        : 'unknown',
+    dirty: status.status !== 0 || status.stdout.trim().length > 0,
+  };
+}
+
+export function runMetadata(
+  choice: ModelChoice,
+  args: Args,
+  caseCount: number,
+  startedAt: Date,
+  elapsedMs: number,
+  cwd = process.cwd(),
+): RunMetadata {
+  return {
+    requestedModel: {id: choice.model, label: choice.label},
+    startedAt: startedAt.toISOString(),
+    elapsedMs,
+    git: gitState(cwd),
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    selectedSuite: args.suite,
+    repeats: args.repeats,
+    caseCount,
+  };
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   let args: Args;
   let cases: TaskCase[];
   try {
     args = parseArgs(argv);
-    cases = limitCases(loadCases(resolve(process.cwd(), args.cases)), args.limit);
-    if (cases.length === 0) throw new Error(`${args.cases} holds no cases`);
+    cases = selectCases(
+      loadCases(resolve(process.cwd(), args.cases)),
+      args.suite,
+      args.limit,
+    );
+    if (cases.length === 0) {
+      throw new Error(`${args.cases} holds no cases for suite '${args.suite}'`);
+    }
   } catch (error) {
     console.error(messageOf(error));
     return 1;
@@ -262,19 +343,38 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       `against ${choice.model}, one at a time`,
   );
 
+  const startedAt = new Date();
   const started = Date.now();
   const trials = await runAll(cases, args.repeats, choice, args.maxSeconds);
   const elapsed = (Date.now() - started) / 1_000;
 
-  const report = score(trials, args.repeats);
+  const report = score(
+    trials,
+    args.repeats,
+    runMetadata(choice, args, cases.length, startedAt, Date.now() - started),
+  );
   const path = resultPath(new Date());
   writeResults(path, trials, report);
 
-  const tokens = trials.reduce((sum, trial) => sum + trial.metrics.tokens, 0);
+  const promptTokens = trials.reduce(
+    (sum, trial) => sum + trial.metrics.promptTokens,
+    0,
+  );
+  const completionTokens = trials.reduce(
+    (sum, trial) => sum + trial.metrics.completionTokens,
+    0,
+  );
+  const totalTokens = trials.reduce(
+    (sum, trial) => sum + trial.metrics.totalTokens,
+    0,
+  );
   console.log('');
   console.log(formatReport(report));
   console.log('');
-  console.log(`${elapsed.toFixed(1)}s wall clock, ${tokens} tokens over ${planned} trials`);
+  console.log(
+    `${elapsed.toFixed(1)}s wall clock, ${promptTokens} prompt + ` +
+      `${completionTokens} completion = ${totalTokens} total tokens over ${planned} trials`,
+  );
   console.log(`wrote ${path}`);
 
   if (report.errors > 0) {

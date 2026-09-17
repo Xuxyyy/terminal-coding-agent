@@ -1,5 +1,10 @@
 import type {StopReason} from '../../core/headless/run.js';
-import {CATEGORIES, type Category} from './cases.js';
+import {
+  CATEGORIES,
+  SUITES,
+  type Category,
+  type TaskSuite,
+} from './cases.js';
 import type {Changes} from './fixture.js';
 import type {CheckResult} from './grade.js';
 import type {Metrics} from './metrics.js';
@@ -8,6 +13,7 @@ export type Result = 'pass' | 'fail' | 'error';
 
 export type Outcome = {
   id: string;
+  suite: TaskSuite;
   category: Category;
   result: Result;
   solved: boolean;
@@ -33,13 +39,38 @@ export type CategoryReport = {
 
 export type CaseReport = {
   id: string;
+  suite: TaskSuite;
   category: Category;
   total: number;
   errors: number;
   passes: number;
   steps: number | null;
   toolErrors: number | null;
-  tokens: number | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+};
+
+export type SuiteReport = {
+  suite: TaskSuite;
+  total: number;
+  errors: number;
+  scored: number;
+  solved: number;
+  clean: number;
+  passHatK: Rate;
+};
+
+export type RunMetadata = {
+  requestedModel: {id: string; label: string};
+  startedAt: string;
+  elapsedMs: number;
+  git: {revision: string; dirty: boolean};
+  node: string;
+  platform: string;
+  selectedSuite: TaskSuite | 'all';
+  repeats: number;
+  caseCount: number;
 };
 
 export type Report = {
@@ -51,8 +82,10 @@ export type Report = {
   clean: Rate;
   passHatK: Rate;
   byCase: CaseReport[];
+  bySuite: SuiteReport[];
   byCategory: CategoryReport[];
   unstable: string[];
+  metadata?: RunMetadata;
 };
 
 function rateOf(count: number, of: number): Rate {
@@ -76,7 +109,23 @@ function idsInOrder(outcomes: Outcome[]): string[] {
   return seen;
 }
 
-export function score(outcomes: Outcome[], repeats: number): Report {
+function passHatKOf(outcomes: Outcome[]): Rate {
+  let withTrials = 0;
+  let allPassed = 0;
+  for (const id of idsInOrder(outcomes)) {
+    const kept = outcomes.filter((o) => o.id === id && o.result !== 'error');
+    if (kept.length === 0) continue;
+    withTrials += 1;
+    if (kept.every((o) => o.result === 'pass')) allPassed += 1;
+  }
+  return rateOf(allPassed, withTrials);
+}
+
+export function score(
+  outcomes: Outcome[],
+  repeats: number,
+  metadata?: RunMetadata,
+): Report {
   const scored = outcomes.filter((o) => o.result !== 'error');
   const errors = outcomes.length - scored.length;
 
@@ -92,13 +141,32 @@ export function score(outcomes: Outcome[], repeats: number): Report {
     }
     byCase.push({
       id,
+      suite: trials[0]!.suite,
       category: trials[0]!.category,
       total: trials.length,
       errors: trials.length - kept.length,
       passes: kept.filter((o) => o.result === 'pass').length,
       steps: median(kept.map((o) => o.metrics.steps)),
       toolErrors: median(kept.map((o) => o.metrics.toolErrors)),
-      tokens: median(kept.map((o) => o.metrics.tokens)),
+      promptTokens: median(kept.map((o) => o.metrics.promptTokens)),
+      completionTokens: median(kept.map((o) => o.metrics.completionTokens)),
+      totalTokens: median(kept.map((o) => o.metrics.totalTokens)),
+    });
+  }
+
+  const bySuite: SuiteReport[] = [];
+  for (const suite of SUITES) {
+    const inSuite = outcomes.filter((o) => o.suite === suite);
+    if (inSuite.length === 0) continue;
+    const kept = inSuite.filter((o) => o.result !== 'error');
+    bySuite.push({
+      suite,
+      total: inSuite.length,
+      errors: inSuite.length - kept.length,
+      scored: kept.length,
+      solved: kept.filter((o) => o.solved).length,
+      clean: kept.filter((o) => o.clean).length,
+      passHatK: passHatKOf(inSuite),
     });
   }
 
@@ -137,8 +205,10 @@ export function score(outcomes: Outcome[], repeats: number): Report {
     clean: rateOf(scored.filter((o) => o.clean).length, scored.length),
     passHatK: rateOf(casesAllPassed, casesWithTrials),
     byCase,
+    bySuite,
     byCategory,
     unstable,
+    ...(metadata === undefined ? {} : {metadata}),
   };
 }
 
@@ -169,7 +239,19 @@ function table(headings: string[], rows: string[][]): string[] {
   return [line(headings), ...rows.map(line)];
 }
 
-const CASE_HEADINGS = ['case', 'n', 'err', 'pass', 'steps', 'tool-err', 'tokens'];
+const CASE_HEADINGS = [
+  'case',
+  'suite',
+  'n',
+  'err',
+  'pass',
+  'steps',
+  'tool-err',
+  'prompt',
+  'completion',
+  'total',
+];
+const SUITE_HEADINGS = ['suite', 'n', 'err', 'solved', 'clean', 'pass^k'];
 const CATEGORY_HEADINGS = ['category', 'n', 'err', 'solved', 'clean'];
 
 export function formatReport(report: Report): string {
@@ -184,12 +266,27 @@ export function formatReport(report: Report): string {
       CASE_HEADINGS,
       report.byCase.map((entry) => [
         entry.id,
+        entry.suite,
         String(entry.total),
         String(entry.errors),
         String(entry.passes),
         number(entry.steps),
         number(entry.toolErrors),
-        number(entry.tokens),
+        number(entry.promptTokens),
+        number(entry.completionTokens),
+        number(entry.totalTokens),
+      ]),
+    ),
+    '',
+    ...table(
+      SUITE_HEADINGS,
+      report.bySuite.map((entry) => [
+        entry.suite,
+        String(entry.total),
+        String(entry.errors),
+        String(entry.solved),
+        String(entry.clean),
+        fraction(entry.passHatK),
       ]),
     ),
     '',

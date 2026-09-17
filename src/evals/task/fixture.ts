@@ -61,10 +61,17 @@ export function changes(
   return {added: added.sort(), modified: modified.sort(), deleted: deleted.sort()};
 }
 
+export type Overlay = 'solution' | 'counterexample';
+
+export function applyOverlay(c: TaskCase, root: string, overlay: Overlay): boolean {
+  const source = join(c.dir, overlay);
+  if (!existsSync(source)) return false;
+  cpSync(source, root, {recursive: true});
+  return true;
+}
+
 export function applySolution(c: TaskCase, root: string): void {
-  const solution = join(c.dir, 'solution');
-  if (!existsSync(solution)) return;
-  cpSync(solution, root, {recursive: true});
+  applyOverlay(c, root, 'solution');
 }
 
 export function removeFixture(root: string): void {

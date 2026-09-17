@@ -10,6 +10,7 @@ type Raw = Record<string, unknown>;
 function raw(overrides: Raw = {}): Raw {
   return {
     id: 'fix-failing-test',
+    suite: 'smoke',
     category: 'edit',
     task: {
       prompt: 'make the test pass',
@@ -64,6 +65,7 @@ test('a valid case round trips', (t) => {
 
   assert.deepEqual(loadCase(dir), {
     id: 'fix-failing-test',
+    suite: 'smoke',
     category: 'edit',
     task: {
       prompt: 'make the test pass',
@@ -107,7 +109,7 @@ test('an unknown check kind lists the legal kinds', (t) => {
     complaint(
       dir,
       'grade\\.checks\\[0\\]: kind must be one of ' +
-        'exit0, exists, absent, contains, matches, unchanged, answers, prompted',
+        'exit0, exists, absent, contains, matches, unchanged, answers, prompted, tool',
     ),
   );
 });
@@ -290,5 +292,91 @@ test('a check path that climbs out with .. is still rejected', (t) => {
       "grade\\.checks\\[0\\]: path '\\.\\./outside\\.txt' " +
         "must not climb out with '\\.\\.'",
     ),
+  );
+});
+
+test('all three suites are accepted and an unknown suite is rejected', (t) => {
+  for (const suite of ['smoke', 'focused', 'workflow']) {
+    const dir = oneCase(t, raw({suite}));
+    assert.equal(loadCase(dir).suite, suite);
+  }
+  const dir = oneCase(t, raw({suite: 'benchmark'}));
+  assert.throws(
+    () => loadCase(dir),
+    complaint(dir, 'suite must be one of smoke, focused, workflow'),
+  );
+});
+
+test('a tool check keeps its name and optional argument and result patterns', (t) => {
+  const dir = oneCase(
+    t,
+    raw({
+      grade: {
+        allowedWrites: [],
+        checks: [
+          {
+            kind: 'tool',
+            name: 'bash',
+            argsPattern: 'node --test',
+            resultPattern: '\\[exit 0\\]',
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.deepEqual(loadCase(dir).grade.checks, [
+    {
+      kind: 'tool',
+      name: 'bash',
+      argsPattern: 'node --test',
+      resultPattern: '\\[exit 0\\]',
+    },
+  ]);
+});
+
+test('a tool check rejects invalid optional regexes at load time', (t) => {
+  for (const key of ['argsPattern', 'resultPattern']) {
+    const dir = oneCase(
+      t,
+      raw({
+        grade: {
+          allowedWrites: [],
+          checks: [{kind: 'tool', name: 'bash', [key]: '('}],
+        },
+      }),
+    );
+    assert.throws(
+      () => loadCase(dir),
+      new RegExp(`grade\\.checks\\[0\\]: ${key} is not a regex`),
+    );
+  }
+});
+
+test('counterexampleAnswer is optional but must be a non-empty string', (t) => {
+  const present = oneCase(
+    t,
+    raw({grade: {allowedWrites: [], checks: [{kind: 'answers', pattern: 'right'}], counterexampleAnswer: 'wrong'}}),
+  );
+  assert.equal(loadCase(present).grade.counterexampleAnswer, 'wrong');
+
+  const invalid = oneCase(
+    t,
+    raw({grade: {allowedWrites: [], checks: [{kind: 'answers', pattern: 'right'}], counterexampleAnswer: ''}}),
+  );
+  assert.throws(
+    () => loadCase(invalid),
+    complaint(invalid, 'grade\.counterexampleAnswer must be a non-empty string'),
+  );
+});
+
+test('duplicate ids are rejected even when their suites differ', (t) => {
+  const dir = root(t);
+  writeCase(dir, 'first', raw({id: 'same', suite: 'smoke'}));
+  writeCase(dir, 'second', raw({id: 'same', suite: 'focused'}));
+
+  assert.throws(
+    () => loadCases(dir),
+    complaint(join(dir, 'second'), "duplicate id 'same', first used by first"),
   );
 });

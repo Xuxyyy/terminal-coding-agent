@@ -12,6 +12,8 @@ export const DETAIL_LIMIT = 2_000;
 
 export type CheckResult = {check: Check; ok: boolean; detail: string};
 
+export type ToolCall = {name: string; args: unknown; result: string};
+
 export type Verdict = {solved: boolean; clean: boolean};
 
 function truncate(text: string, limit = DETAIL_LIMIT): string {
@@ -32,6 +34,7 @@ function runOne(
   text: string,
   before: Map<string, string>,
   prompts: RecordedPrompt[],
+  calls: readonly ToolCall[],
 ): {ok: boolean; detail: string} {
   if (check.kind === 'prompted') {
     const asked = prompts.length > 0;
@@ -62,6 +65,34 @@ function runOne(
         run.status === 0
           ? `${check.command} exited 0`
           : `${check.command} exited ${run.status ?? 'on a signal'}\n${output}`,
+    };
+  }
+
+  if (check.kind === 'tool') {
+    const matchingName = calls.filter((call) => call.name === check.name);
+    const found = matchingName.find((call) => {
+      const args = JSON.stringify(call.args) ?? '';
+      return (
+        (check.argsPattern === undefined || new RegExp(check.argsPattern).test(args)) &&
+        (check.resultPattern === undefined ||
+          new RegExp(check.resultPattern).test(call.result))
+      );
+    });
+    if (found !== undefined) {
+      return {
+        ok: true,
+        detail: truncate(
+          `${check.name} matched with args ${JSON.stringify(found.args)} and result ${JSON.stringify(found.result)}`,
+        ),
+      };
+    }
+    return {
+      ok: false,
+      detail: truncate(
+        matchingName.length === 0
+          ? `no ${check.name} tool call was recorded`
+          : `${matchingName.length} ${check.name} call(s) did not match; saw ${JSON.stringify(matchingName)}`,
+      ),
     };
   }
 
@@ -129,10 +160,11 @@ export function runChecks(
   text: string,
   before: Map<string, string> = new Map(),
   prompts: RecordedPrompt[] = [],
+  calls: readonly ToolCall[] = [],
 ): CheckResult[] {
   return c.grade.checks.map((check) => ({
     check,
-    ...runOne(check, root, text, before, prompts),
+    ...runOne(check, root, text, before, prompts, calls),
   }));
 }
 

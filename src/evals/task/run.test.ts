@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {basename, join, resolve} from 'node:path';
@@ -6,6 +7,7 @@ import test, {type TestContext} from 'node:test';
 import type {RecordedPrompt} from '../../core/headless/host.js';
 import type {HeadlessResult} from '../../core/headless/run.js';
 import type {AgentEvent} from '../../core/host.js';
+import type {ModelChoice} from '../../core/client.js';
 import type {Mode} from '../../core/permission/mode.js';
 import {loadSettings, modeOf, rulesOf} from '../../core/settings.js';
 import type {TaskCase} from './cases.js';
@@ -15,6 +17,7 @@ import {
   DEFAULT_CASES,
   DEFAULTS,
   errorTrial,
+  gitState,
   limitCases,
   messageOf,
   outcomeOf,
@@ -22,6 +25,8 @@ import {
   pinSettings,
   RESULTS_DIR,
   resultPath,
+  runMetadata,
+  selectCases,
   writeResults,
   type Trial,
 } from './run.js';
@@ -29,6 +34,7 @@ import {
 function taskCase(overrides: Partial<TaskCase> = {}): TaskCase {
   return {
     id: 'run-case',
+    suite: 'smoke',
     category: 'edit',
     task: {
       prompt: 'rename the greeting',
@@ -110,6 +116,7 @@ test('parseArgs with no flags returns the defaults', () => {
   assert.deepEqual(DEFAULTS, {
     cases: DEFAULT_CASES,
     repeats: 3,
+    suite: 'all',
     limit: null,
     maxSeconds: null,
   });
@@ -121,6 +128,7 @@ test('every flag is read from the value after it', () => {
     cases: 'evals/cases/other',
   });
   assert.deepEqual(parseArgs(['--repeats', '5']), {...DEFAULTS, repeats: 5});
+  assert.deepEqual(parseArgs(['--suite', 'focused']), {...DEFAULTS, suite: 'focused'});
   assert.deepEqual(parseArgs(['--limit', '2']), {...DEFAULTS, limit: 2});
   assert.deepEqual(parseArgs(['--max-seconds', '90']), {...DEFAULTS, maxSeconds: 90});
   assert.deepEqual(
@@ -134,7 +142,7 @@ test('every flag is read from the value after it', () => {
       '--max-seconds',
       '30',
     ]),
-    {cases: 'evals/cases/other', repeats: 1, limit: 4, maxSeconds: 30},
+    {cases: 'evals/cases/other', repeats: 1, suite: 'all', limit: 4, maxSeconds: 30},
   );
 });
 
@@ -168,6 +176,14 @@ test('--cases with nothing after it throws', () => {
   assert.throws(() => parseArgs(['--cases']), /--cases needs a path/);
 });
 
+test('--suite rejects a missing or unknown selection clearly', () => {
+  assert.throws(() => parseArgs(['--suite']), /--suite needs a name/);
+  assert.throws(
+    () => parseArgs(['--suite', 'large']),
+    /--suite must be one of all, smoke, focused, workflow/,
+  );
+});
+
 test('--concurrency is unknown because task cases run one at a time', () => {
   assert.throws(
     () => parseArgs(['--concurrency', '4']),
@@ -185,6 +201,27 @@ test('limitCases keeps everything without a limit and the first N with one', () 
   );
   assert.deepEqual(limitCases(cases, 10), cases);
   assert.deepEqual(limitCases([], 3), []);
+});
+
+test('suite filtering happens before the limit', () => {
+  const cases = [
+    taskCase({id: 'smoke-a', suite: 'smoke'}),
+    taskCase({id: 'focused-a', suite: 'focused'}),
+    taskCase({id: 'focused-b', suite: 'focused'}),
+    taskCase({id: 'workflow-a', suite: 'workflow'}),
+  ];
+
+  assert.deepEqual(
+    selectCases(cases, 'focused', 1).map((c) => c.id),
+    ['focused-a'],
+  );
+  assert.deepEqual(selectCases(cases, 'workflow', null).map((c) => c.id), [
+    'workflow-a',
+  ]);
+  assert.deepEqual(selectCases(cases, 'all', 2).map((c) => c.id), [
+    'smoke-a',
+    'focused-a',
+  ]);
 });
 
 test('modeOf reads back the mode that was pinned for the case', (t) => {
@@ -238,6 +275,7 @@ test('a trial that solved every check and moved nothing outside is a pass', () =
   const outcome = outcomeOf(taskCase(), headless(), before, after, passing());
 
   assert.equal(outcome.result, 'pass');
+  assert.equal(outcome.suite, 'smoke');
   assert.equal(outcome.solved, true);
   assert.equal(outcome.clean, true);
   assert.deepEqual(outcome.outside, []);
@@ -335,7 +373,14 @@ test('the trial carries the transcript, not only the verdict', () => {
     {name: 'read_file', args: {path: 'src/a.js'}, result: 'hello'},
   ]);
   assert.deepEqual(outcome.prompts, prompts);
-  assert.equal(outcome.metrics.tokens, 14);
+  assert.deepEqual(
+    [
+      outcome.metrics.promptTokens,
+      outcome.metrics.completionTokens,
+      outcome.metrics.totalTokens,
+    ],
+    [10, 4, 14],
+  );
   assert.equal(outcome.metrics.prompts, 1);
 });
 
@@ -350,12 +395,21 @@ test('a result with no error has no error key on the trial', () => {
 test('errorTrial zeroes every metric and keeps the message', () => {
   assert.deepEqual(errorTrial(taskCase({id: 'a', category: 'guard'}), 'the fixture would not copy'), {
     id: 'a',
+    suite: 'smoke',
     category: 'guard',
     result: 'error',
     solved: false,
     clean: false,
     stopped: 'error',
-    metrics: {steps: 0, toolCalls: 0, toolErrors: 0, tokens: 0, prompts: 0},
+    metrics: {
+      steps: 0,
+      toolCalls: 0,
+      toolErrors: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      prompts: 0,
+    },
     checks: [],
     changes: {added: [], modified: [], deleted: []},
     outside: [],
@@ -403,6 +457,41 @@ test('writeResults writes one line per trial and a final report line', (t) => {
     {name: 'read_file', args: {path: 'src/a.js'}, result: 'hello'},
   ]);
   assert.deepEqual(records[0]!['prompts'], [prompt('rm src/b.js')]);
+});
+
+test('run metadata records the model, environment, selection, and git state', (t) => {
+  const repo = scratch(t, 'acc-metadata-repo-');
+  execFileSync('git', ['init', '-q'], {cwd: repo});
+  writeFileSync(join(repo, 'tracked.txt'), 'clean\n');
+  execFileSync('git', ['add', 'tracked.txt'], {cwd: repo});
+  execFileSync(
+    'git',
+    ['-c', 'user.name=Eval Test', '-c', 'user.email=eval@example.test', 'commit', '-qm', 'test'],
+    {cwd: repo},
+  );
+  const choice = {
+    model: 'deepseek-v4-flash',
+    label: 'DeepSeek v4 Flash',
+    contextWindow: 1,
+    client: {} as ModelChoice['client'],
+  };
+  const startedAt = new Date('2026-09-17T12:00:00.000Z');
+  const metadata = runMetadata(choice, DEFAULTS, 10, startedAt, 1234, repo);
+
+  assert.equal(metadata.requestedModel.id, 'deepseek-v4-flash');
+  assert.equal(metadata.requestedModel.label, 'DeepSeek v4 Flash');
+  assert.equal(metadata.startedAt, '2026-09-17T12:00:00.000Z');
+  assert.equal(metadata.elapsedMs, 1234);
+  assert.equal(metadata.git.dirty, false);
+  assert.notEqual(metadata.git.revision, 'unknown');
+  assert.equal(metadata.selectedSuite, 'all');
+  assert.equal(metadata.repeats, 3);
+  assert.equal(metadata.caseCount, 10);
+  assert.equal(metadata.node, process.version);
+  assert.equal(metadata.platform, `${process.platform}-${process.arch}`);
+
+  writeFileSync(join(repo, 'tracked.txt'), 'dirty\n');
+  assert.equal(gitState(repo).dirty, true);
 });
 
 test('messageOf reads an Error, stringifies anything else, and never returns empty', () => {

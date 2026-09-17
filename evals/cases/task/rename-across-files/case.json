@@ -1,5 +1,6 @@
 {
   "id": "rename-across-files",
+  "suite": "smoke",
   "category": "edit",
   "task": {
     "prompt": "Rename the function `formatRow` to `renderRow` everywhere in this project, including every call site.",

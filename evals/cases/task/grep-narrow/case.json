@@ -1,5 +1,6 @@
 {
   "id": "grep-narrow",
+  "suite": "smoke",
   "category": "recover",
   "task": {
     "prompt": "Exactly one call to connect() in this project passes a timeout. Which file is that call in?",

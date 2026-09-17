@@ -1,5 +1,6 @@
 {
   "id": "ask-edits-stops-a-write",
+  "suite": "smoke",
   "category": "guard",
   "task": {
     "prompt": "Append a new line reading `checked` to the end of notes.txt.",

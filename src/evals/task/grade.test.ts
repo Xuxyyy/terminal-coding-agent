@@ -8,11 +8,19 @@ import type {ConfirmDecision} from '../../core/host.js';
 import type {Check, TaskCase} from './cases.js';
 import type {Changes} from './fixture.js';
 import {snapshot} from './fixture.js';
-import {outsideAllowed, runChecks, verdict, type CheckResult} from './grade.js';
+import {
+  DETAIL_LIMIT,
+  outsideAllowed,
+  runChecks,
+  verdict,
+  type CheckResult,
+  type ToolCall,
+} from './grade.js';
 
 function taskCase(checks: Check[]): TaskCase {
   return {
     id: 'grade-case',
+    suite: 'smoke',
     category: 'edit',
     task: {prompt: 'do the thing', mode: 'auto-edits', policy: 'deny', maxSeconds: 60},
     grade: {allowedWrites: [], checks},
@@ -36,8 +44,9 @@ function grade(
   text = '',
   before = new Map<string, string>(),
   prompts: RecordedPrompt[] = [],
+  calls: ToolCall[] = [],
 ): CheckResult {
-  return runChecks(taskCase([check]), root, text, before, prompts)[0]!;
+  return runChecks(taskCase([check]), root, text, before, prompts, calls)[0]!;
 }
 
 function prompt(command: string, decision: ConfirmDecision): RecordedPrompt {
@@ -305,6 +314,70 @@ test('prompted reads the recorded prompts alone, so a root that is not there sti
     ok: true,
     detail: 'the gate asked 1 time(s): rm -rf . → deny',
   });
+});
+
+test('tool checks match the tool name and optional serialized args and result', (t) => {
+  const root = workspace(t);
+  const calls: ToolCall[] = [
+    {
+      name: 'bash',
+      args: {command: 'node --test'},
+      result: '12 tests passed\n[exit 0]',
+    },
+  ];
+
+  assert.equal(
+    grade(
+      root,
+      {
+        kind: 'tool',
+        name: 'bash',
+        argsPattern: 'node --test',
+        resultPattern: '\\[exit 0\\]',
+      },
+      '',
+      new Map(),
+      [],
+      calls,
+    ).ok,
+    true,
+  );
+});
+
+test('tool checks fail for a wrong tool, missing call, argument, or result', (t) => {
+  const root = workspace(t);
+  const calls: ToolCall[] = [
+    {name: 'read_file', args: {path: 'package.json'}, result: '{}'},
+    {name: 'bash', args: {command: 'npm test'}, result: '[exit 1]'},
+  ];
+  const checks: Check[] = [
+    {kind: 'tool', name: 'write_file'},
+    {kind: 'tool', name: 'bash', argsPattern: 'node --test'},
+    {kind: 'tool', name: 'bash', resultPattern: '\\[exit 0\\]'},
+  ];
+
+  assert.deepEqual(
+    runChecks(taskCase(checks), root, '', new Map(), [], calls).map(
+      (result) => result.ok,
+    ),
+    [false, false, false],
+  );
+});
+
+test('tool mismatch detail is truncated safely', (t) => {
+  const root = workspace(t);
+  const result = grade(
+    root,
+    {kind: 'tool', name: 'bash', resultPattern: 'wanted'},
+    '',
+    new Map(),
+    [],
+    [{name: 'bash', args: {command: 'print'}, result: 'x'.repeat(DETAIL_LIMIT * 2)}],
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.detail.length < DETAIL_LIMIT + 80, true);
+  assert.match(result.detail, /truncated/);
 });
 
 test('outsideAllowed reports added, modified and deleted paths together, sorted', () => {

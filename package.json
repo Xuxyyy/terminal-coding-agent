@@ -37,7 +37,11 @@
     "start": "node dist/cli.js",
     "test": "tsc && node --test \"dist/**/*.test.js\"",
     "eval:judge": "tsc && node dist/evals/judge/run.js",
-    "eval:task": "tsc && node dist/evals/task/run.js"
+    "eval:task": "tsc && node dist/evals/task/run.js",
+    "eval:task:all": "npm run eval:task -- --suite all",
+    "eval:task:smoke": "npm run eval:task -- --suite smoke",
+    "eval:task:focused": "npm run eval:task -- --suite focused",
+    "eval:task:workflow": "npm run eval:task -- --suite workflow"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -95,6 +95,13 @@ test('the ids and categories are the ones the plan named', () => {
   );
 });
 
+test('the ten preserved cases are all in the smoke suite', () => {
+  assert.deepEqual(
+    cases.map((c) => [c.id, c.suite]),
+    cases.map((c) => [c.id, 'smoke']),
+  );
+});
+
 test('every reference solution satisfies its own case file-state checks', () => {
   assert.deepEqual(cases.flatMap(solved), []);
 });

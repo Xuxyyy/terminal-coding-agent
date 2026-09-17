@@ -1,5 +1,6 @@
 {
   "id": "already-done",
+  "suite": "smoke",
   "category": "restraint",
   "task": {
     "prompt": "Make `node --test` pass.",

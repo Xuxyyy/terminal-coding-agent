@@ -9,7 +9,9 @@ export type Metrics = {
   steps: number;
   toolCalls: number;
   toolErrors: number;
-  tokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
   prompts: number;
 };
 
@@ -23,15 +25,29 @@ export function metricsOf(
 ): Metrics {
   let toolCalls = 0;
   let toolErrors = 0;
-  let tokens = 0;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
   for (const event of events) {
     if (event.type === 'tool_start') toolCalls += 1;
     if (event.type === 'tool_end' && event.result.startsWith(TOOL_ERROR_PREFIX)) {
       toolErrors += 1;
     }
-    if (event.type === 'turn_end') tokens = event.usage.total;
+    if (event.type === 'turn_end') {
+      promptTokens = event.usage.prompt;
+      completionTokens = event.usage.completion;
+      totalTokens = event.usage.total;
+    }
   }
-  return {steps: toolCalls, toolCalls, toolErrors, tokens, prompts: prompts.length};
+  return {
+    steps: toolCalls,
+    toolCalls,
+    toolErrors,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    prompts: prompts.length,
+  };
 }
 
 function truncate(text: string, limit = RESULT_LIMIT): string {

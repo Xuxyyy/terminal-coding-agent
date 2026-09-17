@@ -11,12 +11,21 @@ type Fields = Partial<Outcome> & {
 function outcome({steps = 1, toolErrors = 0, tokens = 100, ...overrides}: Fields = {}): Outcome {
   return {
     id: 'case-1',
+    suite: 'smoke',
     category: 'edit',
     result: 'pass',
     solved: true,
     clean: true,
     stopped: 'done',
-    metrics: {steps, toolCalls: steps, toolErrors, tokens, prompts: 0},
+    metrics: {
+      steps,
+      toolCalls: steps,
+      toolErrors,
+      promptTokens: Math.floor(tokens * 0.75),
+      completionTokens: tokens - Math.floor(tokens * 0.75),
+      totalTokens: tokens,
+      prompts: 0,
+    },
     checks: [],
     changes: {added: [], modified: [], deleted: []},
     outside: [],
@@ -129,23 +138,29 @@ test('a case carries the medians of its own non-error trials', () => {
   assert.deepEqual(report.byCase, [
     {
       id: 'alpha',
+      suite: 'smoke',
       category: 'edit',
       total: 3,
       errors: 1,
       passes: 2,
       steps: 6,
       toolErrors: 2,
-      tokens: 200,
+      promptTokens: 150,
+      completionTokens: 50,
+      totalTokens: 200,
     },
     {
       id: 'beta',
+      suite: 'smoke',
       category: 'find',
       total: 1,
       errors: 0,
       passes: 1,
       steps: 2,
       toolErrors: 0,
-      tokens: 50,
+      promptTokens: 37,
+      completionTokens: 13,
+      totalTokens: 50,
     },
   ]);
 });
@@ -171,6 +186,56 @@ test('byCategory holds a row only for a category that appears, counted over non-
   assert.deepEqual(report.byCategory, [
     {category: 'edit', total: 1, errors: 0, scored: 1, solved: 1, clean: 1},
     {category: 'find', total: 2, errors: 1, scored: 1, solved: 0, clean: 0},
+  ]);
+});
+
+test('bySuite keeps smoke, focused, and workflow results separate', () => {
+  const report = score(
+    [
+      outcome({id: 's', suite: 'smoke'}),
+      outcome({id: 'f', suite: 'focused', result: 'fail', solved: false}),
+      outcome({id: 'w', suite: 'workflow'}),
+      outcome({
+        id: 'broken',
+        suite: 'workflow',
+        result: 'error',
+        solved: false,
+        clean: false,
+        stopped: 'error',
+        error: 'provider error',
+      }),
+    ],
+    1,
+  );
+
+  assert.deepEqual(report.bySuite, [
+    {
+      suite: 'smoke',
+      total: 1,
+      errors: 0,
+      scored: 1,
+      solved: 1,
+      clean: 1,
+      passHatK: {count: 1, of: 1, rate: 1},
+    },
+    {
+      suite: 'focused',
+      total: 1,
+      errors: 0,
+      scored: 1,
+      solved: 0,
+      clean: 1,
+      passHatK: {count: 0, of: 1, rate: 0},
+    },
+    {
+      suite: 'workflow',
+      total: 2,
+      errors: 1,
+      scored: 1,
+      solved: 1,
+      clean: 1,
+      passHatK: {count: 1, of: 1, rate: 1},
+    },
   ]);
 });
 
@@ -218,6 +283,26 @@ test('the report text keeps solved, clean and pass hat k on three lines and name
   }
   assert.equal(text.includes('case'), true);
   assert.equal(text.includes('tool-err'), true);
+  assert.equal(text.includes('prompt'), true);
+  assert.equal(text.includes('completion'), true);
+  assert.equal(text.includes('total'), true);
+  assert.equal(text.includes('suite'), true);
+});
+
+test('score preserves run metadata on the report', () => {
+  const metadata = {
+    requestedModel: {id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash'},
+    startedAt: '2026-09-17T12:00:00.000Z',
+    elapsedMs: 100,
+    git: {revision: 'abc123', dirty: true},
+    node: 'v22.0.0',
+    platform: 'darwin-arm64',
+    selectedSuite: 'focused' as const,
+    repeats: 3,
+    caseCount: 12,
+  };
+
+  assert.deepEqual(score([outcome()], 3, metadata).metadata, metadata);
 });
 
 test('the report text names the repeats it was scored with', () => {

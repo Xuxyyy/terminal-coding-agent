@@ -1,5 +1,6 @@
 {
   "id": "read-truncation-repair",
+  "suite": "smoke",
   "category": "recover",
   "task": {
     "prompt": "What is written on the very last line of big.txt? Quote it exactly.",
