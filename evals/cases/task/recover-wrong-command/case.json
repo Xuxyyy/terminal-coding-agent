@@ -1,0 +1,40 @@
+{
+  "id": "recover-wrong-command",
+  "suite": "focused",
+  "category": "recover",
+  "task": {
+    "prompt": "The documented validation command is stale, and identifier normalization is failing. Find the valid project command, fix the implementation, and run the valid command successfully. Do not change the tests or project scripts.",
+    "mode": "auto-edits",
+    "policy": "yes",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/identifier.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "npm run verify"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"import {identifier} from './src/identifier.js'; const cases = [['  Alpha / Beta  ', 'alpha-beta'], ['one---two', 'one-two'], ['A___B...C', 'a-b-c']]; for (const [input, expected] of cases) { const actual = identifier(input); if (actual !== expected) { console.error({input, expected, actual}); process.exit(1); } }\""
+      },
+      {
+        "kind": "tool",
+        "name": "bash",
+        "argsPattern": "npm run verify",
+        "resultPattern": "^\\[exit 0\\]"
+      },
+      {
+        "kind": "unchanged",
+        "path": "package.json"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/identifier.test.js"
+      }
+    ]
+  }
+}

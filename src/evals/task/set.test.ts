@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import {existsSync, readdirSync} from 'node:fs';
-import {join, resolve} from 'node:path';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
+import {delimiter, join, resolve} from 'node:path';
 import test from 'node:test';
 import {isMode} from '../../core/permission/mode.js';
 import {loadCases, POLICIES, type Category, type TaskCase} from './cases.js';
 import {
+  applyOverlay,
   applySolution,
   buildFixture,
   changes,
@@ -16,10 +17,25 @@ import {DEFAULT_CASES} from './run.js';
 
 const cases: TaskCase[] = loadCases(resolve(process.cwd(), DEFAULT_CASES));
 
+process.env['PATH'] = [
+  resolve(process.cwd(), 'node_modules', '.bin'),
+  process.env['PATH'] ?? '',
+].join(delimiter);
+
 const EXPECTED_CATEGORY: Record<string, Category> = {
+  'bash-tail-diagnostic': 'recover',
+  'diagnose-indirect-failure': 'edit',
+  'diagnose-state-leak': 'edit',
   'fix-failing-test': 'edit',
+  'follow-project-instructions': 'restraint',
   'no-deleting-the-test': 'restraint',
+  'move-module-and-imports': 'edit',
+  'preserve-user-wip': 'restraint',
   'rename-across-files': 'edit',
+  'recover-incomplete-fix': 'recover',
+  'recover-wrong-command': 'recover',
+  'repair-build-config': 'recover',
+  'repair-type-contract': 'edit',
   'create-to-spec': 'create',
   'answer-needs-grep': 'find',
   'already-done': 'restraint',
@@ -27,7 +43,24 @@ const EXPECTED_CATEGORY: Record<string, Category> = {
   'outside-the-root': 'guard',
   'read-truncation-repair': 'recover',
   'grep-narrow': 'recover',
+  'verify-after-fix': 'edit',
+  'write-regression-test': 'edit',
 };
+
+const FOCUSED = [
+  'bash-tail-diagnostic',
+  'diagnose-indirect-failure',
+  'diagnose-state-leak',
+  'follow-project-instructions',
+  'move-module-and-imports',
+  'preserve-user-wip',
+  'recover-incomplete-fix',
+  'recover-wrong-command',
+  'repair-build-config',
+  'repair-type-contract',
+  'verify-after-fix',
+  'write-regression-test',
+];
 
 const READ_ONLY = [
   'already-done',
@@ -60,13 +93,52 @@ function solved(c: TaskCase): string[] {
   try {
     const before = snapshot(root);
     applySolution(c, root);
-    return runChecks(c, root, '', before)
+    return runChecks(c, root, c.grade.expectedAnswer ?? '', before)
       .filter(
         (result) =>
-          result.check.kind !== 'answers' && result.check.kind !== 'prompted',
+          result.check.kind !== 'tool' && result.check.kind !== 'prompted',
       )
       .filter((result) => !result.ok)
       .map((result) => `${c.id}: ${result.detail}`);
+  } finally {
+    removeFixture(root);
+  }
+}
+
+function startsUnsolved(c: TaskCase): boolean {
+  const root = buildFixture(c);
+  try {
+    const before = snapshot(root);
+    return runChecks(c, root, c.grade.expectedAnswer ?? '', before)
+      .filter(
+        (result) =>
+          result.check.kind !== 'tool' && result.check.kind !== 'prompted',
+      )
+      .some((result) => !result.ok);
+  } finally {
+    removeFixture(root);
+  }
+}
+
+function rejectsCounterexample(c: TaskCase): string | null {
+  const root = buildFixture(c);
+  try {
+    const before = snapshot(root);
+    const applied = applyOverlay(c, root, 'counterexample');
+    if (!applied && c.grade.counterexampleAnswer === undefined) {
+      return `${c.id}: has no counterexample overlay or answer`;
+    }
+    const results = runChecks(
+      c,
+      root,
+      c.grade.counterexampleAnswer ?? c.grade.expectedAnswer ?? '',
+      before,
+    ).filter(
+      (result) => result.check.kind !== 'tool' && result.check.kind !== 'prompted',
+    );
+    return results.some((result) => !result.ok)
+      ? null
+      : `${c.id}: counterexample passes every non-procedural check`;
   } finally {
     removeFixture(root);
   }
@@ -84,8 +156,16 @@ function touched(c: TaskCase): string[] {
   }
 }
 
-test('the whole set loads and holds ten cases', () => {
-  assert.equal(cases.length, 10);
+test('the whole set loads ten smoke and twelve focused cases', () => {
+  assert.deepEqual(
+    Object.fromEntries(
+      ['smoke', 'focused', 'workflow'].map((suite) => [
+        suite,
+        cases.filter((c) => c.suite === suite).length,
+      ]),
+    ),
+    {smoke: 10, focused: 12, workflow: 0},
+  );
 });
 
 test('the ids and categories are the ones the plan named', () => {
@@ -96,14 +176,39 @@ test('the ids and categories are the ones the plan named', () => {
 });
 
 test('the ten preserved cases are all in the smoke suite', () => {
+  const smoke = cases.filter((c) => c.suite === 'smoke');
   assert.deepEqual(
-    cases.map((c) => [c.id, c.suite]),
-    cases.map((c) => [c.id, 'smoke']),
+    smoke.map((c) => [c.id, c.suite]),
+    smoke.map((c) => [c.id, 'smoke']),
   );
 });
 
-test('every reference solution satisfies its own case file-state checks', () => {
+test('the focused suite contains exactly the twelve planned cases', () => {
+  assert.deepEqual(idsWhere((c) => c.suite === 'focused'), FOCUSED);
+});
+
+test('every reference solution satisfies its non-procedural checks', () => {
   assert.deepEqual(cases.flatMap(solved), []);
+});
+
+test('every focused starting fixture fails a non-procedural check', () => {
+  assert.deepEqual(idsWhere((c) => c.suite === 'focused' && !startsUnsolved(c)), []);
+});
+
+test('every focused case has both overlays and rejects its counterexample', () => {
+  const focused = cases.filter((c) => c.suite === 'focused');
+  assert.deepEqual(
+    focused.flatMap((c) =>
+      ['solution', 'counterexample']
+        .filter((overlay) => !existsSync(join(c.dir, overlay)))
+        .map((overlay) => `${c.id}: missing ${overlay}/`),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    focused.map(rejectsCounterexample).filter((detail) => detail !== null),
+    [],
+  );
 });
 
 test('allowedWrites names exactly the paths the solution touches', () => {
@@ -113,11 +218,15 @@ test('allowedWrites names exactly the paths the solution touches', () => {
   );
 });
 
-test('six cases may change nothing and four may write', () => {
+test('the preserved smoke cases retain their read-only and writing split', () => {
   assert.deepEqual(
     {
-      readOnly: idsWhere((c) => c.grade.allowedWrites.length === 0),
-      writing: idsWhere((c) => c.grade.allowedWrites.length > 0),
+      readOnly: idsWhere(
+        (c) => c.suite === 'smoke' && c.grade.allowedWrites.length === 0,
+      ),
+      writing: idsWhere(
+        (c) => c.suite === 'smoke' && c.grade.allowedWrites.length > 0,
+      ),
     },
     {readOnly: READ_ONLY, writing: WRITING},
   );
@@ -182,19 +291,39 @@ test('every case names a positive maxSeconds and a legal mode and policy', () =>
   );
 });
 
-test('only ask-edits-stops-a-write asks, the rest auto-edit, and every case denies', () => {
+test('only ask-edits-stops-a-write asks and every other case auto-edits', () => {
   assert.deepEqual(
     {
       askEdits: idsWhere((c) => c.task.mode === 'ask-edits'),
       neither: idsWhere(
         (c) => c.task.mode !== 'ask-edits' && c.task.mode !== 'auto-edits',
       ),
-      policies: [...new Set(cases.map((c) => c.task.policy))],
     },
     {
       askEdits: ['ask-edits-stops-a-write'],
       neither: [],
-      policies: ['deny'],
     },
+  );
+});
+
+test('tool checks appear only in the three procedural focused cases', () => {
+  assert.deepEqual(
+    idsWhere((c) => c.grade.checks.some((check) => check.kind === 'tool')),
+    ['bash-tail-diagnostic', 'recover-wrong-command', 'verify-after-fix'],
+  );
+});
+
+test('focused cases do not contain dependency installs or network commands', () => {
+  const banned = /\b(?:npm\s+(?:i|install)|pnpm\s+(?:add|install)|yarn\s+add|npx|curl|wget)\b|https?:\/\//i;
+  assert.deepEqual(
+    cases
+      .filter((c) => c.suite === 'focused')
+      .flatMap((c) => {
+        const caseFile = readFileSync(join(c.dir, 'case.json'), 'utf8');
+        const packageFile = join(c.dir, 'workspace', 'package.json');
+        const packageText = existsSync(packageFile) ? readFileSync(packageFile, 'utf8') : '';
+        return banned.test(`${caseFile}\n${packageText}`) ? [c.id] : [];
+      }),
+    [],
   );
 });

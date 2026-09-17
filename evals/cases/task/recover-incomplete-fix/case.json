@@ -1,0 +1,31 @@
+{
+  "id": "recover-incomplete-fix",
+  "suite": "focused",
+  "category": "recover",
+  "task": {
+    "prompt": "Slug normalization does not follow the documented contract. The contract is used in more than one part of this project. Fix every implementation site without changing tests or public exports.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/projects/normalize.js",
+      "src/users/normalize.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"const [{normalizeSlug: projectSlug}, {normalizeSlug: userSlug}] = await Promise.all([import('./src/projects/normalize.js'), import('./src/users/normalize.js')]); const cases = [['  Alpha   Beta  ', 'alpha-beta'], ['ONE\\tTWO\\nTHREE', 'one-two-three'], ['single', 'single']]; for (const normalize of [projectSlug, userSlug]) for (const [input, want] of cases) { const got = normalize(input); if (got !== want) { console.error(JSON.stringify({input, got, want})); process.exit(1); } }\""
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/normalize.test.js"
+      }
+    ]
+  }
+}

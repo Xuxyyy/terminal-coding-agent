@@ -1,0 +1,30 @@
+{
+  "id": "diagnose-state-leak",
+  "suite": "focused",
+  "category": "edit",
+  "task": {
+    "prompt": "The tag summary tests fail only when they run together. Diagnose the leaked state and fix the implementation without changing the tests. Run the tests when you are done.",
+    "mode": "auto-edits",
+    "policy": "yes",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/tag-summary.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"import {summarizeTags} from './src/tag-summary.js'; const first = summarizeTags(['red', 'blue']); const second = summarizeTags(['yellow', 'green']); if (first !== 'blue, red' || second !== 'green, yellow') { console.error({first, second}); process.exit(1); }\""
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/tag-summary.test.js"
+      }
+    ]
+  }
+}

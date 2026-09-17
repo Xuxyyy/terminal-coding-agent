@@ -1,0 +1,47 @@
+{
+  "id": "move-module-and-imports",
+  "suite": "focused",
+  "category": "edit",
+  "task": {
+    "prompt": "Move `src/legacy/format.js` to `src/format.js`, update every import to use the new path, and keep the existing behavior working. Do not leave the old module behind.",
+    "mode": "auto-edits",
+    "policy": "deny",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/legacy/format.js",
+      "src/format.js",
+      "src/report.js",
+      "src/summary.js"
+    ],
+    "checks": [
+      {
+        "kind": "absent",
+        "path": "src/legacy/format.js"
+      },
+      {
+        "kind": "exists",
+        "path": "src/format.js"
+      },
+      {
+        "kind": "matches",
+        "path": "src/report.js",
+        "pattern": "from ['\"]\\./format\\.js['\"]"
+      },
+      {
+        "kind": "matches",
+        "path": "src/summary.js",
+        "pattern": "from ['\"]\\./format\\.js['\"]"
+      },
+      {
+        "kind": "exit0",
+        "command": "if grep -R 'legacy/format' src; then exit 1; fi"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      }
+    ]
+  }
+}

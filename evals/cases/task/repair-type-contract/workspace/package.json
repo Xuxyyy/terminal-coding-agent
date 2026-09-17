@@ -1,0 +1,8 @@
+{
+  "name": "repair-type-contract-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json"
+  }
+}

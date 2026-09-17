@@ -1,0 +1,8 @@
+{
+  "name": "wrong-command-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node --test"
+  }
+}

@@ -11,6 +11,7 @@ import {
   changes,
   FIXTURE_PREFIX,
   hashFile,
+  OVERLAY_DELETE_FILE,
   removeFixture,
   snapshot,
 } from './fixture.js';
@@ -225,6 +226,33 @@ test('solution and counterexample overlays are isolated reusable copies', (t) =>
     fs.readFileSync(path.join(c.dir, 'workspace', 'a.txt'), 'utf8'),
     'original\n',
   );
+});
+
+test('an overlay deletion manifest removes named paths without entering the fixture', (t) => {
+  const c = caseWith(
+    t,
+    {'keep.txt': 'untouched\n', 'old/file.js': 'old\n'},
+    {[OVERLAY_DELETE_FILE]: 'old/file.js\n'},
+  );
+  const root = fixture(t, c);
+
+  assert.equal(applyOverlay(c, root, 'solution'), true);
+  assert.deepEqual(contents(root), {'keep.txt': 'untouched\n'});
+});
+
+test('an overlay deletion manifest cannot remove outside the fixture', (t) => {
+  const c = caseWith(
+    t,
+    {'keep.txt': 'untouched\n'},
+    {[OVERLAY_DELETE_FILE]: '../outside.txt\n'},
+  );
+  const root = fixture(t, c);
+
+  assert.throws(
+    () => applyOverlay(c, root, 'solution'),
+    /\.delete path '\.\.\/outside\.txt' must stay inside the workspace/,
+  );
+  assert.deepEqual(contents(root), {'keep.txt': 'untouched\n'});
 });
 
 test('a missing overlay reports false without changing the fixture', (t) => {

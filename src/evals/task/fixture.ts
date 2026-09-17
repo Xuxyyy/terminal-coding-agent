@@ -8,10 +8,11 @@ import {
   rmSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join, resolve} from 'node:path';
+import {isAbsolute, join, resolve} from 'node:path';
 import type {TaskCase} from './cases.js';
 
 export const FIXTURE_PREFIX = 'acc-task-';
+export const OVERLAY_DELETE_FILE = '.delete';
 
 export type Changes = {added: string[]; modified: string[]; deleted: string[]};
 
@@ -63,10 +64,40 @@ export function changes(
 
 export type Overlay = 'solution' | 'counterexample';
 
+function overlayDeletes(source: string): string[] {
+  const manifest = join(source, OVERLAY_DELETE_FILE);
+  if (!existsSync(manifest)) return [];
+  return readFileSync(manifest, 'utf8')
+    .split(/\r?\n/)
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0)
+    .map((path) => {
+      if (
+        isAbsolute(path) ||
+        /^[A-Za-z]:[\\/]/.test(path) ||
+        path === '.' ||
+        path.split(/[\\/]/).includes('..')
+      ) {
+        throw new Error(
+          `${OVERLAY_DELETE_FILE} path '${path}' must stay inside the workspace`,
+        );
+      }
+      return path;
+    });
+}
+
 export function applyOverlay(c: TaskCase, root: string, overlay: Overlay): boolean {
   const source = join(c.dir, overlay);
   if (!existsSync(source)) return false;
-  cpSync(source, root, {recursive: true});
+  const manifest = join(source, OVERLAY_DELETE_FILE);
+  const deletes = overlayDeletes(source);
+  cpSync(source, root, {
+    recursive: true,
+    filter: (path) => path !== manifest,
+  });
+  for (const path of deletes) {
+    rmSync(join(root, path), {recursive: true, force: true});
+  }
   return true;
 }
 

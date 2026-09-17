@@ -1,0 +1,37 @@
+{
+  "id": "write-regression-test",
+  "suite": "focused",
+  "category": "edit",
+  "task": {
+    "prompt": "Bug report: `parsePort('8080oops')` returns 8080, but malformed port text must return null. Fix the implementation and add a regression test that uses the exact reported input `8080oops`. Keep the existing tests and run the test suite when done.",
+    "mode": "auto-edits",
+    "policy": "yes",
+    "maxSeconds": 120
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/parse-port.js",
+      "test/parse-port.test.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "node --test"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"import {parsePort} from './src/parse-port.js'; const cases = [['8080oops', null], ['80.5', null], [' 80', null], ['80 ', null], ['8080', 8080], ['1', 1], ['65535', 65535], ['0', null], ['65536', null]]; for (const [input, expected] of cases) { const actual = parsePort(input); if (actual !== expected) { console.error({input, expected, actual}); process.exit(1); } }\""
+      },
+      {
+        "kind": "contains",
+        "path": "test/parse-port.test.js",
+        "text": "8080oops"
+      },
+      {
+        "kind": "matches",
+        "path": "test/parse-port.test.js",
+        "pattern": "assert\\.(?:equal|strictEqual)\\(parsePort\\(['\\\"]8080oops['\\\"]\\),\\s*null\\)"
+      }
+    ]
+  }
+}
