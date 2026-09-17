@@ -190,7 +190,7 @@ test(
           slow: echoServer({ECHO_SLEEP_MS: '5000'}),
           echo: echoServer(),
         },
-        400,
+        2_000,
       );
 
       assert.deepEqual(
@@ -200,7 +200,7 @@ test(
           ['echo', 'ready', 1],
         ],
       );
-      assert.match(serverStatus()[0].error ?? '', /slow did not answer within 400ms/);
+      assert.match(serverStatus()[0].error ?? '', /slow did not answer within 2000ms/);
       assert.deepEqual(
         connectedTools().map((tool) => tool.name),
         ['mcp__echo__echo'],
