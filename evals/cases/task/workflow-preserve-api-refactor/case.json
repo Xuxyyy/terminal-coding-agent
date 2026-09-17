@@ -1,0 +1,72 @@
+{
+  "id": "workflow-preserve-api-refactor",
+  "suite": "workflow",
+  "category": "edit",
+  "task": {
+    "prompt": "Refactor the duplicated record normalization in `src/formatter.js` and `src/report.js` into one shared `src/internal/normalize-record.js` module. Both consumers must import and use that shared function. Preserve the exact public exports and all behavior documented in `API.md`, including edge cases that may not be covered by the visible tests. Do not change the public entry point, documentation, tests, or package configuration. Run `npm test` after the refactor to verify the final result.",
+    "mode": "auto-edits",
+    "policy": "yes",
+    "maxSeconds": 180
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/formatter.js",
+      "src/report.js",
+      "src/internal/normalize-record.js"
+    ],
+    "checks": [
+      {
+        "kind": "exists",
+        "path": "src/internal/normalize-record.js"
+      },
+      {
+        "kind": "matches",
+        "path": "src/formatter.js",
+        "pattern": "from ['\"]\\./internal/normalize-record\\.js['\"]"
+      },
+      {
+        "kind": "matches",
+        "path": "src/report.js",
+        "pattern": "from ['\"]\\./internal/normalize-record\\.js['\"]"
+      },
+      {
+        "kind": "exit0",
+        "command": "npm test"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"import assert from 'node:assert/strict'; import * as api from './src/index.js'; assert.deepEqual(Object.keys(api).sort(), ['buildReport', 'formatRecord', 'renderReport']); const source = {name: '  Ada  ', score: '7', tags: [' core ', '', 'ops'], note: 'keep'}; const before = structuredClone(source); assert.equal(api.formatRecord(source), 'Ada: 7 (active) | core, ops'); assert.equal(api.formatRecord({name: '', score: 'not-a-number', active: false, tags: 'core'}), '(unnamed): 0 (inactive)'); assert.equal(api.formatRecord({name: 'Lin', score: 2, tags: ['x']}, {includeTags: false}), 'Lin: 2 (active)'); assert.deepEqual(source, before); const report = api.buildReport([source, {name: null, score: undefined, active: false, tags: [' qa ', '']}]); assert.deepEqual(report, {count: 2, activeCount: 1, scoreTotal: 7, records: [{name: 'Ada', score: 7, active: true, tags: ['core', 'ops']}, {name: '', score: 0, active: false, tags: ['qa']}]}); assert.deepEqual(source, before); assert.equal(api.renderReport([{name: ' Ada ', score: '7'}, {name: 'Bob', score: 3, active: false, tags: ['ops']}]), '1/2 active, total 10\\nAda: 7 (active)\\nBob: 3 (inactive) | ops'); assert.throws(() => api.buildReport(null), {name: 'TypeError', message: 'records must be an array'});\""
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/index.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/render-report.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "API.md"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/public-api.test.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/report.test.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "package.json"
+      },
+      {
+        "kind": "tool",
+        "name": "bash",
+        "argsPattern": "npm test",
+        "resultPattern": "\\[exit 0\\]"
+      }
+    ]
+  }
+}

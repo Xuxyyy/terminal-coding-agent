@@ -1,0 +1,63 @@
+{
+  "id": "workflow-bug-with-regression",
+  "suite": "workflow",
+  "category": "edit",
+  "task": {
+    "prompt": "Support reports a checkout bug. A single quote service first receives `{ customerId: 'VIP-001', subtotalCents: 10000 }` and correctly returns `totalCents: 9000`. When that same service later receives `{ customerId: 'VIP-001', subtotalCents: 20000 }`, the checkout still shows 9000 instead of 18000. Reproduce the report, add a meaningful regression test using the exact customer ID and both reported subtotals, find and fix the root cause, and run `npm test` successfully. Keep the public exports and unrelated tests unchanged.",
+    "mode": "auto-edits",
+    "policy": "yes",
+    "maxSeconds": 180
+  },
+  "grade": {
+    "allowedWrites": [
+      "src/quote-service.js",
+      "test/quote-service.test.js"
+    ],
+    "checks": [
+      {
+        "kind": "exit0",
+        "command": "npm test"
+      },
+      {
+        "kind": "exit0",
+        "command": "node --input-type=module -e \"import {createQuoteService} from './src/index.js'; const scenarios = [['VIP-001', 10000, 20000, 9000, 18000], ['VIP-002', 7500, 12500, 6750, 11250], ['REGULAR-7', 999, 2499, 999, 2499]]; for (const [customerId, firstSubtotal, secondSubtotal, firstTotal, secondTotal] of scenarios) { const service = createQuoteService(); const first = service.quote({customerId, subtotalCents: firstSubtotal}); const second = service.quote({customerId, subtotalCents: secondSubtotal}); const repeated = service.quote({customerId, subtotalCents: secondSubtotal}); if (first.totalCents !== firstTotal || second.totalCents !== secondTotal || repeated !== second) { console.error({customerId, first, second, firstTotal, secondTotal, reused: repeated === second}); process.exit(1); } }\""
+      },
+      {
+        "kind": "contains",
+        "path": "test/quote-service.test.js",
+        "text": "VIP-001"
+      },
+      {
+        "kind": "matches",
+        "path": "test/quote-service.test.js",
+        "pattern": "(?=[\\s\\S]*customerId:\\s*['\\\"]VIP-001['\\\"])(?=[\\s\\S]*subtotalCents:\\s*10_?000)(?=[\\s\\S]*subtotalCents:\\s*20_?000)(?=[\\s\\S]*totalCents[\\s\\S]*9_?000)(?=[\\s\\S]*totalCents[\\s\\S]*18_?000)"
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/customer-tier.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/price-quote.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "src/index.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "test/customer-tier.test.js"
+      },
+      {
+        "kind": "unchanged",
+        "path": "package.json"
+      },
+      {
+        "kind": "tool",
+        "name": "bash",
+        "argsPattern": "npm test",
+        "resultPattern": "^\\[exit 0\\]"
+      }
+    ]
+  }
+}

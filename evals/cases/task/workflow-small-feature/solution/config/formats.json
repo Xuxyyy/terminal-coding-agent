@@ -1,0 +1,19 @@
+{
+  "formats": [
+    {
+      "id": "text",
+      "extension": "txt",
+      "contentType": "text/plain"
+    },
+    {
+      "id": "json",
+      "extension": "json",
+      "contentType": "application/json"
+    },
+    {
+      "id": "csv",
+      "extension": "csv",
+      "contentType": "text/csv"
+    }
+  ]
+}

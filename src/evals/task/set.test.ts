@@ -44,6 +44,9 @@ const EXPECTED_CATEGORY: Record<string, Category> = {
   'read-truncation-repair': 'recover',
   'grep-narrow': 'recover',
   'verify-after-fix': 'edit',
+  'workflow-bug-with-regression': 'edit',
+  'workflow-preserve-api-refactor': 'edit',
+  'workflow-small-feature': 'create',
   'write-regression-test': 'edit',
 };
 
@@ -60,6 +63,12 @@ const FOCUSED = [
   'repair-type-contract',
   'verify-after-fix',
   'write-regression-test',
+];
+
+const WORKFLOWS = [
+  'workflow-bug-with-regression',
+  'workflow-preserve-api-refactor',
+  'workflow-small-feature',
 ];
 
 const READ_ONLY = [
@@ -156,7 +165,7 @@ function touched(c: TaskCase): string[] {
   }
 }
 
-test('the whole set loads ten smoke and twelve focused cases', () => {
+test('the whole set loads ten smoke, twelve focused, and three workflow cases', () => {
   assert.deepEqual(
     Object.fromEntries(
       ['smoke', 'focused', 'workflow'].map((suite) => [
@@ -164,7 +173,7 @@ test('the whole set loads ten smoke and twelve focused cases', () => {
         cases.filter((c) => c.suite === suite).length,
       ]),
     ),
-    {smoke: 10, focused: 12, workflow: 0},
+    {smoke: 10, focused: 12, workflow: 3},
   );
 });
 
@@ -187,18 +196,22 @@ test('the focused suite contains exactly the twelve planned cases', () => {
   assert.deepEqual(idsWhere((c) => c.suite === 'focused'), FOCUSED);
 });
 
+test('the workflow suite contains exactly the three planned cases', () => {
+  assert.deepEqual(idsWhere((c) => c.suite === 'workflow'), WORKFLOWS);
+});
+
 test('every reference solution satisfies its non-procedural checks', () => {
   assert.deepEqual(cases.flatMap(solved), []);
 });
 
-test('every focused starting fixture fails a non-procedural check', () => {
-  assert.deepEqual(idsWhere((c) => c.suite === 'focused' && !startsUnsolved(c)), []);
+test('every new starting fixture fails a non-procedural check', () => {
+  assert.deepEqual(idsWhere((c) => c.suite !== 'smoke' && !startsUnsolved(c)), []);
 });
 
-test('every focused case has both overlays and rejects its counterexample', () => {
-  const focused = cases.filter((c) => c.suite === 'focused');
+test('every new case has both overlays and rejects its counterexample', () => {
+  const newCases = cases.filter((c) => c.suite !== 'smoke');
   assert.deepEqual(
-    focused.flatMap((c) =>
+    newCases.flatMap((c) =>
       ['solution', 'counterexample']
         .filter((overlay) => !existsSync(join(c.dir, overlay)))
         .map((overlay) => `${c.id}: missing ${overlay}/`),
@@ -206,7 +219,7 @@ test('every focused case has both overlays and rejects its counterexample', () =
     [],
   );
   assert.deepEqual(
-    focused.map(rejectsCounterexample).filter((detail) => detail !== null),
+    newCases.map(rejectsCounterexample).filter((detail) => detail !== null),
     [],
   );
 });
@@ -306,24 +319,38 @@ test('only ask-edits-stops-a-write asks and every other case auto-edits', () => 
   );
 });
 
-test('tool checks appear only in the three procedural focused cases', () => {
+test('tool checks appear only in the planned procedural and workflow cases', () => {
   assert.deepEqual(
     idsWhere((c) => c.grade.checks.some((check) => check.kind === 'tool')),
-    ['bash-tail-diagnostic', 'recover-wrong-command', 'verify-after-fix'],
+    [
+      'bash-tail-diagnostic',
+      'recover-wrong-command',
+      'verify-after-fix',
+      'workflow-bug-with-regression',
+      'workflow-preserve-api-refactor',
+      'workflow-small-feature',
+    ],
   );
 });
 
-test('focused cases do not contain dependency installs or network commands', () => {
+test('new cases do not contain dependency installs or network commands', () => {
   const banned = /\b(?:npm\s+(?:i|install)|pnpm\s+(?:add|install)|yarn\s+add|npx|curl|wget)\b|https?:\/\//i;
   assert.deepEqual(
     cases
-      .filter((c) => c.suite === 'focused')
+      .filter((c) => c.suite !== 'smoke')
       .flatMap((c) => {
         const caseFile = readFileSync(join(c.dir, 'case.json'), 'utf8');
         const packageFile = join(c.dir, 'workspace', 'package.json');
         const packageText = existsSync(packageFile) ? readFileSync(packageFile, 'utf8') : '';
         return banned.test(`${caseFile}\n${packageText}`) ? [c.id] : [];
       }),
+    [],
+  );
+});
+
+test('all workflow cases allow verification commands through policy yes', () => {
+  assert.deepEqual(
+    idsWhere((c) => c.suite === 'workflow' && c.task.policy !== 'yes'),
     [],
   );
 });
