@@ -140,6 +140,11 @@ test('a recorded tool result crosses the projected line and compacts before the 
   );
 
   const followUp = model.sent()[2]!;
+  assert.deepEqual(
+    followUp.map((message) => message.role),
+    ['system', 'user', 'assistant'],
+  );
+  assert.equal(followUp[1]!.content, 'inspect the fixture');
   assert.ok(
     followUp.some(
       (message) =>
@@ -185,6 +190,22 @@ test('the threshold notice is emitted at most once across two compactions', asyn
   assert.equal(count(events, 'context_threshold_reached'), 1);
   assert.equal(count(events, 'compact_start'), 2);
   assert.equal(count(events, 'compact_end'), 2);
+  const afterSecond = model.sent()[4]!;
+  assert.deepEqual(
+    afterSecond.map((message) => message.role),
+    ['system', 'user', 'assistant'],
+  );
+  assert.equal(
+    afterSecond.filter((message) => message.content === 'inspect the fixture').length,
+    1,
+  );
+  assert.equal(
+    afterSecond.filter(
+      (message) => message.content === SUMMARY_PREFIX + STORY,
+    ).length,
+    1,
+  );
+  assert.equal(afterSecond.some((message) => message.role === 'tool'), false);
 });
 
 test('ACC_COMPACT_AT controls the single automatic threshold', async () => {

@@ -173,9 +173,10 @@ a dangling call. The same boundary exists before the first request of a new user
 between tool rounds in one active run.
 
 There is one automatic pressure operation: `compactSession` summarizes the complete history
-and, only after a valid summary exists, replaces it with `[system, summary]`. There is no
-earlier result-clearing pass. Manual `/compact` uses the same operation while idle; manual
-`/clear` remains the separate command that intentionally starts a new conversation.
+and, only after a valid summary exists, installs `[system, retained user prompts, summary]`.
+At step zero the held pending task is appended after the summary. There is no earlier
+result-clearing pass. Manual `/compact` uses the same operation while idle; manual `/clear`
+remains the separate command that intentionally starts a new conversation.
 
 ### The two lines
 
@@ -209,12 +210,13 @@ session totals.
 For a later step, the completed assistant `tool_calls` message and all its `tool` replies stay
 in the compaction input. For step zero, the pending user task is different: its estimated size
 must count toward the trigger, but it must not be summarized as old history. The loop therefore
-checks the threshold first, temporarily pops that last user message, and restores the same
-message object after success or failure. Reusing the object also prevents the identity-based
-session store from appending it twice.
+checks the threshold first and temporarily pops that last user message. On success it passes
+the same object into `compactSession` as a post-summary message; on failure the loop pushes it
+back. Reusing the object also prevents the identity-based session store from appending it twice.
 
-On success, `compactSession` installs the summary, the held task is restored if there was one,
-`compact_end` clears the spinner, and the loop sends the next normal request in the same run.
+On success, `compactSession` installs the retained prompts, summary, and held task as one
+replacement, `compact_end` clears the spinner, and the loop sends the next normal request in
+the same run.
 On failure, the held task is restored, the detailed history remains unchanged, and the loop
 emits `compact_end`, `could not compact; the run stopped`, and `turn_end` before returning. It
 does not send another normal request or retry through a different pressure strategy.
@@ -228,10 +230,17 @@ the old continuation state with the old history and keeps only the new summary's
 providers can concatenate it into later context, `estimateMessage` counts it even though the
 terminal never displays it.
 
+**Only prior user prompts survive verbatim.** `retainRecentUserPrompts` walks user messages
+newest-first under a 20,000 estimated-token budget, then restores chronological order. Whole
+messages keep their object identity. If the oldest fitting boundary is a string, a cloned copy
+keeps its newest end behind an explicit truncation marker; structured content is kept only when
+it fits whole. Old assistant messages, tool calls, and tool results are represented only by the
+summary. The pending step-zero task is outside both the summary and this retention budget.
+
 **The ordering removes one trigger; `summaryFrom` guards the class.** Whatever the request
-looks like, the reply still has total power: `compactSession` deletes every non-system message
-and puts that one string in their place, and `messagesOf` replays the record it writes as
-"drop everything before this", so a bad summary is unrecoverable on disk too. The old check
+looks like, the reply still carries every old assistant/tool fact into the replacement, and
+`messagesOf` replays that replacement from the compact record. A bad summary therefore remains
+unrecoverable from active model context even though recent user prompts survive. The old check
 asked only whether the string was empty — the one failure that never happens. So the reply is
 checked before it is used. Two rules, both deliberately narrow: a string shorter than
 `MIN_SUMMARY` is a refusal or an acknowledgement, not a summary of a full window; and `<|` or

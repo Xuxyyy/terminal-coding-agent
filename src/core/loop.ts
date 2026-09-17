@@ -153,8 +153,9 @@ export async function runAgent(
           choice,
           withoutText(host),
           store,
+          task ? [task] : [],
         );
-        if (task) session.messages.push(task);
+        if (task && !result) session.messages.push(task);
         host.onEvent({
           type: 'compact_end',
           replaced: result?.replaced ?? 0,

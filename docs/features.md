@@ -298,11 +298,14 @@ closer to one token per character than to four. This is why the readout prefers
 the measured total wherever it has one, and why anything that acts on the
 estimate needs a margin above it rather than trusting it.
 
-`/compact` replaces the whole conversation with one summary the model writes,
-and prints one notice: how many messages went and roughly how much was freed.
-The spinner reads `Compacting…` while the summary is in flight. A summary that
-fails, or that comes back too short or carrying tool-call markup, is retried
-once and then changes nothing.
+`/compact` keeps the newest user prompts that fit a 20,000 estimated-token
+budget, places one summary the model writes after them, and prints one notice:
+how many messages were covered and roughly how much was freed. A string prompt
+at the oldest boundary can be clearly truncated to fit; structured prompts are
+kept only whole. Old assistant messages and raw tool evidence survive only in
+the summary. The spinner reads `Compacting…` while the summary is in flight. A
+summary that fails, or that comes back too short or carrying tool-call markup,
+is retried once and then changes nothing.
 
 Past 80% of the window the agent compacts automatically at the next model-request
 boundary. That boundary exists both before a new user turn and after a completed
@@ -310,13 +313,15 @@ tool round in an active run. A tool result is appended first, so its actual text
 counts toward the projected trigger and the summarizer sees the complete evidence.
 
 At the start of a new user turn, the pending task counts toward the trigger but is
-temporarily held out of the summary. The exact same message is restored after the
-summary, then sent in the normal request. During an active run, complete assistant
-tool-call and tool-result pairs stay in the summary input.
+temporarily held out of the summary and the retained-prompt budget. The exact
+same message is installed after the summary, persisted there, then sent in the
+normal request. During an active run, complete assistant tool-call and tool-result
+pairs stay in the summary input but are not copied into the replacement.
 
 `compaction threshold reached` prints at most once per run. The spinner reads
-`Compacting…`; the summary text itself stays hidden. A valid summary replaces the
-detailed history and the same run continues. A summary that comes back too short
+`Compacting…`; the summary text itself stays hidden. A valid summary plus the
+retained user prompts replace the detailed history and the same run continues.
+A summary that comes back too short
 or carrying tool-call markup is asked for once more with a firmer prompt.
 
 Since 2026-08-14 the trigger reads a **projection**, not the last measurement:

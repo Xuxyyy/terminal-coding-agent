@@ -18,6 +18,7 @@ export type SessionRecord =
       summary: string;
       replaced: number;
       continuation?: AssistantContinuation;
+      replacement?: Message[];
     }
   | {kind: 'code'; path: string; before: string | null}
   | {kind: 'rewind'; to: number};
@@ -65,7 +66,9 @@ export function messagesOf(records: SessionRecord[]): Message[] {
   let messages: Message[] = [];
   for (const record of records) {
     if (record.kind === 'compact') {
-      messages = [assistantMessage(record.summary, [], record.continuation)];
+      messages = record.replacement
+        ? [...record.replacement]
+        : [assistantMessage(record.summary, [], record.continuation)];
     } else if (record.kind === 'message') {
       messages.push(record.message);
     } else if (record.kind === 'messages') {

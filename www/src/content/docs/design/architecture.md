@@ -100,8 +100,11 @@ A long turn can fill the context window. Before each model request, `runAgent`
 checks projected usage and compacts when it crosses the configured threshold.
 The check happens only after a complete tool round has been recorded, so the
 summarizer sees the full evidence and the next request never contains a dangling
-tool call. A valid summary replaces the detailed history and the same run
-continues; a failed summary preserves history and stops the run.
+tool call. A valid summary replaces old assistant and tool messages while the
+newest user prompts remain exact within a 20,000 estimated-token budget. At the
+start of a turn, the pending task stays outside the summary and follows it in
+the replacement. The same run continues; a failed summary preserves history
+and stops the run.
 
 ## What a run leaves on disk
 

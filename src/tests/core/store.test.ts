@@ -564,19 +564,31 @@ function askedAt(
   return record && record.kind === 'message' ? record.message : null;
 }
 
-test('a compaction drops everything before it and leaves the summary', () => {
+test('a compact record restores retained prompts and the summary', () => {
   const root = home();
   const work = workspace();
   const store = startSession(work, root);
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
   store.appendStep([user('and the readme'), assistant('updated')], usage(20));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
+  const retained = user('and the readme');
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 4, [retained, summary]);
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
-    assistant('SUMMARY: we fixed the cart'),
+    retained,
+    summary,
   ]);
+  assert.deepEqual(
+    store.records().find((record) => record.kind === 'compact'),
+    {
+      kind: 'compact',
+      summary: 'SUMMARY: we fixed the cart',
+      replaced: 4,
+      replacement: [retained, summary],
+    },
+  );
 });
 
 test('a compact record preserves continuation state across reload', () => {
@@ -589,10 +601,11 @@ test('a compact record preserves continuation state across reload', () => {
   });
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
-  store.appendCompact(summary, 2);
+  const retained = user('fix the cart');
+  store.appendCompact(summary, 2, [retained, summary]);
   store.close();
 
-  assert.deepEqual(loadSession(work, null, root).messages, [summary]);
+  assert.deepEqual(loadSession(work, null, root).messages, [retained, summary]);
   assert.deepEqual(
     store.records().find((record) => record.kind === 'compact'),
     {
@@ -603,7 +616,89 @@ test('a compact record preserves continuation state across reload', () => {
         kind: 'reasoning_content',
         content: 'continue from the compacted state',
       },
+      replacement: [retained, summary],
     },
+  );
+});
+
+test('a legacy compact record still restores its summary and continuation', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
+  fs.appendFileSync(
+    path.join(store.dir, 'session.jsonl'),
+    `${JSON.stringify({
+      kind: 'compact',
+      summary: 'SUMMARY: legacy cart work',
+      replaced: 2,
+      continuation: {
+        kind: 'reasoning_content',
+        content: 'legacy continuation',
+      },
+    })}\n`,
+  );
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [
+    assistantMessage('SUMMARY: legacy cart work', [], {
+      kind: 'reasoning_content',
+      content: 'legacy continuation',
+    }),
+  ]);
+});
+
+test('a compact replacement persists a pending task once after the summary', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const retained = user('keep the earlier marker');
+  const pending = user('finish the pending task');
+  const summary = assistant('SUMMARY: earlier work');
+
+  store.appendStep([retained, assistant('earlier answer')], usage(10));
+  store.appendMessage(pending);
+  const replacement = [retained, summary, pending];
+  store.appendCompact(summary, 2, replacement);
+  store.appendStep([...replacement, assistant('done')], usage(15));
+  store.close();
+
+  const restored = loadSession(work, null, root).messages;
+  assert.deepEqual(restored, [...replacement, assistant('done')]);
+  assert.equal(
+    restored.filter((message) => message.content === 'finish the pending task').length,
+    1,
+  );
+  assert.deepEqual(
+    records(store.dir)
+      .filter((record) => record['kind'] === 'messages')
+      .at(-1)?.['messages'],
+    [assistant('done')],
+  );
+});
+
+test('repeated compact records replay only the newest replacement', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const first = user('first marker');
+  const second = user('second marker');
+  const firstSummary = assistant('SUMMARY: first pass');
+  const secondSummary = assistant('SUMMARY: second pass');
+
+  store.appendStep([first, assistant('first answer')], usage(10));
+  store.appendCompact(firstSummary, 2, [first, firstSummary]);
+  store.appendStep([first, firstSummary, second, assistant('second answer')], usage(15));
+  store.appendCompact(secondSummary, 4, [first, second, secondSummary]);
+  store.close();
+
+  const restored = loadSession(work, null, root).messages;
+  assert.deepEqual(restored, [first, second, secondSummary]);
+  assert.equal(JSON.stringify(restored).includes('first pass'), false);
+  assert.equal(
+    restored.filter((message) => message.content === 'first marker').length,
+    1,
   );
 });
 
@@ -613,14 +708,17 @@ test('what is said after a compaction follows the summary', () => {
   const store = startSession(work, root);
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const retained = user('fix the cart');
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 2, [retained, summary]);
   const next = user('and the readme');
   store.appendMessage(next);
   store.appendStep([next, assistant('updated')], usage(20));
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
-    assistant('SUMMARY: we fixed the cart'),
+    retained,
+    summary,
     user('and the readme'),
     assistant('updated'),
   ]);
@@ -633,7 +731,8 @@ test('the checkpoints reach back past a compaction', () => {
 
   store.appendMessage(user('fix the cart'));
   store.appendMessage(user('and the total'));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 2, [user('and the total'), summary]);
   store.appendMessage(user('and the readme'));
   store.appendMessage(user('and the changelog'));
   store.close();
@@ -663,7 +762,8 @@ test('a rewind after a compaction can land before the summary', () => {
   const second = user('and the total');
   store.appendMessage(second);
   store.appendStep([second, assistant('counted')], usage(20));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 4);
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 4, [second, summary]);
   store.appendMessage(user('and the readme'));
 
   const [, middle] = checkpointsOf(store.records());
@@ -682,7 +782,8 @@ test('the last usage is not read across a compaction', () => {
   const store = startSession(work, root);
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(15));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 2, [user('fix the cart'), summary]);
 
   assert.equal(lastUsageOf(store.records()), null);
 
@@ -699,8 +800,9 @@ test('a summary handed back to the next turn is not written twice', () => {
   const summary = assistant('SUMMARY: we fixed the cart');
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
-  store.appendCompact(summary, 2);
-  store.appendStep([summary, user('next'), assistant('done')], usage(10));
+  const retained = user('fix the cart');
+  store.appendCompact(summary, 2, [retained, summary]);
+  store.appendStep([retained, summary, user('next'), assistant('done')], usage(10));
   store.close();
 
   const written = records(store.dir);
@@ -727,7 +829,9 @@ test('an unknown record next to a compaction is still ignored', () => {
   const store = startSession(work, root);
 
   store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
-  store.appendCompact(assistant('SUMMARY: we fixed the cart'), 2);
+  const retained = user('fix the cart');
+  const summary = assistant('SUMMARY: we fixed the cart');
+  store.appendCompact(summary, 2, [retained, summary]);
   fs.appendFileSync(
     path.join(store.dir, 'session.jsonl'),
     `${JSON.stringify({kind: 'something-new', at: '9f3a1c07', note: 'later'})}\n`,
@@ -736,7 +840,8 @@ test('an unknown record next to a compaction is still ignored', () => {
   store.close();
 
   assert.deepEqual(loadSession(work, null, root).messages, [
-    assistant('SUMMARY: we fixed the cart'),
+    retained,
+    summary,
     user('and the readme'),
     assistant('updated'),
   ]);

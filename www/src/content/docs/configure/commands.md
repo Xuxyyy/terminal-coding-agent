@@ -15,7 +15,7 @@ still working does nothing.
 | Command | What it does |
 |---|---|
 | [`/context`](#context) | Shows how full the context window is, broken into system prompt, tools, messages, and free space. |
-| [`/compact`](#compact) | Replaces the conversation with a summary the model writes, and reports what it freed. |
+| [`/compact`](#compact) | Keeps recent user prompts, summarizes older context, and reports what it freed. |
 | [`/clear`](#clear) | Throws the conversation away and closes the session file, so the next message starts a new one. |
 | [`/resume`](#resume) | Picks a past conversation from this folder and reopens it in place. |
 | [`/rewind`](#rewind) | Goes back to before one of your earlier messages, restoring the files the agent wrote. |
@@ -67,7 +67,9 @@ compaction threshold reached
 It then summarizes the complete history before removing any details. After a
 tool finishes, its full result is already recorded, counted, and visible to the
 summarizer. At the start of a new user turn, your pending message counts toward
-the check but is held aside from the summary and restored unchanged afterward.
+the check but is held aside from the summary and installed unchanged after it.
+The newest prior user prompts stay exact within a 20,000 estimated-token budget;
+old assistant replies and raw tool results are represented by the summary.
 The spinner reads `Compacting…`, the summary text stays hidden, and the same run
 continues with the next normal request.
 
@@ -86,8 +88,11 @@ The 80% line is the default and `ACC_COMPACT_AT` moves it — see
 
 *Summarize and shrink the conversation.*
 
-Replaces the whole conversation with one summary the model writes. The spinner
-reads `Compacting…`, then a notice reports the result:
+Keeps the newest user prompts within a 20,000 estimated-token budget and puts
+one summary the model writes after them. A string prompt at the oldest boundary
+may be clearly truncated to fit; structured prompts are kept only whole. Older
+assistant replies and raw tool output survive only through the summary. The
+spinner reads `Compacting…`, then a notice reports the result:
 
 ```
 compacted 34 messages, ~28,400 tokens freed
@@ -96,10 +101,10 @@ compacted 34 messages, ~28,400 tokens freed
 If the summary fails, nothing changes and you get
 `nothing compacted: the summary failed`.
 
-The summary keeps what the conversation decided and drops the transcript that
-got there. Use it when you are about to start a big new task in a session that
-has been running a while. `/rewind` still reaches past a summary — messages a
-summary replaced stay in its picker.
+The summary keeps what the older conversation decided while the recent prompts
+preserve your exact wording. Use it when you are about to start a big new task
+in a session that has been running a while. `/rewind` still reaches past a
+summary — messages a summary replaced stay in its picker.
 
 ## `/clear`
 

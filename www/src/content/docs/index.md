@@ -38,7 +38,7 @@ three providers work through one client, and one API key is enough.
   conversation where you left it, and `/rewind` takes the conversation *and*
   the files back to before an earlier message.
 - **A context readout.** `/context` shows what is filling the window, and
-  `/compact` replaces the conversation with a summary when it gets long.
+  `/compact` keeps recent user prompts and summarizes older context when it gets long.
 
 ## Where to start reading
 

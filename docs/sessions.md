@@ -74,7 +74,7 @@ Six record types interleave in the one file:
 | `{kind:'message', id, message}` | a task is sent | the user message alone |
 | `{kind:'messages', messages, usage}` | a model turn ends | what that turn added |
 | `{kind:'view', items}` | the screen commits | the `Item[]` the terminal drew |
-| `{kind:'compact', summary, replaced}` | `/compact` succeeds | the summary, nothing truncated |
+| `{kind:'compact', summary, replaced, replacement?}` | `/compact` succeeds | compatibility summary fields and the exact new active context |
 | `{kind:'code', path, before}` | a tool is about to write | the path, and the sha of its old bytes |
 | `{kind:'rewind', to}` | `/rewind` picks a message | how many records survive the cut |
 
@@ -137,7 +137,7 @@ Two readers restart at a `compact` record; the other two deliberately do not.
 
 | reader | at a compact record |
 |---|---|
-| `messagesOf` | drops everything before it; the summary becomes the first message |
+| `messagesOf` | resets to the stored replacement; legacy records reset to one summary |
 | `lastUsageOf` | stops the backward scan and returns `null` |
 | `checkpointsOf` | **unchanged** — every user message stays reachable, the compacted ones too |
 | `viewOf` | **unchanged** — the scrollback is a transcript of what was drawn |
@@ -152,7 +152,7 @@ session compacted and then reopened would report the size of the conversation th
 thrown away, and report it as measured — a confidently wrong number, worse than an estimate.
 
 `viewOf` stays whole on purpose: after a compaction the screen still shows the conversation you
-had, because you did have it. Only the model forgot.
+had, because you did have it. The model instead sees the smaller replacement.
 
 ## `/resume`
 
@@ -188,8 +188,8 @@ notice and sets the returned items. The split exists because every other command
 work in core, and a core function can be tested without starting a terminal. Core throws and
 catches nothing; the hook decides what the user sees, so a failed disk write leaves memory and disk
 still agreeing and the rewind is abandoned with a notice. Rebuilding, rather than slicing
-`session.messages`, is what makes the three views agree after a compaction, where memory holds two
-messages and the log holds twenty.
+`session.messages`, is what makes the three views agree after a compaction, where memory holds
+the retained prompts and summary while the log still holds every earlier record.
 
 The marker goes **after** the files because it is the irreversible step: once it lands, the `code`
 records above the cut fall out of the live fold and their copies can never be reached again.
@@ -281,30 +281,39 @@ eviction is a fast leak, not a slow one.
 ## Compaction
 
 `/compact` asks the model to summarize the conversation, then replaces `session.messages` with
-`[system, one assistant message]`. `compactSession` is called by manual `/compact` at the
-prompt and by the automatic request-boundary check in `runAgent`. That automatic check can run
-before the first request of a user turn or after a completed tool round; the ordering and
+`[system, retained prior user prompts, one assistant summary]`. At automatic step zero, the
+pending current task follows the summary. `compactSession` is called by manual `/compact` at
+the prompt and by the automatic request-boundary check in `runAgent`. That automatic check can
+run before the first request of a user turn or after a completed tool round; the ordering and
 failure behavior are described in `agent-loop.md`.
 
-**The whole conversation goes, not the oldest half.** Keeping the last N turns means choosing a
-cut point, and the wrong cut lands between an assistant message carrying `tool_calls` and the
-`tool` messages answering it, which makes the next request invalid. Replacing everything cannot
-produce that shape.
+**Only recent user prompts are copied.** Selection walks user messages newest-first under a
+20,000 estimated-token budget and restores them in chronological order. A string at the oldest
+boundary is cloned and clearly truncated to fit; structured content is kept only if it fits
+whole. Assistant messages, tool calls, and tool results are never copied, so the replacement
+cannot contain a dangling tool-call pair. The summarizer still sees the complete active history
+before any replacement is built.
 
-The summary is an `assistant` message, not a `user` one: the model wrote it, and it keeps the
-`system → assistant → user` order, so no provider ever sees two user messages in a row. It sits
-behind a fixed `SUMMARY_PREFIX` so the model reads it as context rather than as an answer it
-already gave. The summarizing request sends **no tool definitions** — that saves the ~526 tokens
-they cost and stops the model calling a tool when all it must do is write prose.
+The summary is an `assistant` message, not a `user` one: the model wrote it. It sits behind a
+fixed `SUMMARY_PREFIX` so the model reads it as context rather than as an answer it already
+gave. Keeping the assistant role also avoids a provider-specific representation across the
+OpenAI-compatible providers. The summarizing request sends **no tool definitions** — that saves
+the ~526 tokens they cost and stops the model calling a tool when all it must do is write prose.
 
 A failed or empty summary changes nothing and returns `null`. A compaction that half-runs would
 destroy the conversation it was meant to shrink.
 
-**The summary must enter the store's `written` set.** `appendCompact` takes the assistant
-*message object*, not the string. Without that, `appendStep` — which `loop.ts` hands the whole
-of `session.messages` — sees a message it has no record of and writes it a second time as a
-`messages` record, so `messagesOf` replays the summary twice. It only shows up once a real turn
-follows the compaction, which is why a test covers exactly that order.
+**Every replacement message must enter the store's `written` set.** `appendCompact` receives
+the full non-system replacement, not only the summary string. Without that, `appendStep` — which
+`loop.ts` hands the whole of `session.messages` — can write retained prompts, the summary, or a
+held pending task a second time. Tests cover the next real turn and step-zero persistence.
+
+**The compact record stores both compatibility fields and the exact replacement.** New records
+keep `summary`, `continuation`, and `replaced`, and add optional `replacement`. `messagesOf`
+prefers that array, so `/resume` sees the same retained prompts, summary, and pending task as the
+live model did. A record without `replacement` follows the legacy path and restores only its
+summary. `replaced` still counts the non-system messages covered by the summary input; a held
+pending task is not included.
 
 **Hidden continuation state survives the compact record.** Reasoning-capable providers return
 opaque state that must accompany an assistant message in later tool-enabled requests. The

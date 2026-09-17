@@ -28,8 +28,8 @@ before anything it cannot take back.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
   the conversation *and* the files back to before a message you sent.
 - A context readout. `/context` prints how full the window is, with a
-  breakdown; `/compact` replaces the conversation with a summary when it gets
-  long.
+  breakdown; `/compact` keeps recent user prompts and summarizes the older
+  conversation when it gets long.
 
 **It edits your files and runs shell commands** in the folder you start it
 from. That is what it is for, and it is why every call goes through the gate.

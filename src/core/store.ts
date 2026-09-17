@@ -50,7 +50,7 @@ export type SessionStore = {
   seed(messages: Message[]): void;
   appendMessage(message: Message): string;
   appendStep(messages: Message[], usage: Usage): void;
-  appendCompact(summary: Message, replaced: number): void;
+  appendCompact(summary: Message, replaced: number, replacement: Message[]): void;
   appendView(items: unknown[]): void;
   appendCode(path: string, before: string | null): void;
   records(): SessionRecord[];
@@ -135,14 +135,15 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       meta.usage.total += usage.total;
       writeMeta();
     },
-    appendCompact(summary, replaced) {
-      written.add(summary);
+    appendCompact(summary, replaced, replacement) {
+      for (const message of replacement) written.add(message);
       const continuation = assistantContinuation(summary);
       appendRecord(dir, {
         kind: 'compact',
         summary: typeof summary.content === 'string' ? summary.content : '',
         replaced,
         ...(continuation ? {continuation} : {}),
+        replacement,
       });
       writeMeta();
     },

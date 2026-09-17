@@ -326,13 +326,13 @@ This is the part a reader will get wrong, so it is written out:
   `allowed.clear()`.
 - **`/resume` and `/rewind`** restore it with the messages: `restoreMessages` rebuilds `asked`
   from the restored user messages.
-- **A compaction does not erase it.** This is why the user's words come from `session.asked`
-  and not from filtering `session.messages`. `compactSession` replaces the whole conversation
-  with `[system, one assistant summary]`, so filtering `messages` for user text would return
-  **nothing at all** after a compaction: every later action would be judged with no
-  authorization context, the judge would refuse everything, and `auto` would silently collapse
-  into a prompt-for-everything mode with no sign on screen. `session.asked` is a list no model
-  writes, so a compaction cannot touch it.
+- **A compaction does not erase it during the live session.** This is why the user's words come
+  from `session.asked` and not from the retained prompt subset in `session.messages`.
+  `compactSession` keeps only the newest user prompts that fit a 20,000 estimated-token budget,
+  but `session.asked` still contains every task from the current run. Filtering the replacement
+  would silently narrow the judge's authorization context. On `/resume` or `/rewind`, `asked`
+  is rebuilt from the user messages that the persisted replacement or rewind restores; denied
+  commands still remain live-only.
 
   Feeding the compaction summary in instead was rejected: it is written by the agent, so an
   agent that knows compaction is coming could summarize its way into an authorization it never

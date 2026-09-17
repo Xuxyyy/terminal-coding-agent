@@ -125,8 +125,14 @@ test('the summarizer excludes the pending task and restores the same object', as
   const {host} = fakeHost();
   const active = measured(850_000);
   const task = active.messages.at(-1)!;
+  let replacement: Message[] | undefined;
+  const store = fakeStore({
+    appendCompact(_summary, _replaced, messages) {
+      replacement = messages;
+    },
+  });
 
-  await runAgent(active, model.choice, host, [noop]);
+  await runAgent(active, model.choice, host, [noop], store);
 
   const summarizer = model.sent()[0]!;
   assert.equal(summarizer.at(-1)?.content, compactionPrompt());
@@ -137,6 +143,43 @@ test('the summarizer excludes the pending task and restores the same object', as
   assert.ok(model.sent()[1]!.some((message) => message === task));
   assert.equal(active.messages[1]?.content, SUMMARY_PREFIX + STORY);
   assert.equal(active.messages[2], task);
+  assert.deepEqual(replacement, active.messages.slice(1, 3));
+  assert.equal(replacement?.filter((message) => message === task).length, 1);
+});
+
+test('step zero retains prior prompts and persists the pending task after the summary', async () => {
+  const active = createSession(process.cwd(), 'rules', 1_000_000);
+  const prior = addTask(active, 'keep the prior marker');
+  active.messages.push({role: 'assistant', content: 'prior answer'});
+  setMeasured(active, 850_000);
+  const pending = addTask(active, TASK);
+  const model = recordingModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
+  );
+  const {host} = fakeHost();
+  let replacement: Message[] | undefined;
+  const store = fakeStore({
+    appendCompact(_summary, _replaced, messages) {
+      replacement = messages;
+    },
+  });
+
+  await runAgent(active, model.choice, host, [noop], store);
+
+  const summarizer = model.sent()[0]!;
+  assert.equal(summarizer.includes(prior), true);
+  assert.equal(summarizer.includes(pending), false);
+  assert.deepEqual(
+    replacement?.map((message) => message.role),
+    ['user', 'assistant', 'user'],
+  );
+  assert.equal(replacement?.[0], prior);
+  assert.equal(replacement?.[2], pending);
+  assert.equal(replacement?.filter((message) => message === pending).length, 1);
+  assert.deepEqual(
+    model.sent()[1]!.map((message) => message.role),
+    ['system', 'user', 'assistant', 'user'],
+  );
 });
 
 test('the automatic summary is hidden and the same run continues', async () => {

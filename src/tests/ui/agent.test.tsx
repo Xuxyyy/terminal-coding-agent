@@ -426,7 +426,7 @@ function occurrences(messages: unknown, needle: string): number {
   return JSON.stringify(messages).split(needle).length - 1;
 }
 
-test('/compact on an idle session replaces the conversation and commits only a notice', async () => {
+test('/compact on an idle session retains the prompt and commits only a notice', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
   const {choice} = summarizingModel();
@@ -452,10 +452,11 @@ test('/compact on an idle session replaces the conversation and commits only a n
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant'],
+    ['user', 'assistant'],
   );
-  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
-  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
+  assert.ok(String(stored.messages[1]!.content).includes(SUMMARY));
+  assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
 });
 
 test('/compact while the agent is busy does nothing', async () => {
@@ -558,6 +559,10 @@ function crossingResponse(): AsyncIterable<unknown> {
   );
 }
 
+function highUsageAnswer(text: string): AsyncIterable<unknown> {
+  return streamOf(textChunk(text), finishChunk('stop'), usageChunk(850_000, 5));
+}
+
 function rejectedSummary(): AsyncIterable<unknown> {
   return streamOf(finishChunk('stop'), usageChunk(10, 0));
 }
@@ -623,11 +628,70 @@ test('auto compaction shows one notice, hides the summary, and keeps going', asy
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant', 'assistant'],
+    ['user', 'assistant', 'assistant'],
   );
-  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
-  assert.equal(stored.messages[1]!.content, 'done');
-  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
+  assert.ok(String(stored.messages[1]!.content).includes(SUMMARY));
+  assert.equal(stored.messages[2]!.content, 'done');
+  assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
+});
+
+test('step-zero compaction persists the pending task after the summary and resumes it once', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const first = fakeModel((nth) => {
+    if (nth === 1) return highUsageAnswer('prior answer');
+    if (nth === 2) return summaryOf(SUMMARY);
+    return answer('pending done');
+  });
+  const one = mount(root, first.choice);
+
+  one.agent.current!.send('prior marker');
+  await settle(one.agent);
+  one.agent.current!.send('pending marker');
+  await settle(one.agent);
+  one.unmount();
+
+  const [meta] = listSessions(root, home);
+  assert.ok(meta, 'expected the compacted session');
+  const recordFile = path.join(sessionsDir(root, home), meta.id, 'session.jsonl');
+  const records = fs
+    .readFileSync(recordFile, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  const compact = records.find((record) => record['kind'] === 'compact');
+  assert.ok(compact, 'expected a compact record');
+  const replacement = compact['replacement'] as Array<{role: string; content: string}>;
+  assert.deepEqual(
+    replacement.map((message) => message.role),
+    ['user', 'assistant', 'user'],
+  );
+  assert.equal(replacement[0]!.content, 'prior marker');
+  assert.ok(replacement[1]!.content.includes(SUMMARY));
+  assert.equal(replacement[2]!.content, 'pending marker');
+  assert.equal(occurrences(replacement, 'pending marker'), 1);
+
+  const beforeResume = loadSession(root, meta.id, home);
+  assert.deepEqual(
+    beforeResume.messages.map((message) => message.role),
+    ['user', 'assistant', 'user', 'assistant'],
+  );
+  assert.equal(occurrences(beforeResume.messages, 'pending marker'), 1);
+  assert.equal(occurrences(beforeResume.messages, SUMMARY), 1);
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(meta.id);
+  await tick();
+  two.unmount();
+
+  const resumed = loadSession(root, meta.id, home);
+  assert.deepEqual(resumed.messages, beforeResume.messages);
+  assert.equal(occurrences(resumed.messages, 'pending marker'), 1);
+  assert.equal(occurrences(resumed.messages, SUMMARY), 1);
 });
 
 test('the threshold notice is a notice, never a raw event', async () => {
@@ -708,7 +772,7 @@ test('failed automatic compaction stops and preserves stored history', async () 
   assert.equal(stored.messages[0]!.content, 'fix the cart');
 });
 
-test('resuming a compacted session shows the summary, not the original conversation', async () => {
+test('resuming a compacted session restores the retained prompt and summary', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
   const first = summarizingModel();
@@ -731,10 +795,11 @@ test('resuming a compacted session shows the summary, not the original conversat
   const stored = loadSession(root, older!.id, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant'],
+    ['user', 'assistant'],
   );
-  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
-  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
+  assert.ok(String(stored.messages[1]!.content).includes(SUMMARY));
+  assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
 });
 
 test('resuming after a compaction and one more turn holds the summary once', async () => {
@@ -765,10 +830,11 @@ test('resuming after a compaction and one more turn holds the summary once', asy
   assert.equal(occurrences(stored.messages, SUMMARY), 1);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant', 'user', 'assistant'],
+    ['user', 'assistant', 'user', 'assistant'],
   );
-  assert.equal(stored.messages[1]!.content, 'and the total');
-  assert.equal(stored.messages[2]!.content, 'done');
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
+  assert.equal(stored.messages[2]!.content, 'and the total');
+  assert.equal(stored.messages[3]!.content, 'done');
   assert.equal(stored.lastUsage!.total, 15);
   const status = lastContext(two.agent.current!.committed);
   assert.equal(status.measured, true);
@@ -802,7 +868,7 @@ test('a rewind after a compaction cuts at the right place', async () => {
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['assistant'],
+    ['user', 'assistant'],
   );
   assert.equal(occurrences(stored.messages, SUMMARY), 1);
   assert.equal(JSON.stringify(stored.messages).includes('and the total'), false);
