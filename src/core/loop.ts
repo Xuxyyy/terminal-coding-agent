@@ -1,4 +1,3 @@
-import type OpenAI from 'openai';
 import {
   createClient,
   judgeModelFor,
@@ -9,10 +8,9 @@ import {
 } from './client.js';
 import {INTERRUPTED, INTERRUPTED_TURN, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
-import {clearRecoverable} from './clear.js';
 import {compactSession, withoutText} from './compact.js';
+import {assistantMessage} from './messages.js';
 import {
-  contextThreshold,
   projectedTokens,
   recordToolUsage,
   recordUsage,
@@ -36,24 +34,6 @@ function aborted(error: unknown, host: Host): boolean {
     (error as Error)?.name === 'AbortError' ||
     (error as Error)?.name === 'APIUserAbortError'
   );
-}
-
-function assistantMessage(
-  content: string,
-  calls: {id: string; name: string; args: string}[],
-): OpenAI.ChatCompletionMessageParam {
-  if (calls.length === 0) {
-    return {role: 'assistant', content};
-  }
-  return {
-    role: 'assistant',
-    content: content || null,
-    tool_calls: calls.map((call) => ({
-      id: call.id,
-      type: 'function',
-      function: {name: call.name, arguments: call.args},
-    })),
-  };
 }
 
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
@@ -159,60 +139,38 @@ export async function runAgent(
         if (answer === 'session') checkpoints = false;
       }
 
-      if (
-        step === 0 &&
-        (overThreshold(session, process.env, registry) || session.clearingExhausted)
-      ) {
-        const freed = clearRecoverable(
+      if (overThreshold(session, process.env, registry)) {
+        if (!reportedThreshold) {
+          reportedThreshold = true;
+          host.onEvent({type: 'context_threshold_reached'});
+        }
+        const last = session.messages[session.messages.length - 1];
+        const task = step === 0 && last?.role === 'user' ? last : null;
+        if (task) session.messages.pop();
+        host.onEvent({type: 'compact_start'});
+        const result = await compactSession(
           session,
-          session.contextWindow * contextThreshold(),
-          registry,
+          choice,
+          withoutText(host),
+          store,
         );
-        const stuck = session.clearingExhausted && freed === 0;
-        if (stuck || overThreshold(session, process.env, registry)) {
-          const last = session.messages[session.messages.length - 1];
-          const task = last?.role === 'user' ? last : null;
-          if (task) session.messages.pop();
-          host.onEvent({type: 'compact_start'});
-          const result = await compactSession(
-            session,
-            choice,
-            withoutText(host),
-            store,
-          );
-          if (task) session.messages.push(task);
-          if (result) {
-            addUsage(total, result.usage);
-            addUsage(session.usage, result.usage);
-          } else {
-            host.onEvent({
-              type: 'error',
-              message: 'could not compact; the run continues',
-            });
-          }
+        if (task) session.messages.push(task);
+        host.onEvent({
+          type: 'compact_end',
+          replaced: result?.replaced ?? 0,
+          before: result?.before ?? 0,
+          after: result?.after ?? 0,
+        });
+        if (!result) {
           host.onEvent({
-            type: 'compact_end',
-            replaced: result?.replaced ?? 0,
-            before: result?.before ?? 0,
-            after: result?.after ?? 0,
+            type: 'error',
+            message: 'could not compact; the run stopped',
           });
+          host.onEvent({type: 'turn_end', usage: total});
+          return;
         }
-        session.clearingExhausted = false;
-      }
-
-      if (step > 0 && overThreshold(session, process.env, registry)) {
-        const target = session.contextWindow * contextThreshold();
-        const freed = clearRecoverable(session, target, registry);
-        if (freed > 0) {
-          session.clearingExhausted = false;
-          host.onEvent({type: 'context_cleared', freed});
-        } else {
-          session.clearingExhausted = true;
-          if (!reportedThreshold) {
-            reportedThreshold = true;
-            host.onEvent({type: 'context_threshold_reached'});
-          }
-        }
+        addUsage(total, result.usage);
+        addUsage(session.usage, result.usage);
       }
 
       if (
@@ -221,8 +179,7 @@ export async function runAgent(
       ) {
         host.onEvent({
           type: 'error',
-          message:
-            'stopped: the context is full and nothing more can be freed; send your next message and it will compact first',
+          message: 'stopped: the next request would exceed the context window',
         });
         host.onEvent({type: 'turn_end', usage: total});
         return;
@@ -230,7 +187,9 @@ export async function runAgent(
 
       const result = await streamStep(choice, session.messages, definitions, host);
       addUsage(total, result.usage);
-      session.messages.push(assistantMessage(result.content, result.toolCalls));
+      session.messages.push(
+        assistantMessage(result.content, result.toolCalls, result.continuation),
+      );
       recordUsage(session, result.usage);
 
       if (result.toolCalls.length === 0) {
@@ -299,7 +258,9 @@ export async function runAgent(
   } catch (error) {
     const partial = error instanceof StreamFailure ? error.partial : null;
     if (partial?.content) {
-      session.messages.push(assistantMessage(partial.content, []));
+      session.messages.push(
+        assistantMessage(partial.content, [], partial.continuation),
+      );
     }
     save(partial?.usage ?? NO_USAGE);
     if (aborted(error, host)) {

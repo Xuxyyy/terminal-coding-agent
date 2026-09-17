@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import {streamStep, type ModelChoice} from './client.js';
 import type {Host, Usage} from './host.js';
+import {assistantMessage, type AssistantContinuation} from './messages.js';
 import {setMeasured, type Session} from './session.js';
 import type {SessionStore} from './store.js';
 import {estimateMessages} from './tokens.js';
@@ -65,6 +66,7 @@ export async function compactSession(
 ): Promise<Compaction | null> {
   const usage: Usage = {prompt: 0, completion: 0, total: 0};
   let text: string | null = null;
+  let continuation: AssistantContinuation | undefined;
 
   for (let attempt = 0; attempt < ATTEMPTS && text === null; attempt += 1) {
     const asked: Message[] = [
@@ -77,6 +79,7 @@ export async function compactSession(
       usage.completion += result.usage.completion;
       usage.total += result.usage.total;
       text = summaryFrom(result.content);
+      if (text !== null) continuation = result.continuation;
     } catch {
       return null;
     }
@@ -90,7 +93,7 @@ export async function compactSession(
   const system: Message = session.messages.find(
     (message) => message.role === 'system',
   ) ?? {role: 'system', content: session.systemPrompt};
-  const summary: Message = {role: 'assistant', content: SUMMARY_PREFIX + text};
+  const summary = assistantMessage(SUMMARY_PREFIX + text, [], continuation);
 
   session.messages = [system, summary];
   setMeasured(session, 0);

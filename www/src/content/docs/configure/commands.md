@@ -56,34 +56,27 @@ too and gets its own `~`.
 
 ### As the window fills
 
-`acc` manages the window on its own, in three steps, and only the last two are
-visible.
-
-**First it clears quietly.** Past 80% it drops the *contents* of old tool
-results it can get back — a file it read becomes
-`[file contents cleared; read the file again if needed]`, a search becomes
-`[search results cleared; run the same grep again if needed]`, and a shell
-command keeps its `[exit 0]` line but loses its output. The most recent round of
-tool calls is never touched, so work in progress is safe.
-
-**Then it says so.** When clearing cannot free anything more, it prints one line
-and keeps going:
+`acc` manages the window on its own. Before every model request, it checks the
+last measured usage plus an estimate of messages added since that measurement.
+Past 80%, it prints one line:
 
 ```
 compaction threshold reached
 ```
 
-**Then it compacts by itself.** At the start of your next message, if the
-conversation is still over the line, `acc` replaces it with a summary before
-sending. The spinner reads `Compacting…`, and your message is held aside and
-sent straight after, so nothing is lost.
+It then summarizes the complete history before removing any details. After a
+tool finishes, its full result is already recorded, counted, and visible to the
+summarizer. At the start of a new user turn, your pending message counts toward
+the check but is held aside from the summary and restored unchanged afterward.
+The spinner reads `Compacting…`, the summary text stays hidden, and the same run
+continues with the next normal request.
 
-If none of that is enough — the next request plus room for a 32,000-token reply
-would not fit — the turn stops rather than sending something the provider will
-refuse:
+If the summary fails, the current run stops with the detailed history intact.
+It does not send another normal model request. A separate physical guard also
+stops if the next request plus room for a 32,000-token reply would not fit:
 
 ```
-stopped: the context is full and nothing more can be freed; send your next message and it will compact first
+stopped: the next request would exceed the context window
 ```
 
 The 80% line is the default and `ACC_COMPACT_AT` moves it — see

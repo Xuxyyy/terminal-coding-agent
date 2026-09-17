@@ -23,6 +23,7 @@ import type {
 import {
   fakeModel,
   finishChunk,
+  reasoningChunk,
   statusError,
   streamOf,
   textChunk,
@@ -44,6 +45,15 @@ const stdout = {
 
 function answer(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(10, 5));
+}
+
+function reasonedAnswer(text: string): AsyncIterable<unknown> {
+  return streamOf(
+    reasoningChunk('opaque provider continuation'),
+    textChunk(text),
+    finishChunk('stop'),
+    usageChunk(10, 5),
+  );
 }
 
 function mount(
@@ -548,6 +558,10 @@ function crossingResponse(): AsyncIterable<unknown> {
   );
 }
 
+function rejectedSummary(): AsyncIterable<unknown> {
+  return streamOf(finishChunk('stop'), usageChunk(10, 0));
+}
+
 function gate(): {wait: Promise<void>; open: () => void} {
   let open = () => {};
   const wait = new Promise<void>((resolve) => {
@@ -583,36 +597,46 @@ function eventTypes(items: Item[]): string[] {
   return items.flatMap((item) => (item.kind === 'event' ? [item.event.type] : []));
 }
 
-test('a turn that fills the window says so and keeps going', async () => {
+test('auto compaction shows one notice, hides the summary, and keeps going', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? crossingResponse() : answer('done'),
-  );
+  const {choice, calls} = fakeModel((nth) => {
+    if (nth === 1) return crossingResponse();
+    if (nth === 2) return summaryOf(SUMMARY);
+    return answer('done');
+  });
   const {agent, unmount} = mount(root, choice);
 
   agent.current!.send('fix the cart');
   await settle(agent);
   unmount();
 
-  assert.equal(calls(), 2);
+  assert.equal(calls(), 3);
   const notices = agent.current!.committed.flatMap((item) =>
     item.kind === 'notice' ? [(item as NoticeItem).text] : [],
   );
   assert.deepEqual(notices, ['compaction threshold reached']);
+  const visibleText = agent.current!.committed.flatMap((item) =>
+    item.kind === 'text' ? [(item as TextItem).text] : [],
+  );
+  assert.deepEqual(visibleText, ['done']);
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['user', 'assistant', 'tool', 'assistant'],
+    ['assistant', 'assistant'],
   );
-  assert.equal(stored.messages[0]!.content, 'fix the cart');
+  assert.ok(String(stored.messages[0]!.content).includes(SUMMARY));
+  assert.equal(stored.messages[1]!.content, 'done');
+  assert.equal(JSON.stringify(stored.messages).includes('fix the cart'), false);
 });
 
 test('the threshold notice is a notice, never a raw event', async () => {
   const root = workspace();
-  const {choice} = fakeModel((nth) =>
-    nth === 1 ? crossingResponse() : answer('done'),
-  );
+  const {choice} = fakeModel((nth) => {
+    if (nth === 1) return crossingResponse();
+    if (nth === 2) return summaryOf(SUMMARY);
+    return answer('done');
+  });
   const {agent, unmount} = mount(root, choice);
 
   agent.current!.send('fix the cart');
@@ -621,6 +645,67 @@ test('the threshold notice is a notice, never a raw event', async () => {
 
   const types = eventTypes(agent.current!.committed);
   assert.equal(types.includes('context_threshold_reached'), false);
+});
+
+test('the spinner says compacting during automatic compaction', async () => {
+  const root = workspace();
+  const summary = gate();
+  const {choice} = fakeModel((nth) => {
+    if (nth === 1) return crossingResponse();
+    if (nth === 2) return heldAnswer(summary.wait, SUMMARY, 400);
+    return answer('done');
+  });
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await until(
+    () =>
+      agent.current?.phase.kind === 'busy' &&
+      agent.current.phase.label === 'Compacting…',
+    'automatic compaction never entered its spinner phase',
+  );
+
+  assert.equal(agent.current!.phase.kind, 'busy');
+  assert.equal(
+    agent.current!.phase.kind === 'busy' ? agent.current!.phase.label : null,
+    'Compacting…',
+  );
+  summary.open();
+  await settle(agent);
+  unmount();
+});
+
+test('failed automatic compaction stops and preserves stored history', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const {choice, calls} = fakeModel((nth) =>
+    nth === 1 ? crossingResponse() : rejectedSummary(),
+  );
+  const {agent, unmount} = mount(root, choice);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  unmount();
+
+  assert.equal(calls(), 3);
+  const errors = agent.current!.committed.flatMap((item) =>
+    item.kind === 'event' && item.event.type === 'error'
+      ? [item.event.message]
+      : [],
+  );
+  assert.deepEqual(errors, ['could not compact; the run stopped']);
+  assert.equal(
+    agent.current!.committed.some(
+      (item) => item.kind === 'text' && (item as TextItem).text === 'done',
+    ),
+    false,
+  );
+  const stored = loadSession(root, null, home);
+  assert.deepEqual(
+    stored.messages.map((message) => message.role),
+    ['user', 'assistant', 'tool'],
+  );
+  assert.equal(stored.messages[0]!.content, 'fix the cart');
 });
 
 test('resuming a compacted session shows the summary, not the original conversation', async () => {
@@ -1173,6 +1258,38 @@ test('a switch hands the new client to the next turn', async () => {
   assert.equal(second(), 1);
   assert.equal(first(), 1);
   unmount();
+});
+
+test('a model switch preserves shared continuation metadata', async () => {
+  const root = workspace();
+  loadSettings([]);
+  const first = fakeModel(() => reasonedAnswer('done'));
+  let secondBody: unknown;
+  const second = fakeModel((_nth, body) => {
+    secondBody = body;
+    return answer('done');
+  });
+  const swapped = {...second.choice, ...GLM};
+  const {agent, unmount} = mount(root, first.choice, () => swapped);
+
+  agent.current!.send('fix the cart');
+  await settle(agent);
+  await switchTo(agent, GLM.model);
+  agent.current!.send('and the checkout');
+  await settle(agent);
+  unmount();
+
+  const messages =
+    (secondBody as {
+      messages?: Array<{role?: string; reasoning_content?: string}>;
+    }).messages ?? [];
+  assert.ok(
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        message.reasoning_content === 'opaque provider continuation',
+    ),
+  );
 });
 
 test('a switch moves the context budget to the new window', async () => {

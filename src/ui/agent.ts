@@ -147,7 +147,6 @@ export function useAgent(
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);
           return;
         }
-        if (event.type === 'context_cleared') return;
         if (event.type === 'compact_start') {
           setPhase({kind: 'busy', label: COMPACTING_LABEL});
           return;

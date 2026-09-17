@@ -2,6 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
+import {
+  assistantMessage,
+  type AssistantContinuation,
+} from './messages.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
@@ -9,7 +13,12 @@ export type SessionRecord =
   | {kind: 'view'; items: unknown[]}
   | {kind: 'message'; id: string; message: Message}
   | {kind: 'messages'; messages: Message[]; usage: Usage}
-  | {kind: 'compact'; summary: string; replaced: number}
+  | {
+      kind: 'compact';
+      summary: string;
+      replaced: number;
+      continuation?: AssistantContinuation;
+    }
   | {kind: 'code'; path: string; before: string | null}
   | {kind: 'rewind'; to: number};
 
@@ -56,7 +65,7 @@ export function messagesOf(records: SessionRecord[]): Message[] {
   let messages: Message[] = [];
   for (const record of records) {
     if (record.kind === 'compact') {
-      messages = [{role: 'assistant', content: record.summary}];
+      messages = [assistantMessage(record.summary, [], record.continuation)];
     } else if (record.kind === 'message') {
       messages.push(record.message);
     } else if (record.kind === 'messages') {

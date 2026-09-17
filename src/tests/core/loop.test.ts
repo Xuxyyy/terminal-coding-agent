@@ -13,6 +13,7 @@ import {
   fakeModel,
   fakeStore,
   finishChunk,
+  reasoningChunk,
   streamOf,
   textChunk,
   toolCallChunk,
@@ -55,6 +56,37 @@ function toolResponse(n: number): AsyncIterable<unknown> {
 function finalResponse(): AsyncIterable<unknown> {
   return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
 }
+
+test('the next tool-enabled request receives opaque continuation state', async () => {
+  const sent: OpenAI.ChatCompletionMessageParam[][] = [];
+  const {choice} = fakeModel((nth, body) => {
+    sent.push(
+      [...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? [])],
+    );
+    if (nth === 1) {
+      return streamOf(
+        reasoningChunk('keep this provider state'),
+        toolCallChunk('call-1', 'noop', '{}'),
+        finishChunk('tool_calls'),
+        usageChunk(10, 2),
+      );
+    }
+    return finalResponse();
+  });
+  const {host} = fakeHost();
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.equal(sent.length, 2);
+  assert.ok(
+    sent[1]!.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message as {reasoning_content?: unknown}).reasoning_content ===
+          'keep this provider state',
+    ),
+  );
+});
 
 function keepsCalling() {
   return fakeModel((nth) => toolResponse(nth));

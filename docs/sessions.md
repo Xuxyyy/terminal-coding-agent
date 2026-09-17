@@ -281,9 +281,10 @@ eviction is a fast leak, not a slow one.
 ## Compaction
 
 `/compact` asks the model to summarize the conversation, then replaces `session.messages` with
-`[system, one assistant message]`. `compactSession` has two callers — `/compact` at the prompt,
-and turn 0 of a run when the session is over the threshold. Why never mid-run, and how the two
-relate to clearing, is `agent-loop.md`.
+`[system, one assistant message]`. `compactSession` is called by manual `/compact` at the
+prompt and by the automatic request-boundary check in `runAgent`. That automatic check can run
+before the first request of a user turn or after a completed tool round; the ordering and
+failure behavior are described in `agent-loop.md`.
 
 **The whole conversation goes, not the oldest half.** Keeping the last N turns means choosing a
 cut point, and the wrong cut lands between an assistant message carrying `tool_calls` and the
@@ -304,6 +305,13 @@ destroy the conversation it was meant to shrink.
 of `session.messages` — sees a message it has no record of and writes it a second time as a
 `messages` record, so `messagesOf` replays the summary twice. It only shows up once a real turn
 follows the compaction, which is why a test covers exactly that order.
+
+**Hidden continuation state survives the compact record.** Reasoning-capable providers return
+opaque state that must accompany an assistant message in later tool-enabled requests. The
+`compact` record therefore has an optional provider-neutral `continuation` field. Records
+without it remain valid, while `messagesOf` restores it on new records without exposing it in
+the terminal view. Ordinary `message` and `messages` records already preserve the same wire
+metadata as part of their assistant message objects.
 
 **What `measured` means afterwards.** `compactSession` sets `lastContextTokens = 0`, exactly as
 `restoreMessages` does, because that request's prompt was the *old* conversation — it measures what was

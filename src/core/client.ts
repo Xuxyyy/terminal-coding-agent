@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import {loadEnvFiles} from './env.js';
 import type {Host, Usage} from './host.js';
+import type {AssistantContinuation} from './messages.js';
 import {
   DEFAULT_MODEL,
   JUDGE_MODELS,
@@ -67,6 +68,7 @@ export type RawToolCall = {id: string; name: string; args: string};
 
 export type AssistantResponse = {
   content: string;
+  continuation?: AssistantContinuation;
   toolCalls: RawToolCall[];
   finishReason: string;
   usage: Usage;
@@ -89,12 +91,21 @@ async function attemptStep(
   host: Host,
 ): Promise<AssistantResponse> {
   let content = '';
+  let reasoningContent: string | undefined;
   let finishReason = 'stop';
   let emitted = false;
   const calls: RawToolCall[] = [];
   const usage: Usage = {prompt: 0, completion: 0, total: 0};
   const soFar = (): AssistantResponse => ({
     content,
+    ...(reasoningContent === undefined
+      ? {}
+      : {
+          continuation: {
+            kind: 'reasoning_content' as const,
+            content: reasoningContent,
+          },
+        }),
     toolCalls: calls.filter(Boolean),
     finishReason,
     usage,
@@ -124,6 +135,11 @@ async function attemptStep(
       if (choiceChunk.finish_reason) finishReason = choiceChunk.finish_reason;
       const delta = choiceChunk.delta;
       if (!delta) continue;
+      const reasoning = (delta as {reasoning_content?: unknown}).reasoning_content;
+      if (typeof reasoning === 'string') {
+        reasoningContent = (reasoningContent ?? '') + reasoning;
+        emitted = true;
+      }
       if (delta.content) {
         content += delta.content;
         emitted = true;

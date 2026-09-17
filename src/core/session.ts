@@ -29,7 +29,6 @@ export type Session = {
   lastContextTokens: number;
   measuredAt: number;
   contextWindow: number;
-  clearingExhausted: boolean;
 };
 
 export function createSession(
@@ -50,7 +49,6 @@ export function createSession(
     lastContextTokens: 0,
     measuredAt: 0,
     contextWindow,
-    clearingExhausted: false,
   };
 }
 
@@ -101,7 +99,6 @@ export function restoreMessages(
   session.asked = messages
     .map(userText)
     .filter((text): text is string => text !== null);
-  session.clearingExhausted = false;
   setMeasured(session, 0);
 }
 
@@ -119,7 +116,6 @@ export function clearSession(session: Session): void {
   session.allowed.clear();
   session.asked = [];
   session.denied = [];
-  session.clearingExhausted = false;
   setMeasured(session, 0);
 }
 

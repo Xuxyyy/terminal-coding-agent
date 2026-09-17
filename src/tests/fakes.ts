@@ -12,6 +12,12 @@ export function textChunk(text: string): unknown {
   return {choices: [{index: 0, delta: {content: text}, finish_reason: null}]};
 }
 
+export function reasoningChunk(text: string): unknown {
+  return {
+    choices: [{index: 0, delta: {reasoning_content: text}, finish_reason: null}],
+  };
+}
+
 export function toolCallChunk(
   id: string,
   name: string,
@@ -75,14 +81,14 @@ export function abortError(name = 'APIUserAbortError'): Error {
   return error;
 }
 
-export function fakeModel(next: (nth: number) => unknown): {
+export function fakeModel(next: (nth: number, body?: unknown) => unknown): {
   choice: ModelChoice;
   calls: () => number;
 } {
   let nth = 0;
-  const create = async (): Promise<unknown> => {
+  const create = async (body?: unknown): Promise<unknown> => {
     nth += 1;
-    const result = next(nth);
+    const result = next(nth, body);
     if (result instanceof Error) throw result;
     return result;
   };

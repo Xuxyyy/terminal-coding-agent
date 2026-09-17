@@ -26,7 +26,6 @@ export type AgentEvent =
     }
   | {type: 'turn_end'; usage: Usage}
   | {type: 'context_threshold_reached'}
-  | {type: 'context_cleared'; freed: number}
   | {type: 'compact_start'}
   | {type: 'compact_end'; replaced: number; before: number; after: number}
   | {type: 'error'; message: string; hint?: string};

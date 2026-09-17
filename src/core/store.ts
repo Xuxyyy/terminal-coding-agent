@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
+import {assistantContinuation} from './messages.js';
 import {
   appendRecord,
   lastUsageOf,
@@ -136,10 +137,12 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
     },
     appendCompact(summary, replaced) {
       written.add(summary);
+      const continuation = assistantContinuation(summary);
       appendRecord(dir, {
         kind: 'compact',
         summary: typeof summary.content === 'string' ? summary.content : '',
         replaced,
+        ...(continuation ? {continuation} : {}),
       });
       writeMeta();
     },

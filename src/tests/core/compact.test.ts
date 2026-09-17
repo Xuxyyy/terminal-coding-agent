@@ -6,6 +6,7 @@ import {
   fakeModel,
   fakeStore,
   finishChunk,
+  reasoningChunk,
   statusError,
   streamOf,
   textChunk,
@@ -45,6 +46,15 @@ const DSML =
 
 function summaryResponse(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(500, 40));
+}
+
+function reasonedSummary(text: string): AsyncIterable<unknown> {
+  return streamOf(
+    reasoningChunk('summary continuation'),
+    textChunk(text),
+    finishChunk('stop'),
+    usageChunk(500, 40),
+  );
 }
 
 function recordingModel(reply: () => AsyncIterable<unknown>): {
@@ -93,6 +103,20 @@ test('a compaction leaves the system message and one summary', async () => {
     {role: 'system', content: 'rules'},
     {role: 'assistant', content: SUMMARY_PREFIX + RECAP},
   ]);
+});
+
+test('a compaction keeps opaque continuation state on the summary', async () => {
+  const {choice} = fakeModel(() => reasonedSummary(RECAP));
+  const {host} = fakeHost();
+  const active = session();
+
+  await compactSession(active, choice, host);
+
+  assert.deepEqual(active.messages[1], {
+    role: 'assistant',
+    content: SUMMARY_PREFIX + RECAP,
+    reasoning_content: 'summary continuation',
+  });
 });
 
 test('a compaction clears the measured context size', async () => {

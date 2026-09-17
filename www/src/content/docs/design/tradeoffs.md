@@ -69,9 +69,9 @@ then living with a third state I added to enforce a guess.
 
 ## Compact-and-retry on a length rejection
 
-**What it would do.** When the conversation gets long, `acc` clears recoverable
-tool results mid-turn and compacts at a turn boundary, both triggered well below
-the window. If all of that somehow fails to keep up, the provider rejects the
+**What it would do.** When the conversation gets long, `acc` compacts at a safe
+model-request boundary, triggered well below the window. If that and the
+physical request-fit guard somehow fail to keep up, the provider rejects the
 request for length and the run stops with a message. Compact-and-retry would
 catch that rejection, summarize, and try once more — the safety net under the
 trigger rather than the trigger itself.

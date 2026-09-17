@@ -1,93 +1,84 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type OpenAI from 'openai';
 import {z} from 'zod';
 import {
   fakeHost,
-  fakeModel,
+  fakeStore,
   finishChunk,
   streamOf,
   textChunk,
   toolCallChunk,
   usageChunk,
 } from '../fakes.js';
-import {CLEARED_READ} from '../../core/clear.js';
-import {MAX_OUTPUT_TOKENS} from '../../core/client.js';
+import {MAX_OUTPUT_TOKENS, type ModelChoice} from '../../core/client.js';
+import {compactionPrompt, SUMMARY_PREFIX} from '../../core/compact.js';
 import type {AgentEvent} from '../../core/host.js';
 import {runAgent} from '../../core/loop.js';
 import {addTask, createSession, type Session} from '../../core/session.js';
 import type {Tool} from '../../core/tools/registry.js';
 
-const noop: Tool = {
-  name: 'noop',
-  description: 'does nothing',
-  schema: z.object({}),
-  async run() {
-    return {text: 'ok'};
-  },
-};
+type Message = OpenAI.ChatCompletionMessageParam;
+
+const STORY =
+  'The user asked to inspect the large fixture. The complete file result was read, ' +
+  'its evidence was retained, and the next request should finish the same task now.';
+const BIG_READ = `sentinel-start\n${'a'.repeat(440_000)}\nsentinel-end`;
+const SMALL_READ = 'a'.repeat(20_000);
 
 function session(): Session {
   const active = createSession(process.cwd(), 'rules', 1_000_000);
-  addTask(active, 'rename the widget');
+  addTask(active, 'inspect the fixture');
   return active;
 }
 
-const BIG_READ = 'a'.repeat(400_000);
-
-function readingSession(): Session {
-  const active = session();
-  active.messages.push(
-    {
-      role: 'assistant',
-      content: null,
-      tool_calls: [
-        {
-          id: 'r1',
-          type: 'function',
-          function: {name: 'read_file', arguments: '{"path":"a.ts"}'},
-        },
-      ],
+function reader(body: string): Tool {
+  return {
+    name: 'read_file',
+    description: 'returns a fixture',
+    schema: z.object({}),
+    async run() {
+      return {text: body};
     },
-    {role: 'tool', tool_call_id: 'r1', content: BIG_READ},
-  );
-  return active;
+  };
 }
 
 function toolResponse(n: number, total: number): AsyncIterable<unknown> {
   return streamOf(
-    toolCallChunk(`call-${n}`, 'noop', '{}'),
+    toolCallChunk(`call-${n}`, 'read_file', '{}'),
     finishChunk('tool_calls'),
     usageChunk(total - 2, 2),
   );
 }
 
-const bigRead: Tool = {
-  name: 'read_file',
-  description: 'returns a large file',
-  schema: z.object({}),
-  async run() {
-    return {text: BIG_READ};
-  },
-};
-
-function readResponse(n: number): AsyncIterable<unknown> {
-  return streamOf(
-    toolCallChunk(`call-${n}`, 'read_file', '{}'),
-    finishChunk('tool_calls'),
-    usageChunk(699_998, 2),
-  );
+function textResponse(text: string, total = 12): AsyncIterable<unknown> {
+  return streamOf(textChunk(text), finishChunk('stop'), usageChunk(total - 2, 2));
 }
 
-function overTheLine(n: number): AsyncIterable<unknown> {
-  return toolResponse(n, 902_000);
-}
-
-function underTheLine(n: number): AsyncIterable<unknown> {
-  return toolResponse(n, 12_000);
-}
-
-function finalResponse(): AsyncIterable<unknown> {
-  return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
+function recordingModel(next: (nth: number) => unknown): {
+  choice: ModelChoice;
+  calls: () => number;
+  sent: () => Message[][];
+} {
+  let nth = 0;
+  const requests: Message[][] = [];
+  const create = async (body: unknown): Promise<unknown> => {
+    nth += 1;
+    requests.push([...((body as {messages?: Message[]}).messages ?? [])]);
+    const result = next(nth);
+    if (result instanceof Error) throw result;
+    return result;
+  };
+  return {
+    choice: {
+      client: {chat: {completions: {create}}} as unknown as OpenAI,
+      model: 'fake-model',
+      label: 'Fake',
+      contextWindow: 1_000_000,
+    },
+    calls: () => nth,
+    sent: () => requests,
+  };
 }
 
 function errors(events: AgentEvent[]): string[] {
@@ -96,14 +87,8 @@ function errors(events: AgentEvent[]): string[] {
   );
 }
 
-function notices(events: AgentEvent[]): number {
-  return events.filter((event) => event.type === 'context_threshold_reached').length;
-}
-
-function freed(events: AgentEvent[]): number[] {
-  return events.flatMap((event) =>
-    event.type === 'context_cleared' ? [event.freed] : [],
-  );
+function count(events: AgentEvent[], type: AgentEvent['type']): number {
+  return events.filter((event) => event.type === type).length;
 }
 
 async function withThreshold(
@@ -120,157 +105,131 @@ async function withThreshold(
   }
 }
 
-test('a turn that crosses the line is reported, never compacted', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? overTheLine(nth) : finalResponse(),
-  );
+test('a recorded tool result crosses the projected line and compacts before the next request', async () => {
+  const model = recordingModel((nth) => {
+    if (nth === 1) return toolResponse(nth, 700_000);
+    if (nth === 2) return textResponse(STORY);
+    return textResponse('done');
+  });
   const {host, events} = fakeHost();
+  const order: string[] = [];
+  const store = fakeStore({
+    appendStep() {
+      order.push('step');
+    },
+    appendCompact() {
+      order.push('compact');
+    },
+  });
   const active = session();
 
-  await runAgent(active, choice, host, [noop]);
+  await runAgent(active, model.choice, host, [reader(BIG_READ)], store);
 
-  assert.equal(calls(), 2);
-  assert.equal(notices(events), 1);
-  assert.deepEqual(active.messages.slice(0, 2), [
-    {role: 'system', content: 'rules'},
-    {role: 'user', content: 'rename the widget'},
-  ]);
-  assert.equal(
-    active.messages.some(
+  assert.equal(model.calls(), 3);
+  assert.deepEqual(order, ['step', 'compact', 'step']);
+  assert.equal(count(events, 'context_threshold_reached'), 1);
+  assert.equal(count(events, 'compact_start'), 1);
+  assert.equal(count(events, 'compact_end'), 1);
+  assert.deepEqual(errors(events), []);
+
+  const compactRequest = model.sent()[1]!;
+  assert.equal(compactRequest.at(-1)?.content, compactionPrompt());
+  assert.ok(
+    compactRequest.some((message) => message.role === 'tool' && message.content === BIG_READ),
+    'the summarizer must receive the complete tool result',
+  );
+
+  const followUp = model.sent()[2]!;
+  assert.ok(
+    followUp.some(
       (message) =>
-        typeof message.content === 'string' &&
-        message.content.startsWith('Summary of the earlier conversation'),
+        message.role === 'assistant' && message.content === SUMMARY_PREFIX + STORY,
     ),
-    false,
   );
   assert.equal(
-    events.some((event) => event.type === 'compact_start'),
+    followUp.some((message) => message.role === 'tool' && message.content === BIG_READ),
     false,
   );
+  assert.equal(active.messages.at(-1)?.content, 'done');
 });
 
-test('a turn that stays under the line says nothing', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? underTheLine(nth) : finalResponse(),
+test('an estimated delta below the line sends the next request without compaction', async () => {
+  const model = recordingModel((nth) =>
+    nth === 1 ? toolResponse(nth, 700_000) : textResponse('done'),
   );
   const {host, events} = fakeHost();
 
-  await runAgent(session(), choice, host, [noop]);
+  await runAgent(session(), model.choice, host, [reader(SMALL_READ)]);
 
-  assert.equal(calls(), 2);
-  assert.equal(notices(events), 0);
+  assert.equal(model.calls(), 2);
+  assert.equal(count(events, 'context_threshold_reached'), 0);
+  assert.equal(count(events, 'compact_start'), 0);
+  assert.ok(
+    model.sent()[1]!.some(
+      (message) => message.role === 'tool' && message.content === SMALL_READ,
+    ),
+  );
 });
 
-test('the notice comes once a run, not once a turn', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth <= 3 ? overTheLine(nth) : finalResponse(),
-  );
+test('the threshold notice is emitted at most once across two compactions', async () => {
+  const model = recordingModel((nth) => {
+    if (nth === 1 || nth === 3) return toolResponse(nth, 900_000);
+    if (nth === 2 || nth === 4) return textResponse(STORY);
+    return textResponse('done');
+  });
   const {host, events} = fakeHost();
 
-  await runAgent(session(), choice, host, [noop]);
+  await runAgent(session(), model.choice, host, [reader(SMALL_READ)]);
 
-  assert.equal(calls(), 4);
-  assert.equal(notices(events), 1);
+  assert.equal(model.calls(), 5);
+  assert.equal(count(events, 'context_threshold_reached'), 1);
+  assert.equal(count(events, 'compact_start'), 2);
+  assert.equal(count(events, 'compact_end'), 2);
 });
 
-test('the line moves with ACC_COMPACT_AT', async () => {
+test('ACC_COMPACT_AT controls the single automatic threshold', async () => {
   await withThreshold('0.1', async () => {
-    const crossing = fakeModel((nth) =>
-      nth === 1 ? toolResponse(nth, 100_000) : finalResponse(),
+    const crossing = recordingModel((nth) => {
+      if (nth === 1) return toolResponse(nth, 100_000);
+      if (nth === 2) return textResponse(STORY);
+      return textResponse('done');
+    });
+    const under = recordingModel((nth) =>
+      nth === 1 ? toolResponse(nth, 90_000) : textResponse('done'),
     );
-    const short = fakeModel((nth) =>
-      nth === 1 ? toolResponse(nth, 99_000) : finalResponse(),
-    );
-    const {host: first, events: over} = fakeHost();
-    const {host: second, events: under} = fakeHost();
+    const first = fakeHost();
+    const second = fakeHost();
 
-    await runAgent(session(), crossing.choice, first, [noop]);
-    await runAgent(session(), short.choice, second, [noop]);
+    await runAgent(session(), crossing.choice, first.host, [reader(SMALL_READ)]);
+    await runAgent(session(), under.choice, second.host, [reader('ok')]);
 
-    assert.equal(notices(over), 1);
-    assert.equal(notices(under), 0);
+    assert.equal(count(first.events, 'compact_start'), 1);
+    assert.equal(count(second.events, 'compact_start'), 0);
   });
 });
 
-const FLOOR_ERROR =
-  'stopped: the context is full and nothing more can be freed; send your next message and it will compact first';
+const FIT_ERROR = 'stopped: the next request would exceed the context window';
 
-test('a run past the window sends no further request', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? toolResponse(nth, 1_200_000) : finalResponse(),
-  );
-  const {host, events} = fakeHost();
+test('the physical request-fit guard remains separate from compaction', async () => {
+  await withThreshold('1', async () => {
+    for (const [tokens, stops] of [
+      [980_000, true],
+      [900_000, false],
+    ] as const) {
+      const model = recordingModel((nth) =>
+        nth === 1 ? toolResponse(nth, tokens) : textResponse('done'),
+      );
+      const {host, events} = fakeHost();
 
-  await runAgent(session(), choice, host, [noop]);
+      await runAgent(session(), model.choice, host, [reader('ok')]);
 
-  assert.equal(calls(), 1);
-  assert.deepEqual(errors(events), [FLOOR_ERROR]);
-  assert.ok(events.some((event) => event.type === 'turn_end'));
+      assert.equal(
+        errors(events).includes(FIT_ERROR),
+        stops,
+        `${tokens} tokens with a ${MAX_OUTPUT_TOKENS} token reply`,
+      );
+      assert.equal(model.calls(), stops ? 1 : 2);
+      assert.equal(count(events, 'compact_start'), 0);
+    }
+  });
 });
-
-test('the floor keeps the reply its own room', async () => {
-  for (const [tokens, stops] of [
-    [980_000, true],
-    [900_000, false],
-  ] as const) {
-    const {choice, calls} = fakeModel((nth) =>
-      nth === 1 ? toolResponse(nth, tokens) : finalResponse(),
-    );
-    const {host, events} = fakeHost();
-
-    await runAgent(session(), choice, host, [noop]);
-
-    assert.equal(
-      errors(events).includes(FLOOR_ERROR),
-      stops,
-      `${tokens} tokens with a ${MAX_OUTPUT_TOKENS} token reply`,
-    );
-    assert.equal(calls(), stops ? 1 : 2, `${tokens} tokens`);
-  }
-});
-
-test('a turn over the line frees what it can and keeps running', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? overTheLine(nth) : finalResponse(),
-  );
-  const {host, events} = fakeHost();
-  const active = readingSession();
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(calls(), 2);
-  assert.equal(freed(events).length, 1);
-  assert.ok(freed(events)[0] > 90_000, `freed ${freed(events)[0]}`);
-  assert.equal(notices(events), 0);
-  assert.equal(errors(events).length, 0);
-  assert.equal(active.clearingExhausted, false);
-  assert.equal(active.messages[3].content, CLEARED_READ);
-});
-
-test('a later turn that frees something takes back the exhausted flag', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth <= 2 ? readResponse(nth) : finalResponse(),
-  );
-  const {host, events} = fakeHost();
-  const active = session();
-
-  await runAgent(active, choice, host, [bigRead]);
-
-  assert.equal(calls(), 3);
-  assert.equal(notices(events), 1);
-  assert.equal(freed(events).length, 1);
-  assert.equal(active.clearingExhausted, false);
-});
-
-test('a turn with nothing left to free is remembered as exhausted', async () => {
-  const {choice} = fakeModel((nth) => (nth <= 2 ? overTheLine(nth) : finalResponse()));
-  const {host, events} = fakeHost();
-  const active = session();
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(active.clearingExhausted, true);
-  assert.equal(freed(events).length, 0);
-  assert.equal(notices(events), 1);
-});
-

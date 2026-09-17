@@ -6,6 +6,7 @@ import {
   fakeHost,
   fakeModel,
   finishChunk,
+  reasoningChunk,
   statusError,
   streamOf,
   textChunk,
@@ -37,6 +38,8 @@ test('a response collects the text, the tool calls and the usage', async () => {
   const {choice, calls} = fakeModel(() =>
     streamOf(
       textChunk('look'),
+      reasoningChunk('plan '),
+      reasoningChunk('the call'),
       textChunk('ing'),
       toolCallChunk('c1', 'read_file', '{"path":'),
       toolCallChunk('', '', '"a.js"}'),
@@ -49,6 +52,10 @@ test('a response collects the text, the tool calls and the usage', async () => {
   const response = await streamStep(choice, [], [], host, fast);
 
   assert.equal(response.content, 'looking');
+  assert.deepEqual(response.continuation, {
+    kind: 'reasoning_content',
+    content: 'plan the call',
+  });
   assert.equal(response.finishReason, 'tool_calls');
   assert.deepEqual(response.toolCalls, [
     {id: 'c1', name: 'read_file', args: '{"path":"a.js"}'},

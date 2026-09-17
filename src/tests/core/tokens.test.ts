@@ -9,6 +9,7 @@ import {
 } from '../../core/tokens.js';
 import {tools} from '../../core/tools/index.js';
 import {toolDefinitions} from '../../core/tools/registry.js';
+import {assistantMessage} from '../../core/messages.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
@@ -30,6 +31,16 @@ test('a message that only calls a tool still costs tokens', () => {
 
   assert.ok(estimateMessage(calls) > 0);
   assert.ok(estimateMessage(calls) > estimateMessage(silent));
+});
+
+test('hidden continuation state counts toward the projected context', () => {
+  const plain = assistantMessage('done', []);
+  const reasoned = assistantMessage('done', [], {
+    kind: 'reasoning_content',
+    content: 'a'.repeat(400),
+  });
+
+  assert.equal(estimateMessage(reasoned) - estimateMessage(plain), 100);
 });
 
 test('array-shaped content costs the same as the plain string', () => {

@@ -166,38 +166,25 @@ turn needs one request per step and a slow crawl reads worse than a clear failur
 
 ## Context pressure
 
-**The one rule the whole design rests on: a summarizing compaction only ever happens when no
-run is in flight.** That is turn 0 of a run, or `/compact` typed at the prompt (gated on idle
-in `src/ui/agent.ts`). Because the situation cannot arise, a split `tool_calls` pair, a
-"continue from here" prompt, retry counters and a per-run compaction cap are all unnecessary —
-not by careful coding, but because there is nothing in flight to break.
+**Automatic compaction runs at the safe boundary immediately before a model request.** At
+that point the prior assistant tool call and every tool result are already in
+`session.messages`, so the summarizer sees a complete round and the next request cannot contain
+a dangling call. The same boundary exists before the first request of a new user turn and
+between tool rounds in one active run.
 
-### Two operations, not one
+There is one automatic pressure operation: `compactSession` summarizes the complete history
+and, only after a valid summary exists, replaces it with `[system, summary]`. There is no
+earlier result-clearing pass. Manual `/compact` uses the same operation while idle; manual
+`/clear` remains the separate command that intentionally starts a new conversation.
 
-*Clear* and *compact* are different words in the code, the UI and this doc. Blurring them is
-what made the earlier attempt hard to reason about.
-
-| | clear (`src/core/clear.ts`) | compact (`src/core/compact.ts`) |
-| --- | --- | --- |
-| costs | nothing | a full-context request |
-| loses | nothing — every byte is on disk | information |
-| runs | mid-run, every turn over the line | turn 0, or `/compact` |
-
-Clearing removes only what can be recovered: the file is still on disk, so a `read_file`
-result is a cache, not a record. Compacting throws away the conversation itself, which is why
-it is confined to a boundary.
-
-`compactSession` has exactly two callers — `/compact` and turn 0 — and both run with nothing
-in flight. Do not add a third or a second summarizer.
-
-### The three lines
+### The two lines
 
 ```
         0.8 × window            window − 32,000              window
              │                        │                        │
   ───────────┼────────────────────────┼────────────────────────┼──
-     work    │   clear each turn      │   stop, say how to     │  provider refuses
-             │   (compact at turn 0)  │   recover              │
+     work    │ compact before the     │ stop before an         │ provider refuses
+             │ next model request     │ oversized request      │
 ```
 
 | window | threshold (0.8) | floor | room between |
@@ -205,45 +192,41 @@ in flight. Do not add a third or a second summarizer.
 | 262,144 — five of the six models | 209,715 | 230,144 | 20,429 |
 | 200,000 — `glm-4.7-flash` | 160,000 | 168,000 | 8,000 |
 
-The room between the two lines is what clearing has to work with. At 262,144 it is two or
-three tool results, which is enough. `glm-4.7-flash` has 8,000 tokens there — smaller than one
-`read_file` result, so on that one model a run can cross the threshold and reach the floor in
-a single turn. That is a known limit of that model, not a reason to move the threshold for
-everyone.
+The first line is the configurable compaction policy. The second is the physical request-fit
+guard, which reserves the maximum 32,000-token reply. They are different checks, not two
+compaction policies.
 
 ### The threshold
 
 At the top of every iteration, before `streamStep`, `overThreshold(session, env, registry)`
 (`session.ts`) compares the projection against `contextWindow * 0.8`.
 
-On a yes at `turn > 0` the loop calls `clearRecoverable(session, target, registry)` and emits
-`context_cleared` with the tokens freed. Clearing aims at the threshold, not at zero: it stops
-as soon as the projection is back under the line, so recent reads survive when they can.
+On a yes, the loop emits `context_threshold_reached` at most once in the run, then emits
+`compact_start` and calls `compactSession` through `withoutText(host)`. Suppressing text keeps
+the raw summary out of the transcript. Compaction usage is still added to both the run and
+session totals.
 
-When clearing frees nothing the loop sets `session.clearingExhausted` and emits one
-`context_threshold_reached` — `reportedThreshold` keeps that to once per run. A later turn
-that *does* free something takes the flag back, so it always means "the most recent attempt
-found nothing". Without that retraction the flag would stick after a turn that freed nothing
-only because the one clearable result was still in the round in flight, and the next message
-would compact a session under no pressure at all. **Being exhausted does not stop the run.** The band between the threshold and the floor is ordinary
-work at full fidelity — nothing has been lost there — and giving it up would waste capacity
-already paid for.
+For a later step, the completed assistant `tool_calls` message and all its `tool` replies stay
+in the compaction input. For step zero, the pending user task is different: its estimated size
+must count toward the trigger, but it must not be summarized as old history. The loop therefore
+checks the threshold first, temporarily pops that last user message, and restores the same
+message object after success or failure. Reusing the object also prevents the identity-based
+session store from appending it twice.
 
-At `turn === 0` the loop takes the other branch: over the line, or `clearingExhausted` left
-over from the previous run, means clear first (it costs nothing) and then summarize if that
-was not enough. The task message is taken **off** the list before the summarizer is asked, and
-pushed back after — it has to be pushed back anyway, because `compactSession` replaces every
-non-system message. The store keys written messages on object identity, so re-pushing the same
-object appends nothing, and a failed summary leaves `session.messages` untouched, so the pop
-and the push cancel out. A summary that fails is one `error` event and the run continues.
+On success, `compactSession` installs the summary, the held task is restored if there was one,
+`compact_end` clears the spinner, and the loop sends the next normal request in the same run.
+On failure, the held task is restored, the detailed history remains unchanged, and the loop
+emits `compact_end`, `could not compact; the run stopped`, and `turn_end` before returning. It
+does not send another normal request or retry through a different pressure strategy.
 
-**Take the task off first, and never leave it on.** An earlier version asked the summarizer
-with the task still last, so the summary could be "aimed at" the work about to start. What the
-model actually receives then is two `user` messages in a row — a job, then "summarize the
-above" — and it may answer the job. A live run on `deepseek-v4-flash` did exactly that: with
-no tools offered, the model's tool-call syntax came out as plain text, and that text became
-the summary and replaced a whole task's history. This only works because the task is last,
-which is true at turn 0 by construction and nowhere else in the loop.
+Reasoning-capable providers can return hidden continuation state alongside visible content and
+tool calls. `client.ts` collects that state without emitting it to the `Host`; `messages.ts`
+attaches it to the assistant message in the provider's OpenAI-compatible wire shape. The loop
+does not branch on provider names. Normal turns, compaction summaries, persistence, resume, and
+model switching all carry the optional state through the same message path. Compaction removes
+the old continuation state with the old history and keeps only the new summary's state. Because
+providers can concatenate it into later context, `estimateMessage` counts it even though the
+terminal never displays it.
 
 **The ordering removes one trigger; `summaryFrom` guards the class.** Whatever the request
 looks like, the reply still has total power: `compactSession` deletes every non-system message
@@ -263,18 +246,12 @@ one costs the conversation. **Keep both rules biased that way.** A check widened
 rejecting a real summary has the trade backwards.
 
 **What the user actually sees is deliberately less than what the loop emits.** The TUI draws
-one notice, `compaction threshold reached`, plus errors. `context_cleared` is drawn nowhere —
-clearing is bookkeeping, and a line per turn would bury the work. `compact_start` and
-`compact_end` set and clear the `Compacting…` spinner label instead of printing anything, so
-the pair is visible while it runs and leaves nothing behind. `compact_end` therefore fires on
-failure as well as success: it is what puts the spinner back. A `Host` that ignores all three
-is still a correct one.
+one notice, `compaction threshold reached`, plus errors. `compact_start` and `compact_end` set
+and clear the `Compacting…` spinner label instead of printing anything, so the pair is visible
+while it runs and leaves nothing behind. `compact_end` fires on failure as well as success: it
+is what puts the spinner back. A `Host` that ignores these lifecycle events is still correct.
 
-This is also the whole recovery path. A run that stops at the floor needs no new code: the
-user sends the next message, turn 0 sees the session is over the line, it compacts, and the
-task runs.
-
-**Why that point and no other.** It is the only place in the loop that is always a safe cut.
+**Why that boundary.** It is the place in the loop that is always a safe cut.
 Every assistant message carrying `tool_calls` has its `tool` replies pushed before the loop
 comes back around, so no pair can be split, and the API never sees a dangling call. It also
 catches the failure a check in the UI cannot — *one long task* that fills the window with
@@ -323,10 +300,9 @@ fits:
 projectedTokens(session, registry) + MAX_OUTPUT_TOKENS > session.contextWindow
 ```
 
-On a yes it emits one `error` — `stopped: the context is full and nothing more can be freed;
-send your next message and it will compact first` — plus `turn_end`, and returns. The message
-names the remedy because there is one; telling the user to start a new session would throw
-away work the summary carries across.
+On a yes it emits `stopped: the next request would exceed the context window`, then
+`turn_end`, and returns. Automatic compaction has already been considered at this same
+boundary, so promising that the next user message will change the result would be false.
 
 **Why a check and never a reaction to the rejection.** At 100% of the window the provider
 refuses the request, and at that moment compaction cannot save the run either: the compaction
@@ -340,67 +316,19 @@ the window is at least 160,000 tokens. Every real model in the table is 200,000 
 this holds today — but a small-window model added later would trip the floor below its own
 compaction line.
 
-Ordering matters. Both the clearing block and the turn-0 compaction sit above the floor, so
-the floor is reached only when freeing space has already been tried and was not enough.
-
-### What clearing touches
-
-Chosen **by tool name**, resolved through a `tool_call_id → name` map built from the assistant
-messages — a `tool` message alone does not say which tool produced it.
-
-| | |
-| --- | --- |
-| `read_file` result | replaced whole; the file is still on disk |
-| `grep` result | replaced whole; the same search can be run again |
-| `bash` result | keeps its `[exit N]` line, loses the body below it |
-| `write_file` **arguments** | `content` replaced, `path` kept |
-
-`read_file` results are capped at 32,000 chars, but a `write_file` call carries a whole file
-body in `arguments` with no cap at all — often the single largest item in the context, and
-recoverable because the file on disk now holds exactly those contents.
-
-**A marker is only written when it is smaller than what it replaces**, measured in estimated
-tokens, not characters — CJK text costs about a token per character, so raw lengths compare
-backwards. `CLEARED_READ` is 54 characters, so clearing a one-line file read would *add* about
-11 tokens. Without the guard that growth was reported as `0` freed, which the loop reads as
-"nothing left to free" — so a clear that made things worse looked identical to a clear that
-had nothing to do, and bought an unnecessary summary on the next message. The guard also makes
-the return value honest: replacements can only shrink, so `before - after` can never go
-negative and needs no clamp.
-
-Never touched: the system message, user messages, assistant text, and the **results** of
-`edit_file` and `write_file`. An `[exit N]` line and a `Wrote 40 chars to 'a.ts'.` are the
-record that something already happened; at a few tokens each there is nothing to gain and a
-real record to lose. Nothing at or after the last assistant message carrying `tool_calls` is
-cleared either — that is the round in flight.
-
-`content` and `arguments` are mutated **in place**. `written` in `store.ts` is a
-`Set<Message>` keyed on object identity, so a mutated message is not re-appended by
-`appendStep`. Every marker is checked before it is written, so a second pass frees 0 and says
-so.
-
-### Why there is no mid-run summary
-
-This is the decision most likely to be re-proposed, so it is written down. A model continuing
-from a compressed context mid-task produces work that *looks* like progress: it re-applies an
-edit that already landed, re-decides something that was settled, or drops a constraint that
-only existed in the deleted history. In a coding agent those land on disk.
-
-An earlier attempt did summarize mid-run. At `ACC_COMPACT_AT=0.02` it compacted eight times
-from one prompt and had to be stopped by hand — a summary that gets back under the line is not
-the same as progress.
-
-A stop is honest: the workspace is in a known state and recovery is one message.
+Ordering matters. The compaction threshold block sits above the fit guard, so an over-threshold
+history gets its summary attempt before the loop decides whether the normal request fits. The
+guard remains necessary for unusual configurations such as `ACC_COMPACT_AT=1`, and for a
+summary whose irreducible size still leaves too little reply room.
 
 ### Still unsolved
 
-- `edit_file` **arguments** are never freed. Unlike `write_file`, the old string is not
-  recoverable from the file after the edit lands.
-- A task whose *irreducible* context is larger than one window cannot be finished by clearing
-  or summarizing. It needs the user to re-prompt.
-- A `Host` with nobody to re-prompt has no way past the floor, so an autonomous run ends there.
+- A history can become too large even for the summary request, because that request contains
+  the complete history plus its compaction instruction.
+- A task whose *irreducible* context is larger than one window cannot be finished by
+  summarizing.
 - Structured note-taking — the agent writing its progress to a file — is what would let a long
-  task survive without either summarizing mid-run or stopping.
+  task retain facts that even a valid summary omits.
 
 ## Permission
 

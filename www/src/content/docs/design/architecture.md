@@ -86,18 +86,22 @@ It repeats until a response comes back with no tool call. Every text delta,
 every tool start and every tool end leaves through `host.onEvent`, so the
 terminal and a test see exactly the same run.
 
+Reasoning-capable providers may also return hidden continuation state. The
+shared client preserves it on assistant messages for later tool-enabled
+requests, sessions, compaction, and model switches, but never sends it through
+the UI event stream. The core loop has no provider-name branches.
+
 `MAX_STEPS` is 20, and it is a **checkpoint, not a ceiling**: every twenty steps
 without finishing, the loop asks whether to keep going.
 
 ### When the window fills
 
-A long turn eventually runs out of context window, and the design splits that
-into two operations that are never confused: *clearing* drops tool results that
-can be recovered from disk — a `read_file` result is a cache, not a record — and
-costs nothing, so it can run mid-turn. *Compacting* replaces the conversation
-with a summary, which loses information and costs a full-context request, so it
-is confined to a boundary where nothing is in flight. One rule carries the whole
-design: a summarizing compaction only ever happens when no run is in flight.
+A long turn can fill the context window. Before each model request, `runAgent`
+checks projected usage and compacts when it crosses the configured threshold.
+The check happens only after a complete tool round has been recorded, so the
+summarizer sees the full evidence and the next request never contains a dangling
+tool call. A valid summary replaces the detailed history and the same run
+continues; a failed summary preserves history and stops the run.
 
 ## What a run leaves on disk
 

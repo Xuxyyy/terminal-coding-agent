@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import test from 'node:test';
 import type OpenAI from 'openai';
 import type {Usage} from '../../core/host.js';
+import {assistantMessage} from '../../core/messages.js';
 import {
   evictSessions,
   listSessions,
@@ -576,6 +577,34 @@ test('a compaction drops everything before it and leaves the summary', () => {
   assert.deepEqual(loadSession(work, null, root).messages, [
     assistant('SUMMARY: we fixed the cart'),
   ]);
+});
+
+test('a compact record preserves continuation state across reload', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const summary = assistantMessage('SUMMARY: we fixed the cart', [], {
+    kind: 'reasoning_content',
+    content: 'continue from the compacted state',
+  });
+
+  store.appendStep([user('fix the cart'), assistant('fixed')], usage(10));
+  store.appendCompact(summary, 2);
+  store.close();
+
+  assert.deepEqual(loadSession(work, null, root).messages, [summary]);
+  assert.deepEqual(
+    store.records().find((record) => record.kind === 'compact'),
+    {
+      kind: 'compact',
+      summary: 'SUMMARY: we fixed the cart',
+      replaced: 2,
+      continuation: {
+        kind: 'reasoning_content',
+        content: 'continue from the compacted state',
+      },
+    },
+  );
 });
 
 test('what is said after a compaction follows the summary', () => {

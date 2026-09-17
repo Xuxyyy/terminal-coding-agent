@@ -38,6 +38,8 @@ The workspace is the current directory. Installed as the `acc` command.
 - `edit_file` and `write_file` return a diff, drawn in the scrollback.
 - Every path is confined to the workspace root before a tool runs.
 - Broken tool-call JSON comes back as a tool error, not a crash.
+- Hidden continuation state returned by reasoning-capable providers is preserved across tool
+  rounds, compaction, resume, and model switching. It is counted as context but never printed.
 - Esc stops the turn from anywhere inside it — while the model streams, while a
   command runs, while the approval box is open, while the judge is thinking, and
   while an MCP server is slow.
@@ -294,28 +296,20 @@ The spinner reads `Compacting…` while the summary is in flight. A summary that
 fails, or that comes back too short or carrying tool-call markup, is retried
 once and then changes nothing.
 
-Past 80% of the window the agent frees context itself, in two steps, cheapest
-first.
+Past 80% of the window the agent compacts automatically at the next model-request
+boundary. That boundary exists both before a new user turn and after a completed
+tool round in an active run. A tool result is appended first, so its actual text
+counts toward the projected trigger and the summarizer sees the complete evidence.
 
-- **Clearing** runs every turn over the line and costs nothing, because it loses
-  nothing. A `read_file` result is a cache, not a record — the file is still on
-  disk — so `clearRecoverable` (`src/core/clear.ts`) replaces recoverable tool
-  output in place, oldest first: a read or a search becomes a marker naming the
-  call to repeat, `bash` keeps its `[exit N]` line and drops the output, and a
-  `write_file` call keeps its path and loses its content. It aims at the
-  threshold, not at zero, so recent reads survive when they can, and it never
-  touches the round in flight.
-- **Compacting** runs at the start of a turn, and only when clearing was not
-  enough or found nothing left to take. The task message is lifted off the list
-  before the summarizer is asked and pushed back after, so the summary is never
-  aimed at the work about to start — that was the bug that made the first
-  automatic compaction re-trigger itself and the model redo the work. A summary
-  that comes back too short or carrying tool-call markup is asked for once more
-  with a firmer prompt, then abandoned with the history intact.
+At the start of a new user turn, the pending task counts toward the trigger but is
+temporarily held out of the summary. The exact same message is restored after the
+summary, then sent in the normal request. During an active run, complete assistant
+tool-call and tool-result pairs stay in the summary input.
 
-`compaction threshold reached` prints once per run, at the point where clearing
-finds nothing left to free. Clearing itself is drawn nowhere — it is bookkeeping,
-and a line per turn would bury the work.
+`compaction threshold reached` prints at most once per run. The spinner reads
+`Compacting…`; the summary text itself stays hidden. A valid summary replaces the
+detailed history and the same run continues. A summary that comes back too short
+or carrying tool-call markup is asked for once more with a firmer prompt.
 
 Since 2026-08-14 the trigger reads a **projection**, not the last measurement:
 the measured total plus the estimate of whatever was pushed since it was taken.
@@ -328,14 +322,10 @@ tool results of the turn you just watched. Only the *difference* of two estimate
 enters the projection, so the estimator's 28% shortfall applies to the messages
 added since the measurement, never to the whole conversation.
 
-Below the trigger sits a floor: if the next request plus a 32,000-token reply
-would not fit in the window, the run stops with `the context is full and nothing
-more can be freed; send your next message and it will compact first` rather than
-sending a request the provider will refuse. Summarizing cannot help inside that
-turn — a compaction request carries every message plus the instruction, so it is
-larger than the request that just failed — but the next turn starts at step 0,
-which is where compaction is allowed to run. The floor is a handoff, not a dead
-end.
+Below the trigger sits a separate physical guard: if the next request plus a
+32,000-token reply would not fit in the window, the run stops with `the next
+request would exceed the context window` rather than sending a request the
+provider will refuse. This is a request-fit check, not another compaction policy.
 
 The threshold announces itself with **one line**, `compaction threshold
 reached`, and nothing else: the `Compacting…` spinner underneath already says what is being
@@ -346,9 +336,9 @@ particular was a trap — it reads `165%` whenever a single turn overshoots the
 window, which is honest and looks broken. `/compact` keeps its freed-tokens
 notice, because there the command *is* the result.
 
-If the summary fails, the run keeps going with one `✖` line and the conversation
-is left exactly as it was. See `agent-loop.md` for the three lines and
-`ACC_COMPACT_AT`.
+If automatic compaction fails, the run stops with one `✖` line and the
+conversation is left exactly as it was. It does not send another normal model
+request. See `agent-loop.md` for the boundary ordering and `ACC_COMPACT_AT`.
 
 It does **not** print a `/context` readout afterwards, though it did at first.
 The notice already carries the number that matters, and the readout straight

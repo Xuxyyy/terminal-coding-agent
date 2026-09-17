@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
 import type {ToolDefinition} from './tools/registry.js';
+import {assistantContinuation} from './messages.js';
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
@@ -58,6 +59,8 @@ export function estimateMessage(message: Message): number {
   if (Array.isArray(calls)) {
     for (const call of calls) total += callTokens(call);
   }
+  const continuation = assistantContinuation(message);
+  if (continuation) total += estimateTokens(continuation.content);
   return total;
 }
 

@@ -5,13 +5,13 @@ import {z} from 'zod';
 import {
   fakeHost,
   fakeModel,
+  fakeStore,
   finishChunk,
+  statusError,
   streamOf,
   textChunk,
-  toolCallChunk,
   usageChunk,
 } from '../fakes.js';
-import {CLEARED_READ} from '../../core/clear.js';
 import type {ModelChoice} from '../../core/client.js';
 import {compactionPrompt, SUMMARY_PREFIX} from '../../core/compact.js';
 import type {AgentEvent} from '../../core/host.js';
@@ -27,6 +27,9 @@ import type {Tool} from '../../core/tools/registry.js';
 type Message = OpenAI.ChatCompletionMessageParam;
 
 const TASK = 'rename the widget';
+const STORY =
+  'The user asked for a rename and it is done. No file is left open and ' +
+  'nothing else is pending in the workspace right now, so the task is complete.';
 
 const noop: Tool = {
   name: 'noop',
@@ -37,10 +40,6 @@ const noop: Tool = {
   },
 };
 
-const STORY =
-  'The user asked for a rename and it is done. No file is left open and ' +
-  'nothing else is pending in the workspace right now, so the task is complete.';
-
 function textResponse(text: string): AsyncIterable<unknown> {
   return streamOf(textChunk(text), finishChunk('stop'), usageChunk(10, 2));
 }
@@ -49,46 +48,46 @@ function emptyResponse(): AsyncIterable<unknown> {
   return streamOf(finishChunk('stop'), usageChunk(10, 0));
 }
 
-function toolResponse(n: number, total: number): AsyncIterable<unknown> {
-  return streamOf(
-    toolCallChunk(`call-${n}`, 'noop', '{}'),
-    finishChunk('tool_calls'),
-    usageChunk(total - 2, 2),
-  );
-}
-
-function readRound(id: string, path: string, body: string): Message[] {
-  return [
-    {
-      role: 'assistant',
-      content: null,
-      tool_calls: [
-        {
-          id,
-          type: 'function',
-          function: {name: 'read_file', arguments: JSON.stringify({path})},
-        },
-      ],
-    },
-    {role: 'tool', tool_call_id: id, content: body},
-  ];
-}
-
-function session(...extra: Message[]): Session {
+function session(): Session {
   const active = createSession(process.cwd(), 'rules', 1_000_000);
-  active.messages.push(...extra);
   addTask(active, TASK);
   return active;
 }
 
-function measured(tokens: number, ...extra: Message[]): Session {
-  const active = session(...extra);
+function measured(tokens: number): Session {
+  const active = session();
   setMeasured(active, tokens);
   return active;
 }
 
-function compacted(events: AgentEvent[]): boolean {
-  return events.some((event) => event.type === 'compact_start');
+function recordingModel(next: (nth: number) => unknown): {
+  choice: ModelChoice;
+  calls: () => number;
+  sent: () => Message[][];
+} {
+  let nth = 0;
+  const sent: Message[][] = [];
+  const create = async (body: unknown): Promise<unknown> => {
+    nth += 1;
+    sent.push([...((body as {messages?: Message[]}).messages ?? [])]);
+    const result = next(nth);
+    if (result instanceof Error) throw result;
+    return result;
+  };
+  return {
+    choice: {
+      client: {chat: {completions: {create}}} as unknown as OpenAI,
+      model: 'fake-model',
+      label: 'Fake',
+      contextWindow: 1_000_000,
+    },
+    calls: () => nth,
+    sent: () => sent,
+  };
+}
+
+function count(events: AgentEvent[], type: AgentEvent['type']): number {
+  return events.filter((event) => event.type === type).length;
 }
 
 function errors(events: AgentEvent[]): string[] {
@@ -103,82 +102,59 @@ function streamed(events: AgentEvent[]): string {
     .join('');
 }
 
-function recordingModel(next: (nth: number) => unknown): {
-  choice: ModelChoice;
-  sent: () => Message[][];
-} {
-  let nth = 0;
-  const sent: Message[][] = [];
-  const create = async (body: unknown): Promise<unknown> => {
-    nth += 1;
-    sent.push([...((body as {messages?: Message[]}).messages ?? [])]);
-    return next(nth);
-  };
-  return {
-    choice: {
-      client: {chat: {completions: {create}}} as unknown as OpenAI,
-      model: 'fake-model',
-      label: 'Fake',
-      contextWindow: 1_000_000,
-    },
-    sent: () => sent,
-  };
-}
-
-test('the summarizer is never shown the pending task', async () => {
-  const {choice, sent} = recordingModel((nth) =>
-    nth === 1 ? textResponse(STORY) : textResponse('done'),
-  );
-  const {host} = fakeHost();
-
-  await runAgent(measured(850_000), choice, host, [noop]);
-
-  const summarizer = sent()[0];
-  assert.equal(
-    summarizer[summarizer.length - 1]?.content,
-    compactionPrompt(),
-    'the instruction must be the last thing the summarizer sees',
-  );
-  assert.equal(
-    summarizer.filter((message) => message.content === TASK).length,
-    0,
-    'the task must be out of the list while the summary is written',
-  );
-  assert.ok(
-    sent()[1]?.some((message) => message.content === TASK),
-    'the task must be back for the run itself',
-  );
-});
-
-test('step 0 over the line compacts and keeps the task last', async () => {
+test('a pending user task counts toward the step-zero threshold', async () => {
+  const active = createSession(process.cwd(), 'rules', 1_000_000);
+  active.messages.push({role: 'assistant', content: STORY});
+  setMeasured(active, 799_990);
+  addTask(active, 'x'.repeat(1_000));
   const {choice, calls} = fakeModel((nth) =>
     nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
-  const active = measured(850_000);
-  const task = active.messages[active.messages.length - 1];
 
   await runAgent(active, choice, host, [noop]);
 
   assert.equal(calls(), 2);
-  assert.ok(compacted(events));
-  assert.equal(active.messages[1].content, SUMMARY_PREFIX + STORY);
-  assert.equal(active.messages[2], task);
-  assert.equal(errors(events).length, 0);
+  assert.equal(count(events, 'compact_start'), 1);
 });
 
-test('the summary never streams into the transcript', async () => {
-  const {choice} = fakeModel((nth) =>
+test('the summarizer excludes the pending task and restores the same object', async () => {
+  const model = recordingModel((nth) =>
+    nth === 1 ? textResponse(STORY) : textResponse('done'),
+  );
+  const {host} = fakeHost();
+  const active = measured(850_000);
+  const task = active.messages.at(-1)!;
+
+  await runAgent(active, model.choice, host, [noop]);
+
+  const summarizer = model.sent()[0]!;
+  assert.equal(summarizer.at(-1)?.content, compactionPrompt());
+  assert.equal(
+    summarizer.some((message) => message === task || message.content === TASK),
+    false,
+  );
+  assert.ok(model.sent()[1]!.some((message) => message === task));
+  assert.equal(active.messages[1]?.content, SUMMARY_PREFIX + STORY);
+  assert.equal(active.messages[2], task);
+});
+
+test('the automatic summary is hidden and the same run continues', async () => {
+  const {choice, calls} = fakeModel((nth) =>
     nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
   const {host, events} = fakeHost();
 
   await runAgent(measured(850_000), choice, host, [noop]);
 
+  assert.equal(calls(), 2);
   assert.equal(streamed(events), 'done');
+  assert.equal(count(events, 'compact_start'), 1);
+  assert.equal(count(events, 'compact_end'), 1);
+  assert.equal(count(events, 'turn_end'), 1);
 });
 
-test('a session past the window compacts instead of stopping', async () => {
+test('a session past the physical window compacts before the request', async () => {
   const {choice, calls} = fakeModel((nth) =>
     nth === 1 ? textResponse(STORY) : textResponse('done'),
   );
@@ -187,97 +163,60 @@ test('a session past the window compacts instead of stopping', async () => {
   await runAgent(measured(1_200_000), choice, host, [noop]);
 
   assert.equal(calls(), 2);
-  assert.ok(compacted(events));
-  assert.equal(errors(events).length, 0);
+  assert.equal(count(events, 'compact_start'), 1);
+  assert.deepEqual(errors(events), []);
 });
 
-test('step 0 compacts when clearing was exhausted, even under the line', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth === 1 ? textResponse(STORY) : textResponse('done'),
-  );
-  const {host, events} = fakeHost();
-  const active = session();
-  active.clearingExhausted = true;
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(calls(), 2);
-  assert.ok(compacted(events));
-  assert.equal(active.clearingExhausted, false);
-});
-
-test('step 0 under the line with nothing exhausted does not compact', async () => {
+test('step zero below the line does not compact', async () => {
   const {choice, calls} = fakeModel(() => textResponse('done'));
   const {host, events} = fakeHost();
 
   await runAgent(session(), choice, host, [noop]);
 
   assert.equal(calls(), 1);
-  assert.equal(compacted(events), false);
+  assert.equal(count(events, 'compact_start'), 0);
 });
 
-test('clearing runs first, and a session it saves is never summarized', async () => {
-  const {choice, calls} = fakeModel(() => textResponse('done'));
-  const {host, events} = fakeHost();
-  const active = measured(
-    850_000,
-    ...readRound('r1', 'a.ts', 'a'.repeat(400_000)),
-    ...readRound('r2', 'b.ts', 'small'),
-  );
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(calls(), 1);
-  assert.equal(compacted(events), false);
-  assert.equal(active.messages[2].content, CLEARED_READ);
-});
-
-test('a failed summary is reported and the run continues', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth <= 2 ? emptyResponse() : textResponse('done'),
-  );
+test('two rejected summaries preserve history and stop the run', async () => {
+  const model = recordingModel(() => emptyResponse());
   const {host, events} = fakeHost();
   const active = measured(850_000);
+  const original = [...active.messages];
+  let compactRecords = 0;
+  const store = fakeStore({
+    appendCompact() {
+      compactRecords += 1;
+    },
+  });
 
-  await runAgent(active, choice, host, [noop]);
+  await runAgent(active, model.choice, host, [noop], store);
 
-  assert.equal(calls(), 3);
-  assert.deepEqual(errors(events), ['could not compact; the run continues']);
-  assert.equal(active.messages[1].content, TASK);
-  assert.ok(events.some((event) => event.type === 'compact_end'));
+  assert.equal(model.calls(), 2);
+  assert.equal(compactRecords, 0);
+  assert.deepEqual(active.messages, original);
+  assert.ok(active.messages.every((message, index) => message === original[index]));
+  assert.deepEqual(errors(events), ['could not compact; the run stopped']);
+  assert.equal(count(events, 'compact_start'), 1);
+  assert.equal(count(events, 'compact_end'), 1);
+  assert.equal(count(events, 'turn_end'), 1);
 });
 
-test('a summary refused twice leaves the conversation alone', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth <= 2 ? textResponse('<｜｜DSML｜｜tool_calls>') : textResponse('done'),
-  );
+test('a summary transport failure restores the task and sends no normal request', async () => {
+  const model = recordingModel(() => statusError(503));
   const {host, events} = fakeHost();
   const active = measured(850_000);
+  const original = [...active.messages];
 
-  await runAgent(active, choice, host, [noop]);
+  await runAgent(active, model.choice, host, [noop]);
 
-  assert.equal(calls(), 3);
-  assert.deepEqual(errors(events), ['could not compact; the run continues']);
-  assert.equal(active.messages[1].content, TASK);
-});
-
-test('the summarizer is never called once a run is in flight', async () => {
-  const {choice, calls} = fakeModel((nth) =>
-    nth <= 2 ? toolResponse(nth, 902_000) : textResponse('done'),
+  assert.ok(model.calls() >= 1);
+  assert.ok(
+    model.sent().every((messages) => messages.at(-1)?.content === compactionPrompt()),
+    'transport retries must all remain compaction requests',
   );
-  const {host, events} = fakeHost();
-  const active = session();
-
-  await runAgent(active, choice, host, [noop]);
-
-  assert.equal(calls(), 3);
-  assert.equal(compacted(events), false);
-  assert.equal(
-    active.messages.some(
-      (message) =>
-        typeof message.content === 'string' &&
-        message.content.startsWith(SUMMARY_PREFIX),
-    ),
-    false,
-  );
+  assert.deepEqual(active.messages, original);
+  assert.ok(active.messages.every((message, index) => message === original[index]));
+  assert.deepEqual(errors(events), ['could not compact; the run stopped']);
+  assert.equal(count(events, 'compact_end'), 1);
+  assert.equal(count(events, 'turn_end'), 1);
 });
