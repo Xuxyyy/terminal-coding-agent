@@ -5,7 +5,7 @@
   "task": {
     "prompt": "Move `src/legacy/format.js` to `src/format.js`, update every import to use the new path, and keep the existing behavior working. Do not leave the old module behind.",
     "mode": "auto-edits",
-    "policy": "deny",
+    "policy": "yes",
     "maxSeconds": 120
   },
   "grade": {

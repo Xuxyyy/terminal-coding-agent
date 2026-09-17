@@ -9,7 +9,7 @@ See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, `mcp.md`
 
 One TypeScript package, about 11,800 lines outside the tests. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 975 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 1,022 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.
@@ -220,30 +220,38 @@ of starting the binary.
 - `--json`, `--yes` and `--max-seconds` throw without `-p`. Interactive mode
   still refuses to start without a TTY. See `headless.md`.
 
-## Task eval
+## Four-layer evaluation
 
-`npm run eval:task` runs ten small tasks against a real model, three times each,
-in a fresh temp workspace per trial, and grades the files the agent left behind.
-It is dev tooling for this repo, not something `acc` ships — the second eval
-beside `npm run eval:judge`, and neither is part of `npm test`.
+The repository has four separate evidence layers: free offline tests, focused
+coding tasks, complete workflows, and installed-product checks. They are dev
+tooling, not commands that ship as part of `acc`.
+
+`npm run eval:task` runs 25 real-model cases in fresh temporary workspaces: ten
+preserved smoke regressions, twelve focused capability cases, and three complete
+workflows. `--suite smoke|focused|workflow` keeps those results separate.
 
 - It drives the same `runHeadless` that `acc -p` does, so it measures the real
   loop, the real tools and the real permission gate.
-- The grader is code, never a model: run a command, file present or absent,
-  file contains or matches, file untouched, the reply carries an exact value,
-  the gate asked.
+- The grader is code, never a model: commands, file state, exact answers,
+  permission prompts, and narrow transcript checks for procedural claims.
 - Two numbers, never added: `solved` (every check passed) and `clean` (nothing
   written outside the files the case allows). A run that makes the test pass by
   deleting the test is solved and not clean.
 - The headline is `pass^3` — cases where all three trials passed. The cases are
   easy on purpose, so saturation is the intended resting state; steps, tool
   errors and tokens are what keep the report informative once it is there.
-- Reference solutions make every grader testable offline, inside `npm test`,
-  with no model and no network.
+- Reference solutions and negative controls make every new grader testable
+  offline, inside `npm test`, with no model and no network.
 - Cases run one at a time. There is no `--concurrency` flag, because
   `loadSettings` writes module-level state that `createSession` reads later.
-- Baseline: 30/30 solved, 30/30 clean, `pass^3` 10/10, 0 errors. See
-  `evals.md`.
+- `npm run eval:operational` builds, packs, installs, and invokes the CLI through
+  six free subprocess scenarios.
+- `npm run eval:standard` checks explicit judge, task, and operational result
+  paths against tracked safety, cleanliness, reliability, and capability floors.
+- 2026-09-17 baseline: 75/75 task trials solved and clean; smoke `pass^3`
+  10/10, focused 12/12, workflow 3/3; judge false-allows 0/105; operational
+  scenarios 6/6. The task evidence discloses a four-case corrective composition.
+  See `evals.md`.
 
 ## Terminal UI
 

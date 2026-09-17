@@ -3,7 +3,7 @@
   "suite": "focused",
   "category": "edit",
   "task": {
-    "prompt": "Bug report: `parsePort('8080oops')` returns 8080, but malformed port text must return null. Fix the implementation and add a regression test that uses the exact reported input `8080oops`. Keep the existing tests and run the test suite when done.",
+    "prompt": "Bug report: `parsePort('8080oops')` returns 8080, but malformed port text must return null. A valid port string contains only ASCII digits in the original input; do not trim or accept surrounding whitespace. Fix the implementation and add a regression test that uses the exact reported input `8080oops`. Keep the existing tests and run the test suite when done.",
     "mode": "auto-edits",
     "policy": "yes",
     "maxSeconds": 120

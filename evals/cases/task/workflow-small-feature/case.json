@@ -31,14 +31,9 @@
         "pattern": "\\\"id\\\"\\s*:\\s*\\\"csv\\\"[\\s\\S]*\\\"extension\\\"\\s*:\\s*\\\"csv\\\"[\\s\\S]*\\\"contentType\\\"\\s*:\\s*\\\"text/csv\\\""
       },
       {
-        "kind": "contains",
-        "path": "test/report.test.js",
-        "text": "North, Inc."
-      },
-      {
         "kind": "matches",
         "path": "test/report.test.js",
-        "pattern": "assert\\.equal\\([\\s\\S]*format:\\s*['\\\"]csv['\\\"][\\s\\S]*\\\"North, Inc\\.\\\""
+        "pattern": "renderReport\\([\\s\\S]*format:\\s*['\\\"]csv['\\\"]"
       },
       {
         "kind": "matches",

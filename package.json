@@ -41,7 +41,10 @@
     "eval:task:all": "npm run eval:task -- --suite all",
     "eval:task:smoke": "npm run eval:task -- --suite smoke",
     "eval:task:focused": "npm run eval:task -- --suite focused",
-    "eval:task:workflow": "npm run eval:task -- --suite workflow"
+    "eval:task:workflow": "npm run eval:task -- --suite workflow",
+    "eval:operational": "tsc && node dist/evals/operational/run.js",
+    "eval:standard": "tsc && node dist/evals/standard/run.js",
+    "eval:compose-task": "tsc && node dist/evals/standard/compose-task.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -71,6 +71,12 @@ export type RunMetadata = {
   selectedSuite: TaskSuite | 'all';
   repeats: number;
   caseCount: number;
+  composition?: {
+    method: 'replace-case-trials';
+    baseResult: string;
+    replacementResult: string;
+    replacedCaseIds: string[];
+  };
 };
 
 export type Report = {

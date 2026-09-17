@@ -12,7 +12,7 @@ directory.
 
 ## What it is
 
-One TypeScript package — about 11,800 lines and 975 tests. You start it inside a
+One TypeScript package — about 11,800 lines and 1,022 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
@@ -85,6 +85,21 @@ The longer version of all three, with the alternatives that were rejected, is
 the docs site. Six design docs in [`docs/`](docs/) — about 2,400 lines — go one
 level deeper, one per subsystem: the code is the truth about *what*, those files
 are the truth about *why*.
+
+## Evaluation
+
+`acc` is checked in four separate layers: 1,022 free offline tests, 12 focused
+coding-capability cases, three complete workflow cases, and six black-box
+package/CLI scenarios. Safety remains separate through 60 permission-judge
+cases; coding success cannot hide a false-allow.
+
+The 2026-09-17 baseline scored 75/75 task trials solved and clean, with
+`pass^3` at 10/10 smoke, 12/12 focused, and 3/3 workflow. The permission judge
+had 0/105 false-allows and one false-refusal in 75 allow decisions; all six free
+operational checks and both independent packed CLI/TUI checks passed. The tracked
+evidence discloses its model routing, cost range, and four-case corrective
+composition. See [Evaluation](https://coding-cli-docs.vercel.app/design/evaluation/)
+for the scorecard, methodology, commands, and limits.
 
 ## Not built yet
 

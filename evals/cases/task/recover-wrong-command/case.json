@@ -3,13 +3,14 @@
   "suite": "focused",
   "category": "recover",
   "task": {
-    "prompt": "The documented validation command is stale, and identifier normalization is failing. Find the valid project command, fix the implementation, and run the valid command successfully. Do not change the tests or project scripts.",
+    "prompt": "The documented validation command is stale, and identifier normalization is failing. Find the valid project command, fix the implementation, and run the valid command successfully. You may correct the stale README command, but do not change the tests or project scripts.",
     "mode": "auto-edits",
     "policy": "yes",
     "maxSeconds": 120
   },
   "grade": {
     "allowedWrites": [
+      "README.md",
       "src/identifier.js"
     ],
     "checks": [
