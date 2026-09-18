@@ -136,7 +136,9 @@ test('the result line counts the prompts and the tool steps', () => {
 
   assert.deepEqual(JSON.parse(String(lines.at(-1))), {
     kind: 'result',
+    schemaVersion: 1,
     stopped: 'denied',
+    message: '',
     usage: {prompt: 40, completion: 7, total: 47},
     prompts: 2,
     steps: 2,

@@ -9,11 +9,16 @@ import {loadSettings, settingsFiles} from './core/settings.js';
 import {App} from './ui/app.js';
 import {parseArgs} from './ui/args.js';
 import {dimText, formatExitSummary} from './ui/exit-summary.js';
+import {packageVersion} from './version.js';
 
 try {
   const options = parseArgs(process.argv.slice(2));
-  loadSettings(settingsFiles(options.workspaceRoot));
-  if (options.print !== null) {
+  if (options.version) {
+    process.stdout.write(`acc ${packageVersion()}\n`);
+  } else {
+    loadSettings(settingsFiles(options.workspaceRoot));
+  }
+  if (!options.version && options.print !== null) {
     await connectServers();
     const choice = createClient();
     const result = await runHeadless({
@@ -38,7 +43,7 @@ try {
       }
     }
     process.exitCode = exitCode(result);
-  } else {
+  } else if (!options.version) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       throw new Error('interactive mode requires a terminal');
     }

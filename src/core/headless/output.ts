@@ -25,7 +25,9 @@ export function jsonLines(result: HeadlessResult): string[] {
   lines.push(
     JSON.stringify({
       kind: 'result',
+      schemaVersion: 1,
       stopped: result.stopped,
+      message: result.text,
       usage: result.usage,
       prompts: result.prompts.length,
       steps,

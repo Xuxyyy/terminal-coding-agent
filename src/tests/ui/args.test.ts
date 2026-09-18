@@ -63,6 +63,7 @@ test('parseArgs reads the task after -p into print', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
+    version: false,
   });
 });
 
@@ -135,6 +136,7 @@ test('parseArgs defaults every print field when no flags are given', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
+    version: false,
   });
 });
 
@@ -154,5 +156,24 @@ test('parseArgs takes -p, --json and --yes together', () => {
     json: true,
     yes: true,
     maxSeconds: 300,
+    version: false,
   });
+});
+
+test('parseArgs accepts --version without a project workspace', () => {
+  assert.deepEqual(parseArgs(['--version'], os.homedir()), {
+    workspaceRoot: os.homedir(),
+    print: null,
+    json: false,
+    yes: false,
+    maxSeconds: 300,
+    version: true,
+  });
+});
+
+test('parseArgs keeps --version separate from run options', () => {
+  assert.throws(
+    () => parseArgs(['--version', '-p', 'hi'], process.cwd()),
+    /--version cannot be combined with -p/,
+  );
 });

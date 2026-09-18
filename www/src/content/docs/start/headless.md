@@ -113,7 +113,7 @@ acc -p "list the tools" --json
 {"type":"tool_end","id":"call_1","name":"read_file","result":"…","diff":null}
 {"type":"text_delta","text":"There are five tools."}
 {"type":"turn_end","usage":{"prompt":1840,"completion":96,"total":1936}}
-{"kind":"result","stopped":"done","usage":{"prompt":1840,"completion":96,"total":1936},"prompts":0,"steps":1}
+{"kind":"result","schemaVersion":1,"stopped":"done","message":"There are five tools.","usage":{"prompt":1840,"completion":96,"total":1936},"prompts":0,"steps":1}
 ```
 
 Every line parses on its own. The event lines carry a `type`; the one summary
@@ -121,7 +121,9 @@ line carries a `kind` instead, so the two never blur together.
 
 | Field on the `result` line | What it says |
 |---|---|
+| `schemaVersion` | Version of the public result record. |
 | `stopped` | `done`, `denied`, `timeout`, or `error` — why the run ended. |
+| `message` | The authoritative final assistant text. |
 | `usage` | Prompt, completion and total tokens for the whole run. |
 | `prompts` | How many permission confirms the run was asked, whatever the answer. |
 | `steps` | How many tool calls the run made. |
@@ -134,6 +136,9 @@ line carries a `kind` instead, so the two never blur together.
 | `--json` | Puts the event stream on stdout instead of the answer. |
 | `--yes` | Approves each permission prompt once. Never remembers one. |
 | `--max-seconds <n>` | Wall-clock cap. Default 300. Must be a positive number. |
+
+`acc --version` prints the installed ACC package version. It works outside a
+project and cannot be combined with run options.
 
 `--json`, `--yes` and `--max-seconds` all fail without `-p`, naming print mode —
 a flag that was silently ignored is how you come to believe a run was approved

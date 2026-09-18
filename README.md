@@ -41,15 +41,17 @@ git clone https://github.com/Xuxyyy/terminal-coding-agent.git
 cd terminal-coding-agent
 npm install   # prepare runs tsc, so there is no separate build step
 npm link
+acc --version
 cd ~/some-project
 acc
 ```
 
 It is not published on npm — cloning is the way to install it.
 
-**The workspace is the current directory.** `acc` takes no path argument and no
-flags, and it refuses to start in your home directory or at the filesystem
-root, so `cd` into a project folder first.
+**The workspace is the current directory.** Interactive `acc` takes no path
+argument, and it refuses to start in your home directory or at the filesystem
+root, so `cd` into a project folder first. `acc --version` is
+workspace-independent.
 
 ## Requirements and keys
 

@@ -8,6 +8,7 @@ export type CliOptions = {
   json: boolean;
   yes: boolean;
   maxSeconds: number;
+  version: boolean;
 };
 
 const DEFAULT_MAX_SECONDS = 300;
@@ -37,6 +38,7 @@ export function parseArgs(
   let yes = false;
   let maxSeconds = DEFAULT_MAX_SECONDS;
   let maxSecondsGiven = false;
+  let version = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]!;
@@ -69,8 +71,32 @@ export function parseArgs(
       maxSecondsGiven = true;
       continue;
     }
+    if (arg === '--version') {
+      version = true;
+      continue;
+    }
     if (arg.startsWith('-')) throw new Error(`unknown option: ${arg}`);
     throw new Error(`unexpected argument: ${arg}`);
+  }
+
+  if (version) {
+    const combined = [
+      print !== null ? '-p' : null,
+      json ? '--json' : null,
+      yes ? '--yes' : null,
+      maxSecondsGiven ? '--max-seconds' : null,
+    ].filter((flag): flag is string => flag !== null);
+    if (combined.length > 0) {
+      throw new Error(`--version cannot be combined with ${combined.join(' or ')}`);
+    }
+    return {
+      workspaceRoot: path.resolve(cwd),
+      print,
+      json,
+      yes,
+      maxSeconds,
+      version,
+    };
   }
 
   if (print === null) {
@@ -95,5 +121,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot, print, json, yes, maxSeconds};
+  return {workspaceRoot, print, json, yes, maxSeconds, version};
 }

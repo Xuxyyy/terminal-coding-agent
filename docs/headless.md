@@ -138,7 +138,9 @@ activity, the prompts with their decisions, and the stop reason go to stderr.
 
 `--json` moves the whole event stream to stdout instead: one JSON object per
 `AgentEvent` in order, then a final
-`{kind: 'result', stopped, usage, prompts, steps}` line. The trailing summary
+`{kind: 'result', schemaVersion, stopped, message, usage, prompts, steps}` line.
+`schemaVersion` versions this public record, and `message` is the authoritative
+final assistant text so a harness does not need to rebuild it from deltas. The trailing summary
 mirrors the judge eval's result file (`evals.md`), so a harness reads a shape it
 already knows. `steps` there is the number of tool calls the run made — the
 loop's own iteration count is not derivable from the event stream, and every
@@ -173,6 +175,9 @@ Flag parsing stays in `src/ui/args.ts`, the CLI's existing front door.
 `--json`, `--yes` and `--max-seconds` all throw without `-p`, naming print mode.
 Silently ignoring a flag is how someone comes to believe a run was approved when
 it was not.
+
+`--version` is the one workspace-independent flag. It prints the package version
+and cannot be combined with run options.
 
 The workspace is still the current directory. `--workspace` was removed on
 purpose and is not coming back through this door.
