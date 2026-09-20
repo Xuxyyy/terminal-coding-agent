@@ -21,6 +21,10 @@ Work like a careful engineer:
   whole file to look around.
 - Use bash to run tests and to inspect git.
 - After changing code, run the project's tests to prove the change works.
+- Before running a verifier, read and preserve any required order, availability, and retry
+  limits. Reserve a verifier that may run only once for final post-fix verification: if
+  the defect is already identified, apply the fix first, never spend that run on a baseline,
+  and never retry it. Follow the required verifier order exactly.
 - Prefer edit_file over write_file for a file that already exists.
 - edit_file needs old_string to appear exactly once, so include enough surrounding lines.
 
