@@ -12,13 +12,6 @@ export type Standards = {
     caseIds: string[];
     maxFalseAllows: number;
   };
-  task: {
-    repeats: number;
-    caseIds: string[];
-    smokeMinPassHatK: number;
-    suitePassHatKFloors: Record<string, number>;
-    categoryPassHatKFloors: Record<string, number>;
-  };
   operational: {scenarioIds: string[]};
 };
 
@@ -38,7 +31,6 @@ export type StandardReport = {ok: boolean; axes: Axis[]};
 export type Paths = {
   standards: string;
   judge: string;
-  task: string;
   operational: string;
 };
 
@@ -70,12 +62,6 @@ function stringArray(value: unknown, label: string): string[] {
   return value as string[];
 }
 
-function numberRecord(value: unknown, label: string): Record<string, number> {
-  const record = object(value, label);
-  for (const [key, entry] of Object.entries(record)) number(entry, `${label}.${key}`);
-  return record as Record<string, number>;
-}
-
 function parseJson(path: string): unknown {
   let text: string;
   try {
@@ -93,7 +79,6 @@ function parseJson(path: string): unknown {
 export function loadStandards(path: string): Standards {
   const root = object(parseJson(path), 'standards');
   const judge = object(root['judge'], 'standards.judge');
-  const task = object(root['task'], 'standards.task');
   const operational = object(root['operational'], 'standards.operational');
   const standards: Standards = {
     version: number(root['version'], 'standards.version'),
@@ -106,22 +91,6 @@ export function loadStandards(path: string): Standards {
         'standards.judge.maxFalseAllows',
       ),
     },
-    task: {
-      repeats: number(task['repeats'], 'standards.task.repeats'),
-      caseIds: stringArray(task['caseIds'], 'standards.task.caseIds'),
-      smokeMinPassHatK: number(
-        task['smokeMinPassHatK'],
-        'standards.task.smokeMinPassHatK',
-      ),
-      suitePassHatKFloors: numberRecord(
-        task['suitePassHatKFloors'],
-        'standards.task.suitePassHatKFloors',
-      ),
-      categoryPassHatKFloors: numberRecord(
-        task['categoryPassHatKFloors'],
-        'standards.task.categoryPassHatKFloors',
-      ),
-    },
     operational: {
       scenarioIds: stringArray(
         operational['scenarioIds'],
@@ -129,7 +98,7 @@ export function loadStandards(path: string): Standards {
       ),
     },
   };
-  if (standards.version !== 1) {
+  if (standards.version !== 2) {
     throw new Error(`unsupported standards version ${standards.version}`);
   }
   return standards;
@@ -192,30 +161,9 @@ function idsMatch(
   };
 }
 
-function passHatK(records: JsonObject[]): number | null {
-  const byId = new Map<string, JsonObject[]>();
-  for (const record of records) {
-    const id = string(record['id'], 'task record id');
-    byId.set(id, [...(byId.get(id) ?? []), record]);
-  }
-  if (byId.size === 0) return null;
-  let passed = 0;
-  for (const trials of byId.values()) {
-    if (trials.every((trial) => trial['result'] === 'pass')) passed += 1;
-  }
-  return passed / byId.size;
-}
-
-function rateAxis(name: string, rate: number | null, floor: number): Axis {
-  const ok = rate !== null && rate >= floor;
-  const observed = rate === null ? 'n/a' : `${(rate * 100).toFixed(1)}%`;
-  return axis(name, ok, `${observed} observed; ${(floor * 100).toFixed(1)}% floor`);
-}
-
 export function checkEvidence(
   standards: Standards,
   judge: Evidence,
-  task: Evidence,
   operational: Evidence,
 ): StandardReport {
   const axes: Axis[] = [];
@@ -253,56 +201,6 @@ export function checkEvidence(
       `${falseAllowRecords} observed; ${falseAllows} reported; ${standards.judge.maxFalseAllows} maximum`,
     ),
   );
-
-  const taskMetadata = metadataOf(task.report, 'task');
-  const taskIds = idsMatch(task.records, standards.task.caseIds, standards.task.repeats);
-  const taskMetadataOk =
-    requestedModel(taskMetadata, 'task') === standards.model &&
-    taskMetadata['selectedSuite'] === 'all' &&
-    number(taskMetadata['repeats'], 'task metadata repeats') === standards.task.repeats &&
-    number(taskMetadata['caseCount'], 'task metadata caseCount') === standards.task.caseIds.length &&
-    number(task.report['total'], 'task report total') === task.records.length &&
-    taskIds.ok;
-  axes.push(axis('task.metadata', taskMetadataOk, taskIds.detail));
-  const taskErrors = number(task.report['errors'], 'task report errors');
-  const taskRecordErrors = task.records.filter((record) => record['result'] === 'error').length;
-  axes.push(
-    axis(
-      'task.harness',
-      taskErrors === taskRecordErrors && taskRecordErrors === 0,
-      `${taskErrors} report errors; ${taskRecordErrors} error records`,
-    ),
-  );
-  const unclean = task.records.filter((record) => record['clean'] !== true).length;
-  axes.push(axis('task.clean', unclean === 0, `${unclean} unclean trials`));
-  axes.push(
-    rateAxis(
-      `task.smoke.pass^${standards.task.repeats}`,
-      passHatK(task.records.filter((record) => record['suite'] === 'smoke')),
-      standards.task.smokeMinPassHatK,
-    ),
-  );
-  for (const [suite, floor] of Object.entries(standards.task.suitePassHatKFloors)) {
-    axes.push(
-      rateAxis(
-        `task.suite.${suite}.pass^${standards.task.repeats}`,
-        passHatK(task.records.filter((record) => record['suite'] === suite)),
-        floor,
-      ),
-    );
-  }
-  const capability = task.records.filter((record) => record['suite'] !== 'smoke');
-  for (const [category, floor] of Object.entries(
-    standards.task.categoryPassHatKFloors,
-  )) {
-    axes.push(
-      rateAxis(
-        `task.category.${category}.pass^${standards.task.repeats}`,
-        passHatK(capability.filter((record) => record['category'] === category)),
-        floor,
-      ),
-    );
-  }
 
   const operationalMetadata = metadataOf(operational.report, 'operational');
   const operationalIds = idsMatch(
@@ -352,7 +250,7 @@ export function parseArgs(argv: string[]): Paths {
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
     const value = argv[index + 1];
-    if (!['--standards', '--judge', '--task', '--operational'].includes(flag ?? '')) {
+    if (!['--standards', '--judge', '--operational'].includes(flag ?? '')) {
       throw new Error(`unknown flag '${flag ?? ''}'`);
     }
     if (value === undefined || value.startsWith('--')) {
@@ -360,13 +258,12 @@ export function parseArgs(argv: string[]): Paths {
     }
     found.set(flag!, value);
   }
-  for (const flag of ['--standards', '--judge', '--task', '--operational']) {
+  for (const flag of ['--standards', '--judge', '--operational']) {
     if (!found.has(flag)) throw new Error(`${flag} is required`);
   }
   return {
     standards: found.get('--standards')!,
     judge: found.get('--judge')!,
-    task: found.get('--task')!,
     operational: found.get('--operational')!,
   };
 }
@@ -375,7 +272,6 @@ export function evaluatePaths(paths: Paths): StandardReport {
   return checkEvidence(
     loadStandards(resolve(paths.standards)),
     loadEvidence(resolve(paths.judge)),
-    loadEvidence(resolve(paths.task)),
     loadEvidence(resolve(paths.operational)),
   );
 }

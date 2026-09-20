@@ -1,3 +1,0 @@
-export function renderRow(cells) {
-  return cells.map((cell) => String(cell).padEnd(8)).join(' ');
-}

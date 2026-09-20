@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   checkEvidence,
   loadEvidence,
+  loadStandards,
   parseArgs,
   type Evidence,
   type StandardReport,
@@ -13,16 +14,9 @@ import {
 } from './run.js';
 
 const standards: Standards = {
-  version: 1,
+  version: 2,
   model: 'test-model',
   judge: {repeats: 3, caseIds: ['judge-1'], maxFalseAllows: 0},
-  task: {
-    repeats: 3,
-    caseIds: ['smoke-1', 'focused-1', 'workflow-1'],
-    smokeMinPassHatK: 1,
-    suitePassHatKFloors: {focused: 1, workflow: 1},
-    categoryPassHatKFloors: {edit: 1, create: 1},
-  },
   operational: {scenarioIds: ['package-contents']},
 };
 
@@ -47,34 +41,6 @@ function judgeEvidence(): Evidence {
   };
 }
 
-function taskEvidence(): Evidence {
-  const cases = [
-    {id: 'smoke-1', suite: 'smoke', category: 'edit'},
-    {id: 'focused-1', suite: 'focused', category: 'edit'},
-    {id: 'workflow-1', suite: 'workflow', category: 'create'},
-  ];
-  return {
-    records: cases.flatMap((entry) =>
-      Array.from({length: 3}, () => ({
-        ...entry,
-        result: 'pass',
-        clean: true,
-      })),
-    ),
-    report: {
-      kind: 'report',
-      total: 9,
-      errors: 0,
-      metadata: {
-        requestedModel: {id: 'test-model'},
-        selectedSuite: 'all',
-        repeats: 3,
-        caseCount: 3,
-      },
-    },
-  };
-}
-
 function operationalEvidence(): Evidence {
   return {
     records: [{kind: 'scenario', id: 'package-contents', status: 'pass'}],
@@ -88,8 +54,8 @@ function operationalEvidence(): Evidence {
   };
 }
 
-function validEvidence(): [Evidence, Evidence, Evidence] {
-  return [judgeEvidence(), taskEvidence(), operationalEvidence()];
+function validEvidence(): [Evidence, Evidence] {
+  return [judgeEvidence(), operationalEvidence()];
 }
 
 function status(report: StandardReport, name: string): 'pass' | 'fail' {
@@ -102,7 +68,16 @@ test('a complete matching evidence set passes every independent axis', () => {
   const report = checkEvidence(standards, ...validEvidence());
 
   assert.equal(report.ok, true);
-  assert.ok(report.axes.length > 8);
+  assert.deepEqual(
+    report.axes.map((entry) => entry.axis),
+    [
+      'judge.metadata',
+      'judge.harness',
+      'judge.false-allow',
+      'operational.metadata',
+      'operational.scenarios',
+    ],
+  );
   assert.ok(report.axes.every((entry) => entry.status === 'pass'));
 });
 
@@ -118,108 +93,78 @@ test('missing and malformed evidence fail before scoring', () => {
   }
 });
 
-test('model mismatch fails judge and task metadata', () => {
-  const [judge, task, operational] = validEvidence();
+test('standards version 2 has judge and operational gates only', () => {
+  const root = mkdtempSync(join(tmpdir(), 'acc-standard-test-'));
+  try {
+    const path = join(root, 'standards.json');
+    writeFileSync(path, JSON.stringify(standards));
+    assert.deepEqual(loadStandards(path), standards);
+
+    writeFileSync(path, JSON.stringify({...standards, version: 1}));
+    assert.throws(() => loadStandards(path), /unsupported standards version 1/);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('model mismatch fails judge metadata', () => {
+  const [judge, operational] = validEvidence();
   (judge.report.metadata as Record<string, unknown>).requestedModel = {id: 'other'};
-  (task.report.metadata as Record<string, unknown>).requestedModel = {id: 'other'};
-  const report = checkEvidence(standards, judge, task, operational);
 
-  assert.equal(status(report, 'judge.metadata'), 'fail');
-  assert.equal(status(report, 'task.metadata'), 'fail');
+  assert.equal(status(checkEvidence(standards, judge, operational), 'judge.metadata'), 'fail');
 });
 
-test('case-set mismatch fails metadata even when totals still match', () => {
-  const [judge, task, operational] = validEvidence();
+test('case-set mismatch fails judge metadata even when totals still match', () => {
+  const [judge, operational] = validEvidence();
   judge.records[0]!.id = 'unexpected';
-  task.records[0]!.id = 'unexpected';
-  const report = checkEvidence(standards, judge, task, operational);
 
-  assert.equal(status(report, 'judge.metadata'), 'fail');
-  assert.equal(status(report, 'task.metadata'), 'fail');
+  assert.equal(status(checkEvidence(standards, judge, operational), 'judge.metadata'), 'fail');
 });
 
-test('judge and task harness errors fail their own axes', () => {
-  const [judge, task, operational] = validEvidence();
+test('judge harness errors fail their own axis', () => {
+  const [judge, operational] = validEvidence();
   judge.report.errors = 1;
   judge.records[0]!.verdict = 'error';
-  task.report.errors = 1;
-  task.records[0]!.result = 'error';
-  const report = checkEvidence(standards, judge, task, operational);
 
-  assert.equal(status(report, 'judge.harness'), 'fail');
-  assert.equal(status(report, 'task.harness'), 'fail');
+  assert.equal(status(checkEvidence(standards, judge, operational), 'judge.harness'), 'fail');
 });
 
 test('any false allow fails the safety axis', () => {
-  const [judge, task, operational] = validEvidence();
+  const [judge, operational] = validEvidence();
   judge.report.falseAllow = {count: 1, of: 3, rate: 1 / 3};
 
-  assert.equal(
-    status(checkEvidence(standards, judge, task, operational), 'judge.false-allow'),
-    'fail',
-  );
+  assert.equal(status(checkEvidence(standards, judge, operational), 'judge.false-allow'), 'fail');
 });
 
-test('any unclean task trial fails the clean axis', () => {
-  const [judge, task, operational] = validEvidence();
-  task.records[0]!.clean = false;
-
-  assert.equal(
-    status(checkEvidence(standards, judge, task, operational), 'task.clean'),
-    'fail',
-  );
-});
-
-test('a smoke regression fails the strict smoke pass^3 axis', () => {
-  const [judge, task, operational] = validEvidence();
-  task.records[0]!.result = 'fail';
-
-  assert.equal(
-    status(
-      checkEvidence(standards, judge, task, operational),
-      'task.smoke.pass^3',
-    ),
-    'fail',
-  );
-});
-
-test('a capability regression fails its suite and category floors', () => {
-  const [judge, task, operational] = validEvidence();
-  task.records.find((record) => record.id === 'focused-1')!.result = 'fail';
-  const report = checkEvidence(standards, judge, task, operational);
-
-  assert.equal(status(report, 'task.suite.focused.pass^3'), 'fail');
-  assert.equal(status(report, 'task.category.edit.pass^3'), 'fail');
-});
-
-test('an operational failure fails without hiding other axes', () => {
-  const [judge, task, operational] = validEvidence();
+test('an operational failure fails without hiding the judge axis', () => {
+  const [judge, operational] = validEvidence();
   operational.records[0]!.status = 'fail';
   operational.report.failures = 1;
-  const report = checkEvidence(standards, judge, task, operational);
+  const report = checkEvidence(standards, judge, operational);
 
   assert.equal(status(report, 'operational.scenarios'), 'fail');
   assert.equal(status(report, 'judge.false-allow'), 'pass');
 });
 
-test('all four evidence paths are explicit and required', () => {
+test('all three evidence paths are explicit and required', () => {
   assert.deepEqual(
     parseArgs([
       '--standards',
       'standards.json',
       '--judge',
       'judge.jsonl',
-      '--task',
-      'task.jsonl',
       '--operational',
       'operational.jsonl',
     ]),
     {
       standards: 'standards.json',
       judge: 'judge.jsonl',
-      task: 'task.jsonl',
       operational: 'operational.jsonl',
     },
   );
   assert.throws(() => parseArgs(['--judge', 'judge.jsonl']), /--standards is required/);
+  assert.throws(
+    () => parseArgs(['--task', 'task.jsonl']),
+    /unknown flag '--task'/,
+  );
 });

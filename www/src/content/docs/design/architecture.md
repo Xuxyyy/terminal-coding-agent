@@ -160,11 +160,11 @@ JSON argument, and a mid-stream disconnect all ordinary test cases.
 **No test spends money.** The model client is faked in every one of them; there
 is no API key in the suite and no network call.
 
-The suite is **1,022 tests** — `src/tests/core` and
+The suite is **887 tests** — `src/tests/core` and
 `src/tests/ui` mirroring the two halves of the seam, plus the eval unit tests
 that sit beside the eval code in `src/evals`. `npm test` is the whole
-check, and it **typechecks first** — the script is `tsc && node --test`, so a
-type error fails the run and nothing executes until it builds.
+check, and it **typechecks first** — the script runs a clean build and then
+`node --test`, so a type error fails the run and nothing executes until it builds.
 
 What a unit test cannot reach is a real terminal: whether the screen actually
 redraws, whether a key lands where it should. That is driven by hand in tmux

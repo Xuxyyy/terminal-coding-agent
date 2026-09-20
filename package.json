@@ -31,20 +31,15 @@
     "acc": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "prepare": "tsc",
-    "dev": "tsc && node dist/cli.js",
+    "clean": "node --eval \"import {rmSync} from 'node:fs'; rmSync('dist', {recursive: true, force: true})\"",
+    "build": "npm run clean && tsc",
+    "prepare": "npm run build",
+    "dev": "npm run build && node dist/cli.js",
     "start": "node dist/cli.js",
-    "test": "tsc && node --test \"dist/**/*.test.js\"",
-    "eval:judge": "tsc && node dist/evals/judge/run.js",
-    "eval:task": "tsc && node dist/evals/task/run.js",
-    "eval:task:all": "npm run eval:task -- --suite all",
-    "eval:task:smoke": "npm run eval:task -- --suite smoke",
-    "eval:task:focused": "npm run eval:task -- --suite focused",
-    "eval:task:workflow": "npm run eval:task -- --suite workflow",
-    "eval:operational": "tsc && node dist/evals/operational/run.js",
-    "eval:standard": "tsc && node dist/evals/standard/run.js",
-    "eval:compose-task": "tsc && node dist/evals/standard/compose-task.js"
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "eval:judge": "npm run build && node dist/evals/judge/run.js",
+    "eval:operational": "npm run build && node dist/evals/operational/run.js",
+    "eval:standard": "npm run build && node dist/evals/standard/run.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
