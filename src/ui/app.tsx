@@ -76,6 +76,7 @@ export function App({
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [closing, setClosing] = useState(false);
+  const [sessionRevision, setSessionRevision] = useState(0);
   const inputShown = phase.kind === 'idle' && !closing;
   const menuOpen = commandMatches(input).length > 0;
   const visibleStream = useMemo(
@@ -84,11 +85,19 @@ export function App({
   );
   const rows = useMemo(
     () => (phase.kind === 'picking' ? sessionRows(workspaceRoot) : []),
-    [phase.kind, workspaceRoot],
+    [phase.kind, sessionRevision, workspaceRoot],
   );
   const rewindable = phase.kind === 'rewinding' ? checkpoints() : [];
   const modes = phase.kind === 'permission' ? permissionRows(mode) : [];
   const models = phase.kind === 'model' ? modelRows(modelId) : [];
+
+  useEffect(() => {
+    if (phase.kind !== 'picking') return;
+    const timer = setInterval(() => {
+      setSessionRevision((current) => current + 1);
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [phase.kind]);
 
   const submit = (value: string) => {
     const command = value.trim();

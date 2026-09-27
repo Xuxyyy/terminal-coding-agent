@@ -8,7 +8,7 @@ import {INTERRUPTED} from '../../core/host.js';
 import {listSessions, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
 import {loadSettings, modeOf, modelOf, settingsFiles} from '../../core/settings.js';
-import {loadSession} from '../../core/store.js';
+import {loadSession, startSession} from '../../core/store.js';
 import {DENIED} from '../../core/tools/registry.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
 import type {
@@ -177,6 +177,42 @@ test('resuming replays the old screen and writes back to the same session', asyn
     ['user', 'assistant', 'user', 'assistant'],
   );
   assert.equal(again.meta.id, older!.id);
+});
+
+test('a session can be resumed only after its other owner exits', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  const active = startSession(root, home);
+  active.appendStep(
+    [
+      {role: 'user', content: 'fix the cart'},
+      {role: 'assistant', content: 'done'},
+    ],
+    {prompt: 10, completion: 5, total: 15},
+  );
+
+  const second = fakeModel(() => answer('still here'));
+  const two = mount(root, second.choice);
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(active.id);
+  await tick();
+
+  assert.equal(two.agent.current!.phase.kind, 'idle');
+  const refused = two.agent.current!.committed.at(-1) as NoticeItem;
+  assert.equal(refused.kind, 'notice');
+  assert.equal(refused.text, 'could not reopen: session is active elsewhere');
+
+  active.close();
+  await tick();
+  two.agent.current!.pick();
+  await tick();
+  two.agent.current!.resume(active.id);
+  await tick();
+
+  assert.equal(two.agent.current!.committed[0]!.kind, 'header');
+  assert.match((two.agent.current!.committed[1] as NoticeItem).text, /^restored 2 messages/);
+  two.unmount();
 });
 
 function lastContext(items: Item[]): ContextItem {

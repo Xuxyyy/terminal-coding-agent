@@ -64,6 +64,7 @@ first, so `Esc` still stops instantly.
     <YYYYMMDD>-<HHMMSS>-<id8>/
       session.json                 metadata only, small, version 2
       session.jsonl                one {kind, …} record per line, append-only
+      session.lock                 transient owner identity while active
       files/<sha256>               the bytes of a file before a write, if any
 ```
 
@@ -112,6 +113,25 @@ Three properties of this layout:
 tests point at a temp folder. Files are `0600` and directories `0700`: the conversation contains
 the contents of every file the agent read and the output of every command it ran, so a config
 with a password in it is now on disk in plain JSON.
+
+## Exclusive ownership
+
+Only one `acc` process can own a session at a time. `startSession` and `openSession` acquire an
+atomic `session.lock` before returning a writable store, and `close` releases it. The lock records
+the PID, the operating system's process-start identity, and a random token. The token prevents an
+older owner from deleting a replacement lock, while the process-start identity distinguishes a
+live owner from a later process that reused the same PID.
+
+The lock is local to one macOS or Linux machine. A clean close removes it. After a crash, the next
+picker scan, open, or eviction confirms that the owning process is gone and retires the stale lock.
+An unreadable owner remains locked: a false refusal is safer than two writers. `session.json`'s
+`status` field is descriptive only; the lock is the ownership authority.
+
+Reads do not require ownership. `/resume` can therefore list a live session, but it dims that row,
+adds `active elsewhere`, and refuses Enter. The picker refreshes once a second, so the row becomes
+available after the other process exits. `openSession` still acquires the lock again, because the
+owner can change between drawing the picker and pressing Enter. Eviction uses the same acquisition
+rule and never deletes a live session.
 
 Writing is best-effort. If a write fails, warn once and keep going — losing the ability to
 resume must never kill a working run.
@@ -165,6 +185,9 @@ The whole stored view is replayed, led by one summary line (`restored 42 message
 2026-08-11 10:04`). ink's `Static` prints each row once into terminal scrollback, so a long
 replay costs one render and stays scrollable. When a session has no view records,
 `restoreItems` maps the messages instead, and tool results come back with `diff: null`.
+
+An owned session stays in the list but is disabled and labeled `active elsewhere`. The picker does
+not add a separate explanation below the locked row. There is no session fork operation.
 
 ## `/rewind`
 

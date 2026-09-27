@@ -51,19 +51,28 @@ test('the age counts from the last use, in one short unit', () => {
 });
 
 test('a row pushes the age to the right edge', () => {
-  const row = {id: 'x', title: 'fix the cart', age: '2h'};
+  const row = {id: 'x', title: 'fix the cart', age: '2h', locked: false};
 
   assert.equal(rowLine(row, true, 20), '❯ fix the cart    2h');
   assert.equal(rowLine(row, false, 20), '  fix the cart    2h');
 });
 
 test('a long title is cut so the age still fits', () => {
-  const row = {id: 'x', title: 'a'.repeat(40), age: '12d'};
+  const row = {id: 'x', title: 'a'.repeat(40), age: '12d', locked: false};
 
   const line = rowLine(row, true, 20);
 
   assert.equal(line.length, 20);
   assert.ok(line.endsWith('… 12d'));
+});
+
+test('a locked row says that it is active elsewhere', () => {
+  const row = {id: 'x', title: 'fix the cart', age: '2h', locked: true};
+
+  assert.equal(
+    rowLine(row, true, 50),
+    '❯ fix the cart               active elsewhere · 2h',
+  );
 });
 
 test('the picker skips a version 1 session', () => {
@@ -109,4 +118,18 @@ test('a session that never ran a turn is not offered', () => {
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.title, 'fix the cart');
+});
+
+test('an active first turn is shown as locked before it has usage', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-work-'));
+  process.env.ACC_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-home-'));
+  const live = startSession(root);
+  live.appendMessage({role: 'user', content: 'fix the cart'});
+
+  const [row] = sessionRows(root);
+
+  assert.equal(row?.title, 'fix the cart');
+  assert.equal(row?.locked, true);
+  live.close();
+  assert.equal(sessionRows(root)[0]?.locked, false);
 });

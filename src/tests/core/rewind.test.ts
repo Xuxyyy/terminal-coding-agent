@@ -239,6 +239,7 @@ test('the note stays in the run and never reaches the log', () => {
   rewindSession(store, session, checkpointsOf(store.records())[1]!.at);
 
   store.appendStep(session.messages, {prompt: 60, completion: 0, total: 60});
+  store.close();
 
   const saved = openSession(session.root, store.id, home);
   assert.deepEqual(

@@ -23,6 +23,7 @@ import {
   sessionsDir,
   writeJson,
 } from './projects.js';
+import {acquireSessionLock, type SessionLock} from './session-lock.js';
 
 export type SessionMeta = {
   version: number;
@@ -85,22 +86,38 @@ export function startSession(
 
   makeDir(dir);
   makeDir(project);
-  writeJson(path.join(project, 'project.json'), {path: workspace});
+  const lock = acquireSessionLock(dir);
+  try {
+    writeJson(path.join(project, 'project.json'), {path: workspace});
 
-  const meta: SessionMeta = {
-    version: SESSION_VERSION,
-    id,
-    workspace,
-    startedAt: started.toISOString(),
-    updatedAt: started.toISOString(),
-    status: 'open',
-    usage: {prompt: 0, completion: 0, total: 0},
-  };
-  return makeStore(dir, meta, now);
+    const meta: SessionMeta = {
+      version: SESSION_VERSION,
+      id,
+      workspace,
+      startedAt: started.toISOString(),
+      updatedAt: started.toISOString(),
+      status: 'open',
+      usage: {prompt: 0, completion: 0, total: 0},
+    };
+    return makeStore(dir, meta, now, lock);
+  } catch (error) {
+    lock.release();
+    throw error;
+  }
 }
 
-function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStore {
+function makeStore(
+  dir: string,
+  meta: SessionMeta,
+  now: () => Date,
+  lock: SessionLock,
+): SessionStore {
   const written = new Set<Message>();
+  let closed = false;
+
+  const ensureOpen = (): void => {
+    if (closed) throw new Error('session store is closed');
+  };
 
   const writeMeta = (): void => {
     meta.updatedAt = now().toISOString();
@@ -112,9 +129,11 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
     id: meta.id,
     dir,
     seed(messages) {
+      ensureOpen();
       for (const message of messages) written.add(message);
     },
     appendMessage(message) {
+      ensureOpen();
       const id = crypto.randomBytes(4).toString('hex');
       written.add(message);
       if (meta.firstTask === undefined) meta.firstTask = firstTaskIn([message]);
@@ -123,6 +142,7 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       return id;
     },
     appendStep(messages, usage) {
+      ensureOpen();
       const fresh = messages.filter(
         (message) => message.role !== 'system' && !written.has(message),
       );
@@ -136,6 +156,7 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       writeMeta();
     },
     appendCompact(summary, replaced, replacement) {
+      ensureOpen();
       for (const message of replacement) written.add(message);
       const continuation = assistantContinuation(summary);
       appendRecord(dir, {
@@ -148,11 +169,13 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       writeMeta();
     },
     appendView(items) {
+      ensureOpen();
       if (items.length === 0) return;
       appendRecord(dir, {kind: 'view', items});
       writeMeta();
     },
     appendCode(path, before) {
+      ensureOpen();
       appendRecord(dir, {kind: 'code', path, before});
       writeMeta();
     },
@@ -160,12 +183,19 @@ function makeStore(dir: string, meta: SessionMeta, now: () => Date): SessionStor
       return liveRecords(readRecords(dir));
     },
     rewind(to) {
+      ensureOpen();
       appendRecord(dir, {kind: 'rewind', to});
       writeMeta();
     },
     close() {
-      meta.status = 'closed';
-      writeMeta();
+      if (closed) return;
+      closed = true;
+      try {
+        meta.status = 'closed';
+        writeMeta();
+      } finally {
+        lock.release();
+      }
     },
   };
 }
@@ -202,8 +232,32 @@ export function openSession(
   home: string = accHome(),
   now: () => Date = () => new Date(),
 ): {stored: StoredSession; store: SessionStore} {
-  const stored = loadSession(workspace, id, home);
-  const dir = path.join(sessionsDir(workspace, home), stored.meta.id);
-  stored.meta.status = 'open';
-  return {stored, store: makeStore(dir, stored.meta, now)};
+  const found = (
+    id ? allEntries(home) : entriesIn(sessionsDir(workspace, home))
+  ).filter((entry) => isCurrent(entry.meta));
+  const entry = id ? found.find((one) => one.meta.id === id) : found[0];
+
+  if (!entry) {
+    throw new Error(id ? `no session '${id}'` : `no session in ${workspace}`);
+  }
+  const owner = entry.meta.workspace;
+  if (owner !== workspace) {
+    throw new Error(`that session belongs to another folder: ${owner}`);
+  }
+
+  const lock = acquireSessionLock(entry.dir);
+  try {
+    const records = liveRecords(readRecords(entry.dir));
+    const stored: StoredSession = {
+      meta: entry.meta,
+      messages: messagesOf(records),
+      view: viewOf(records),
+      lastUsage: lastUsageOf(records),
+    };
+    stored.meta.status = 'open';
+    return {stored, store: makeStore(entry.dir, stored.meta, now, lock)};
+  } catch (error) {
+    lock.release();
+    throw error;
+  }
 }

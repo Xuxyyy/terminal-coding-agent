@@ -133,6 +133,12 @@ Reopen a conversation
 
 If there is nothing to show, it says `No past conversations in this folder yet.`
 
+A conversation that is open in another `acc` process stays in the list, but its
+row is dimmed and labeled `active elsewhere`. Enter cannot reopen that row. Close
+the other process, or press esc to leave the picker and use a new session. The
+picker refreshes while it is open, and locks left by a crashed process are cleared
+after the owner is confirmed dead.
+
 Sessions live in `~/.acc/projects/<folder-name>-<hash>/sessions/<id>/`. The
 project folder is named after the directory you ran `acc` in plus a short hash
 of its full path, so two projects with the same name never collide. Files are

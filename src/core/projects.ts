@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type {SessionMeta} from './store.js';
+import {acquireSessionLock, SessionLockedError} from './session-lock.js';
 
 export const SESSION_MAX_AGE_DAYS = 30;
 export const SESSION_KEEP = 50;
@@ -95,8 +96,21 @@ export function evictSessions(
     .slice(keep)
     .filter((entry) => Date.parse(entry.meta.updatedAt) < cutoff);
 
+  let removed = 0;
   for (const entry of doomed) {
-    fs.rmSync(entry.dir, {recursive: true, force: true});
+    let lock;
+    try {
+      lock = acquireSessionLock(entry.dir);
+    } catch (error) {
+      if (error instanceof SessionLockedError) continue;
+      throw error;
+    }
+    try {
+      fs.rmSync(entry.dir, {recursive: true, force: true});
+      removed += 1;
+    } finally {
+      lock.release();
+    }
   }
-  return doomed.length;
+  return removed;
 }

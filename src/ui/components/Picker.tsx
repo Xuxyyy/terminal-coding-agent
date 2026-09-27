@@ -31,7 +31,7 @@ export function Picker<Row extends {id: string}>({
   onCancel: () => void;
   initial?: number;
   disabled?: (row: Row) => boolean;
-  disabledHint?: (row: Row) => string;
+  disabledHint?: (row: Row) => string | null;
 }) {
   const [selected, setSelected] = useState(
     Math.max(0, Math.min(initial, rows.length - 1)),
@@ -66,8 +66,8 @@ export function Picker<Row extends {id: string}>({
   const start = windowStart(selected, rows.length);
   const shown = rows.slice(start, start + VISIBLE);
   const here = rows[selected];
-  const blockedHint =
-    here && disabled(here) && disabledHint ? disabledHint(here) : null;
+  const footer =
+    here && disabled(here) && disabledHint ? disabledHint(here) : hint;
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.muted} paddingX={1}>
@@ -89,10 +89,12 @@ export function Picker<Row extends {id: string}>({
           </Text>
         );
       })}
-      <Text color={theme.muted}>
-        {rows.length > VISIBLE ? `${selected + 1}/${rows.length} · ` : ''}
-        {blockedHint ?? hint}
-      </Text>
+      {footer ? (
+        <Text color={theme.muted}>
+          {rows.length > VISIBLE ? `${selected + 1}/${rows.length} · ` : ''}
+          {footer}
+        </Text>
+      ) : null}
     </Box>
   );
 }

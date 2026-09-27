@@ -19,6 +19,7 @@ import {
   startSession,
   type SessionMeta,
 } from '../../core/store.js';
+import {SessionLockedError} from '../../core/session-lock.js';
 
 function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -334,6 +335,33 @@ test('reopening a session keeps the folder and appends to the same file', () => 
   assert.deepEqual(again.messages, [user('fix the cart'), assistant('done')]);
   assert.equal(again.meta.usage.total, 25);
   assert.equal(again.meta.id, first.id);
+});
+
+test('an active session cannot be opened by a second owner', () => {
+  const root = home();
+  const work = workspace();
+  const first = startSession(work, root);
+  first.appendStep([user('fix the cart')], usage(15));
+
+  assert.throws(() => openSession(work, first.id, root), SessionLockedError);
+
+  first.close();
+  const reopened = openSession(work, first.id, root);
+  reopened.store.close();
+});
+
+test('eviction never removes an active session', () => {
+  const root = home();
+  const work = workspace();
+  const active = startSession(work, root, at('2026-06-01T10:00:00Z'));
+  active.appendStep([user('still working')], usage(5));
+
+  assert.equal(evictSessions(root, new Date('2026-08-11T10:00:00Z'), 0), 0);
+  assert.equal(fs.existsSync(active.dir), true);
+
+  active.close();
+  assert.equal(evictSessions(root, new Date('2026-08-11T10:00:00Z'), 0), 1);
+  assert.equal(fs.existsSync(active.dir), false);
 });
 
 test('a reopened session is open again while it runs', () => {

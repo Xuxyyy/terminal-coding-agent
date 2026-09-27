@@ -19,6 +19,8 @@ export function SessionPicker({
       renderRow={rowLine}
       onPick={onPick}
       onCancel={onCancel}
+      disabled={(row) => row.locked}
+      disabledHint={() => null}
     />
   );
 }

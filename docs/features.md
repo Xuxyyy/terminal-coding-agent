@@ -169,7 +169,9 @@ typo anywhere in the file stops `acc` at startup with the file named. See
   not know. Files are `0600`.
 - `/resume` opens a picker listing past conversations by their first task and
   relative age, then reopens the session **in place** and replays the stored
-  view, diffs included.
+  view, diffs included. A live session is protected by an exclusive process lock;
+  it stays visible but is dimmed, labeled `active elsewhere`, and cannot be reopened
+  until its owner exits. Stale locks left by crashes are recovered automatically.
 - `/rewind` opens the same picker with one row per user message, newest selected,
   and takes the conversation, the context reading and the files back to that
   point. On disk it appends a marker, so the dropped turns stay in the file and

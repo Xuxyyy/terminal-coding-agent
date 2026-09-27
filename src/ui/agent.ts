@@ -1,4 +1,4 @@
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {createClient, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
@@ -17,6 +17,7 @@ import {
   type Session,
 } from '../core/session.js';
 import {modeOf, rememberMode, rememberModel} from '../core/settings.js';
+import {SessionLockedError} from '../core/session-lock.js';
 import {openSession, startSession, type SessionStore} from '../core/store.js';
 import {
   compactionNotice,
@@ -305,7 +306,9 @@ export function useAgent(
     try {
       opened = openSession(workspaceRoot, id);
     } catch (error) {
-      commit([{kind: 'notice', text: `could not reopen: ${String(error)}`}]);
+      const reason =
+        error instanceof SessionLockedError ? error.message : String(error);
+      commit([{kind: 'notice', text: `could not reopen: ${reason}`}]);
       return;
     }
     try {
@@ -440,6 +443,15 @@ export function useAgent(
     }
     setPhase({kind: 'closed'});
   };
+
+  useEffect(
+    () => () => {
+      try {
+        storeRef.current?.close();
+      } catch {}
+    },
+    [],
+  );
 
   return {
     committed,
