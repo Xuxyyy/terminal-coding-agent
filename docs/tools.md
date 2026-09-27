@@ -57,29 +57,6 @@ also import each other because the child needs the registry; delaying creation
 until call time keeps that cycle away from module initialization. Moving one
 constructed instance into the array would freeze an empty or stale cache.
 
-## Tools an MCP server adds
-
-Six is what ships built in, not what the model is offered. `toolsFor(mode)`
-returns the six plus `connectedTools()` (`src/core/tools/index.ts:14`) — every
-tool listed by an MCP server that connected at boot, named
-`mcp__<label>__<tool>`.
-
-They are not a second kind of tool. `adaptTool` (`src/core/mcp/adapt.ts:34-52`)
-builds each one into the same `Tool` this file describes below, so `runTool`
-validates, runs, and caps it exactly as it does `bash`, and `permitted()` gates it
-from the same `request` field. The only differences: the schema is
-`z.record(z.unknown())` with the server's own JSON Schema passed through as
-`parameters`, and `request` returns `{kind: 'mcp'}` — which is never allowed
-outright, in any mode.
-
-An MCP tool's `description` is prompt text the same way a built-in's is, with one
-difference worth remembering: **a third party wrote it.** Everything the section
-below says about descriptions being the prompt holds, except that this prompt did
-not come from this repo.
-
-`mcp.md` has the transport, the connection lifecycle, and why every call reaches
-the gate.
-
 ## The shape every tool shares
 
 A tool is a `Tool` — `name`, `description`, `schema`, an optional `request`, and
@@ -96,8 +73,8 @@ mostly punctuation it tokenizes far closer to one token per character than to
 four — a long `.describe()` costs more than its length suggests.
 
 **A tool with no `request` never reaches the gate.** `permitted()` returns
-immediately when `tool.request` is absent. The five file and command tools, plus
-every MCP tool, carry one. `agent` deliberately does not: starting a child is
+immediately when `tool.request` is absent. The five file and command tools carry
+one. `agent` deliberately does not: starting a child is
 not itself an action on the workspace, while every tool the child calls still
 has its own permission decision. `read_file` and `grep` do not prompt for an
 inside-project read because `decide()` classifies it as `observe`; an outside
@@ -257,12 +234,12 @@ missing field in a named definition, keeps the existing defaults: the exact
 parent `ModelChoice`, all currently available tools except `agent`, and the
 parent mode. A configured model client is created only when that type runs. A
 configured tool list is exact and keeps its written order after intersection
-with the live built-in and MCP registry. A configured mode resolves to the
+with the live tool registry. A configured mode resolves to the
 stricter of it and the parent mode: `ask-edits` > `auto-edits` > `auto`.
 
-Missing provider keys and configured tools that are unavailable because an MCP
-server is disabled or failed are invocation errors naming the agent and missing
-dependency. They do not stop startup. Invalid files do stop startup, because
+Missing provider keys and configured tools that are unavailable are invocation
+errors naming the agent and missing dependency. They do not stop startup.
+Invalid files do stop startup, because
 silently dropping a type would leave the parent routing against a different
 tool schema.
 
@@ -343,7 +320,5 @@ nothing more; what stops it is the permission gate, not a path check.
 5. Register it in `src/core/tools/index.ts`, in the `tools` array — unless it
    imports the registry back, as `agent` does, in which case it goes into
    `toolsFor` for the reason above. The array order is the order the model sees,
-   and MCP tools are appended after it. This
-   step is what "built-in" means — an MCP server is the other route to a tool,
-   and it needs none of these six (`mcp.md`).
+   and this step is what makes the tool available.
 6. Decide how `src/ui/events.ts` draws its row — see `features.md`.

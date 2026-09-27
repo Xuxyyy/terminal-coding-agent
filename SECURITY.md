@@ -29,7 +29,6 @@ Anything that gets past that gate:
 - a `bash` string the classifier reads as safe when it is not, or a wrapper that
   hides its worst stage;
 - an approval remembered when the decision was not `suppressible`;
-- an MCP server or tool that reaches a tool call without being judged.
 
 ## What is not
 

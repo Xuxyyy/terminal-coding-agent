@@ -65,7 +65,7 @@ machinery. A larger cap is a flag someone can add later; it is not a default.
 
 **Wall clock.** `--max-seconds`, default 300, is a timer that aborts the
 controller. The same signal reaches the model request, `bash`, the permission
-judge, an open confirmation and every MCP request, so the deadline stops work
+judge, and an open confirmation, so the deadline stops work
 that is already in flight. Work that completed before the abort is not undone.
 A `maxSeconds` of zero or less aborts before the first model call, rather than
 racing a timer.
@@ -90,7 +90,7 @@ So **a headless run under `'deny'` still edits files in its workspace, and
 reports `prompts: 0` while doing it.** That is correct: it is the same thing the
 terminal app does without asking. The policy only ever sees what sits above the
 cut — protected paths, deletes, anything reaching outside the project, escapes,
-unclassified commands, and every MCP call.
+and unclassified commands.
 
 A genuinely read-only run has to be configured, not assumed, and there is only
 one setting that does it: `"permission_mode": "ask-edits"`, which cuts at

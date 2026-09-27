@@ -328,7 +328,7 @@ test('unknown types and unavailable tools return repairable errors before a mode
   const root = workspace();
   const {host} = fakeHost();
   const choice = recordingChoice();
-  const tool = makeSubagent([definition({tools: ['missing_builtin', 'mcp__off__gone']})]);
+  const tool = makeSubagent([definition({tools: ['missing_builtin', 'missing_external']})]);
 
   const unknown = await tool.run(
     {...job, agent: 'missing'},
@@ -343,7 +343,7 @@ test('unknown types and unavailable tools return repairable errors before a mode
   assert.match(unknown.text, /explorer/);
   assert.match(unavailable.text, /explorer/);
   assert.match(unavailable.text, /missing_builtin/);
-  assert.match(unavailable.text, /mcp__off__gone/);
+  assert.match(unavailable.text, /missing_external/);
   assert.equal(choice.calls(), 0);
 });
 

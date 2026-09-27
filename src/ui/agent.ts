@@ -3,7 +3,6 @@ import {createClient, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
-import {serverStatus} from '../core/mcp/connect.js';
 import type {Mode} from '../core/permission/mode.js';
 import {systemPrompt} from '../core/prompt.js';
 import {rewindPlan, rewindSession} from '../core/rewind.js';
@@ -28,7 +27,6 @@ import {
   type Phase,
   type ReadyInfo,
 } from './events.js';
-import {mcpReadout, mcpServerReadout} from './mcp.js';
 import {modelNotice} from './model.js';
 import {permissionNotice, withPermission} from './permission.js';
 import {restoreView} from './restore.js';
@@ -54,7 +52,6 @@ export type Agent = {
   cancelRewind: () => void;
   applyRewind: (id: string) => void;
   context: () => void;
-  mcp: (label?: string) => void;
   compact: () => void;
   permission: () => void;
   setPermission: (mode: Mode) => void;
@@ -334,14 +331,6 @@ export function useAgent(
     commit([{kind: 'context', ...status}]);
   };
 
-  const mcp = (label = '') => {
-    if (phase.kind !== 'idle') return;
-    const statuses = serverStatus();
-    const text =
-      label === '' ? mcpReadout(statuses) : mcpServerReadout(statuses, label);
-    commit([{kind: 'notice', text}]);
-  };
-
   const compact = () => {
     if (phase.kind !== 'idle') return;
     const controller = new AbortController();
@@ -473,7 +462,6 @@ export function useAgent(
     cancelRewind,
     applyRewind,
     context,
-    mcp,
     compact,
     permission,
     setPermission,

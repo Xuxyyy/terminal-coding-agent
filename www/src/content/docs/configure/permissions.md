@@ -43,7 +43,7 @@ above the line:
 
 A stricter mode moves rows down. **Nothing moves a row up** — no mode and no rule
 can make `acc` delete without asking. Anything outside the project asks in every
-mode, and so does every [MCP server's tool](/configure/mcp).
+mode.
 
 Set the mode in `settings.json`, or switch it mid-session with
 [`/permission`](/configure/commands), which saves the choice for next time:

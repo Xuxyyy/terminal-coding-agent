@@ -719,7 +719,7 @@ const RAW_SCHEMA = {
 
 function rawTool(parameters: Record<string, unknown>): Tool {
   return {
-    name: 'mcp__notion__search',
+    name: 'search_workspace',
     description: 'search a workspace',
     schema: z.record(z.unknown()),
     parameters,

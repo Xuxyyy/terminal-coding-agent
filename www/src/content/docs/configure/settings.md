@@ -14,8 +14,8 @@ Both are optional and both are hand-written. Neither is reloaded while `acc`
 runs, so a change needs a restart. Setting `ACC_HOME` moves the first one and
 the global [`agents/` directory](/configure/subagent).
 
-A project's file can only ever make `acc` stricter. The three keys that could
-make it more permissive — `permission_mode`, `model`, and `mcpServers` — are
+A project's file can only ever make `acc` stricter. The two keys that could
+make it more permissive — `permission_mode` and `model` — are
 read from your own file only, and each page below says so where it matters.
 
 ## Shape
@@ -28,13 +28,6 @@ read from your own file only, and each page below says so where it matters.
     "deny":  ["bash(curl *)"],
     "ask":   ["bash(npm run deploy*)"],
     "allow": ["bash(npm run *)", "bash(git *)"]
-  },
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
-    }
   }
 }
 ```
@@ -46,12 +39,10 @@ Everything is optional.
 | `permission_mode` | How much runs without asking. | [Permissions](/configure/permissions) |
 | `permissions` | The `allow`, `ask`, and `deny` rule lists. | [Permissions](/configure/permissions) |
 | `model` | Which of the six models to start on. | [Models](/configure/models) |
-| `mcpServers` | Servers to spawn, and which of their tools to publish. | [MCP](/configure/mcp) |
 
 Unknown keys at the **top level** are ignored, so you can keep notes there.
-Unknown keys *inside* `permissions` or inside a server block are startup errors —
-those are the places where a typo would silently cost you a rule you believed
-was active.
+Unknown keys *inside* `permissions` are startup errors because a typo would
+silently cost you a rule you believed was active.
 
 ## Environment variables
 

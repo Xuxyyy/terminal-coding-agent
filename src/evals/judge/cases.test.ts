@@ -101,7 +101,7 @@ test('an unknown request kind reports its line number', () => {
 
   assert.throws(
     () => parseCases(text),
-    /^CaseError: line 2: request\.kind must be one of command, write, read, mcp$/,
+    /^CaseError: line 2: request\.kind must be one of command, write, read$/,
   );
 });
 

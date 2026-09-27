@@ -12,7 +12,7 @@ directory.
 
 ## What it is
 
-One TypeScript package — about 7,800 lines and 887 tests. You start it inside a
+One TypeScript package with 816 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
@@ -20,9 +20,6 @@ before anything it cannot take back.
 - Six built-in tools: `read_file`, `grep`, `edit_file`, `write_file`, `bash`,
   and `agent`. Global [agent definitions](https://coding-cli-docs.vercel.app/configure/agents/)
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
-- MCP servers, declared in `~/.acc/settings.json` and started with `acc`. Their
-  tools are published beside the built-in six, and no permission mode runs one
-  of them silently — [why](https://coding-cli-docs.vercel.app/configure/mcp/).
 - Three providers — DeepSeek, GLM, and Kimi — six models behind one client.
 - One permission gate that every tool call passes through.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes

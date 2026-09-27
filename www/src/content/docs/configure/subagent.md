@@ -61,7 +61,7 @@ no questions to the user, and a complete final report.
 |---|---|---|---|
 | `description` | yes | — | A non-empty routing summary shown to the parent model. |
 | `model` | no | parent's current model | One id from [Models](/configure/models). The client is created when this type runs. |
-| `tools` | no | every available tool except `agent` | Exact built-in or `mcp__<server>__<tool>` names, in the order written. `[]` gives the child no tools. |
+| `tools` | no | every available tool except `agent` | Exact tool names, in the order written. `[]` gives the child no tools. |
 | `permission_mode` | no | parent's current mode | `ask-edits`, `auto-edits`, or `auto`. The child receives whichever is stricter: this value or the parent's mode. |
 
 No other front-matter keys are accepted. Tool names must be unique, non-empty,
@@ -93,10 +93,9 @@ created only when that type runs. This means a valid definition for a provider
 whose key is missing does not stop `acc` from starting. Selecting it returns an
 error that names the missing environment variable.
 
-Configured tools are checked against the live registry at invocation time. If
-an MCP server is disabled, failed to connect, or did not publish a named tool,
-the child does not run with a smaller list. The tool result names every missing
-tool so you can fix the file or server.
+Configured tools are checked against the live registry at invocation time. If a
+named tool is unavailable, the child does not run with a smaller list. The tool
+result names every missing tool so you can fix the definition.
 
 A definition can narrow permissions but cannot widen them. The order from most
 to least strict is `ask-edits`, `auto-edits`, then `auto`. For example, an
@@ -112,8 +111,8 @@ unknown keys, unknown model or mode values, invalid tool lists, and invalid
 filenames. Starting with a silently dropped type would give the parent routing
 information that does not match what can run.
 
-Missing provider keys and unavailable MCP tools are different: they can change
-without changing a valid definition, so they fail only when that type is used.
+Missing provider keys and unavailable tools can change without changing a valid
+definition, so they fail only when that type is used.
 
 ## Not built
 

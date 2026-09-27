@@ -20,8 +20,7 @@ acc -p "summarize the README" > summary.txt
 ```
 
 Tool lines, every confirm with the decision it got, and the reason a run stopped
-early all go to stderr. Nothing else is on stdout — no welcome header, no MCP
-warnings, no notices.
+early all go to stderr. Nothing else is on stdout — no welcome header or notices.
 
 ## It answers every permission prompt with no
 
@@ -53,8 +52,7 @@ prompt, so the policy never sees it. Print mode changes **the answer to a
 question**, not the question.
 
 What the policy does catch: protected paths, deletes, anything reaching outside
-the project, escapes like `sudo` or `git push`, commands it cannot classify, and
-every MCP call.
+the project, escapes like `sudo` or `git push`, and commands it cannot classify.
 
 For a run that truly cannot write, move the line down in `~/.acc/settings.json`:
 

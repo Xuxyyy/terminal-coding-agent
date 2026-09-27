@@ -9,7 +9,7 @@ Type `/` in the input box to open the menu. It filters as you type, ↑↓ moves
 through the matches, and enter runs the highlighted one — so `/co` then enter
 runs `/context`.
 
-All eight commands only work while `acc` is idle — typing one while the agent is
+All seven commands only work while `acc` is idle — typing one while the agent is
 still working does nothing.
 
 | Command | What it does |
@@ -21,7 +21,6 @@ still working does nothing.
 | [`/rewind`](#rewind) | Goes back to before one of your earlier messages, restoring the files the agent wrote. |
 | [`/permission`](#permission) | Switches between the three permission modes and saves the choice for next time. |
 | [`/model`](#model) | Switches which model answers, keeping the conversation as it is. |
-| [`/mcp`](#mcp) | Lists the MCP servers from your settings file and whether each one connected. `/mcp <server>` lists one server's tools. |
 
 ## `/context`
 
@@ -43,7 +42,7 @@ free                  220,936
 - **system prompt** — the instructions `acc` sends every turn, including a
   description of your project.
 - **system tools** — the definitions of the tools the model is offered: the
-  six built-ins, plus any an MCP server added.
+  six built-ins.
 - **messages** — everything you and the model have said, plus every file read
   and every command's output.
 - **free** — what is left.
@@ -241,68 +240,11 @@ The conversation carries over untouched — only the client changes. Earlier row
 keep naming the model that answered them, and the new one picks up the context
 budget of its own window. [Models](/configure/models) lists the six.
 
-## `/mcp`
-
-*Show the MCP servers.*
-
-Lists every server in the `mcpServers` block of your `~/.acc/settings.json` and
-what happened when `acc` tried to start it.
-
-```
-docs — ready, 12 tools
-github — ready, 6 of 45 tools (no tool matches "list_isues")
-scratch — disabled
-linear — failed: spawn linear-mcp ENOENT
-```
-
-A **ready** server is connected and its tools are already offered to the model,
-named `mcp__github__list_issues` and so on. A **failed** one is skipped: its
-reason is whatever went wrong — the command was not found, it did not speak MCP,
-or it did not answer within fifteen seconds — and the other servers keep their
-tools. One bad server never stops `acc` from starting.
-
-**`6 of 45 tools`** means that server has a
-[`tools` allowlist](/configure/mcp): it offered forty-five and six were
-published. Without one the line reads plainly, `12 tools`, so a filtered server
-and a small server never look the same. A pattern that matched nothing is named
-in brackets on that line — a typo costs you a tool, and this is where you see it.
-
-**`disabled`** is a server with `"enabled": false`. It was never spawned at all,
-so it has no tools and no startup cost, and it is listed rather than hidden so
-you can see why its tools are gone.
-
-### `/mcp <server>`
-
-Prints one server's line and then the tool names it published, two per row:
-
-```
-github — ready, 6 of 45 tools
-  list_issues        list_prs
-  list_commits       get_file
-  get_me             search_code
-```
-
-Those are the names to write a `tools` allowlist with, so the usual order is: add
-the server unfiltered, run `/mcp <server>`, then narrow it. A disabled or failed
-server prints its line and nothing else. A name that is not one of your servers
-says so and lists the ones that are.
-
-With no servers configured it says so and names the file to add them to:
-
-```
-no MCP servers configured — add an "mcpServers" block to /Users/you/.acc/settings.json
-```
-
-Servers connect once, at startup. Editing the block while `acc` is running
-changes nothing until you restart — the same rule the
-[settings files](/configure/settings) follow. `/mcp` reports what the *current*
-run connected to.
-
 ## Keys and leaving
 
 | Input | What it does |
 |---|---|
-| **Esc** while working | Stops the turn — the model, any running shell command, and any waiting MCP call. |
+| **Esc** while working | Stops the turn — the model, any running shell command, and any active sub-agent. |
 | **Esc** in an approval box | Stops the turn too. Use `n` to refuse just that one action. |
 | **↑ / ↓** in the input box | Walks your previous prompts, saved to `~/.acc/prompt-history` and kept between runs. While the slash menu is open, they move through it instead. |
 | `exit`, `quit`, `q` | Closes `acc`. |

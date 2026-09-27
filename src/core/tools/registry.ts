@@ -119,7 +119,6 @@ async function permitted(
 
 function describe(request: Request): string {
   if (request.kind === 'command') return request.command;
-  if (request.kind === 'mcp') return `${request.server}/${request.tool}`;
   return request.path;
 }
 

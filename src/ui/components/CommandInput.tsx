@@ -11,7 +11,6 @@ const COMMANDS = [
   {value: '/rewind', description: 'go back to before an earlier message'},
   {value: '/permission', description: 'change what runs without asking'},
   {value: '/model', description: 'switch the model'},
-  {value: '/mcp', description: 'show the MCP servers'},
 ];
 
 export function commandMatches(input: string) {
@@ -21,13 +20,6 @@ export function commandMatches(input: string) {
 
 export function completeCommand(input: string, index = 0): string {
   return commandMatches(input)[index]?.value ?? input;
-}
-
-export function splitCommand(input: string): {name: string; argument: string} {
-  const trimmed = input.trim();
-  const gap = trimmed.search(/\s/);
-  if (gap === -1) return {name: trimmed, argument: ''};
-  return {name: trimmed.slice(0, gap), argument: trimmed.slice(gap).trim()};
 }
 
 export function CommandInput({

@@ -95,9 +95,7 @@ function pending(
   const action =
     request.kind === 'command'
       ? `run: ${command ?? request.command}`
-      : request.kind === 'mcp'
-        ? `call the MCP tool: ${request.server}/${request.tool}`
-        : `${request.kind} the file: ${request.path}`;
+      : `${request.kind} the file: ${request.path}`;
   return [
     `The project root is: ${root}`,
     `The action to judge — ${action}`,

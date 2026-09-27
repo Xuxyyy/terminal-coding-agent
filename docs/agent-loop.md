@@ -50,7 +50,7 @@ interface Host {
   `Confirm.tsx`. When the user presses a key, it calls `resolve('once')`.
 - Tests use a fake `Host` that always returns `'once'`, so the core is testable with no terminal.
 - Esc → `abortController.abort()`; the signal goes to the OpenAI request,
-  `child_process`, the judge call and every MCP request. Esc means *stop the turn*
+  `child_process`, and the judge call. Esc means *stop the turn*
   wherever it is pressed — including inside the approval box. `n` is the only key
   that refuses one command.
 
@@ -97,8 +97,8 @@ output cap and the loop says so.
 
 **The rule: every `await` in the loop observes the signal, and the loop never waits on a
 promise the signal cannot break.** Esc ends the turn from anywhere inside it — while the
-model streams, while a command runs, while the approval box is open, while the judge is
-thinking, and while an MCP server is slow. The checks that keep that true:
+model streams, while a command runs, while the approval box is open, and while the judge is
+thinking. The checks that keep that true:
 
 - `loop.ts`, at the top of each step, and again after the `MAX_STEPS` checkpoint's
   `confirm` returns.

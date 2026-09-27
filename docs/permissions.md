@@ -425,7 +425,7 @@ and narrower than any mode could ever express.
 
 A tool-keyed map — OpenCode's `{"bash": {"git *": "allow"}}` — was weighed against this shape
 and the tagged string kept. `tag(<pattern>)` can carry a syntax that is not a glob, which a
-later `WebFetch(domain:…)` or an mcp rule will need and a glob key cannot hold; a rule stays
+later tool rule may need and a glob key cannot hold; a rule stays
 **one string**, so it can be pasted, logged, or named in an error as the thing that matched;
 and the three arrays **concatenate** across the user file and the project file, with no
 key-conflict policy to invent — one that would have to be "the stricter wins" anyway, or a
@@ -589,39 +589,6 @@ For one `bash` command:
 `bash -lc "..."`, `python -c`, `node -e` and similar land in unclassified and therefore ask.
 That is the intended answer: we do not try to parse a nested shell, we refuse to guess.
 
-## MCP calls
-
-An MCP tool reaches the gate as a fourth request kind, `{kind: 'mcp'; server; tool}`
-(`decide.ts:17`), and `decide()` answers it before anything above runs:
-
-```ts
-if (request.kind === 'mcp') {
-  return outcomeFor({level: null, reason: ''}, mode, MCP_REASON);
-}
-```
-
-**It returns before the classifier, on purpose.** Everything in the pipeline above
-reads shell command text or a file path. An MCP call has neither — only a tool
-name the server chose and arguments against a schema the server also wrote.
-Classifying it would mean reading a verdict out of a string a third party
-controls, so the gate declines to have an opinion and says so: the reason shown
-is `MCP_REASON` (`decide.ts:28`), *an MCP server outside the workspace runs this*.
-
-`level: null` is inside no mode's cut, so the `allow` branch is unreachable and
-the answer is `aboveCut(mode)` — **ask in `ask-edits` and `auto-edits`, judge in
-`auto`**, the same route an unclassified command takes. The judge is a different
-question from the classifier and survives where it does not: it asks only whether
-the user already authorized the action, which a server-chosen name cannot
-influence. It sees `call the MCP tool: <server>/<tool>` (`judge.ts:98-99`).
-
-The outcome is `suppressible: true`, so a session answer is remembered.
-`approvalKey` returns `mcp <server> <tool>` (`decide.ts:119`) — **per tool, not
-per server.** Approving one tool of a server says nothing about its others, so a
-server cannot earn standing trust by being approved once for something harmless.
-
-There is no `mcp(...)` rule tag. Session approval is the only memory an MCP call
-has, and it dies with the session. `mcp.md` has the rest.
-
 ## Hardening
 
 `harden.ts` rewrites `git diff|log|show` to add `--no-ext-diff` unless it is already there.
@@ -729,7 +696,7 @@ Session memory is keyed on the **normalized whole command**, stage by stage, joi
 ago must not be waiting after a restart. `/clear` clears it; `/rewind` does not, because a
 rewind is not a new session and the approvals were granted in this run.
 
-The five file and command tools, plus every MCP tool, carry a `request`. `agent` is the
+The five file and command tools carry a `request`. `agent` is the
 deliberate exception: starting a child is not itself an action on the workspace, so the parent
 call takes `permitted()`'s early exit. Each tool the child calls still reaches the gate in the
 normal way. Path confinement in `paths.ts` is the second layer for path-taking tools. It stays

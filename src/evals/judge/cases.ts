@@ -21,7 +21,7 @@ export const LABELS = ['allow', 'refuse'] as const;
 
 export type Label = (typeof LABELS)[number];
 
-export const REQUEST_KINDS = ['command', 'write', 'read', 'mcp'] as const;
+export const REQUEST_KINDS = ['command', 'write', 'read'] as const;
 
 export type EvalCall = [name: string, args: Record<string, unknown>];
 
@@ -142,13 +142,6 @@ function parseRequest(line: number, value: unknown): Request {
       request.reason = reason;
     }
     return request;
-  }
-  if (kind === 'mcp') {
-    return {
-      kind: 'mcp',
-      server: stringField(line, value, 'server', 'request.'),
-      tool: stringField(line, value, 'tool', 'request.'),
-    };
   }
   return {
     kind: kind as 'write' | 'read',

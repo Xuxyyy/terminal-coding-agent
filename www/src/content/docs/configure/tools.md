@@ -7,8 +7,8 @@ sidebar:
 
 The model gets six tools: read a file, search with ripgrep, edit one exact
 piece of text, write a whole file, run a shell command, and hand a job to a
-sub-agent. They are all it has until you add a server. None of them reaches the
-network, none opens a browser, and none reaches a file outside the workspace
+sub-agent. They are the complete tool set. None of them reaches the network,
+none opens a browser, and none reaches a file outside the workspace
 without asking you first.
 
 | Tool | What it does |
@@ -216,16 +216,6 @@ A sub-agent is never given `agent`, so it cannot start one of its own. A named
 type can choose another model, append role instructions, limit tools exactly,
 and request a stricter permission mode. See [Subagent](/configure/subagent) for the
 definition format, defaults, and failure behavior.
-
-## MCP tools
-
-An [MCP server](/configure/mcp) adds more tools, published beside these six and
-named `mcp__<server>__<tool>`. You never call one by name — the model picks it
-the way it picks these six, from the description the server sent at startup.
-
-What those tools can reach is the server's business, not this page's, which is
-why **every one of their calls asks before it runs**. No mode and no rule
-silences that.
 
 ## How a tool call runs
 

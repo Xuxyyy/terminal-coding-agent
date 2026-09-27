@@ -13,8 +13,7 @@ import {commandParts, splitStages} from './stages.js';
 export type Request =
   | {kind: 'command'; command: string; reason?: string}
   | {kind: 'write'; path: string}
-  | {kind: 'read'; path: string}
-  | {kind: 'mcp'; server: string; tool: string};
+  | {kind: 'read'; path: string};
 
 export type Outcome = {
   decision: 'allow' | 'ask' | 'deny' | 'judge';
@@ -24,8 +23,6 @@ export type Outcome = {
 };
 
 const UNCLASSIFIED_REASON = 'cannot be classified from its text';
-
-export const MCP_REASON = 'an MCP server outside the workspace runs this';
 
 function outcomeFor(
   classification: Classification,
@@ -75,9 +72,6 @@ export function decide(
   rules: Rules = NO_RULES,
   mode: Mode = DEFAULT_MODE,
 ): Outcome {
-  if (request.kind === 'mcp') {
-    return outcomeFor({level: null, reason: ''}, mode, MCP_REASON);
-  }
   if (request.kind === 'write') {
     return fileOutcome(
       classifyWrite(request.path, root),
@@ -116,7 +110,6 @@ export function decide(
 export function approvalKey(request: Request): string {
   if (request.kind === 'write') return `write ${request.path}`;
   if (request.kind === 'read') return `read ${request.path}`;
-  if (request.kind === 'mcp') return `mcp ${request.server} ${request.tool}`;
   const stages = splitStages(request.command);
   if (stages === null) return request.command.trim();
   return stages
