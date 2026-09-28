@@ -75,8 +75,9 @@ which is rarely the intent behind `edit(**)`.
 
 Two caps, and both are on:
 
-- **20 steps.** The loop asks permission to continue every 20 steps. A print run
-  always denies that, `--yes` included, so 20 is a real ceiling.
+- **30 steps.** After 20 completed steps the model receives a private completion
+  audit. At 30 the loop asks permission to continue. A print run always denies
+  that, `--yes` included, so 30 is a real ceiling.
 - **300 seconds**, changed with `--max-seconds`. The timer aborts the run, and
   the abort is honoured between steps — a single very long tool call can overrun
   it and stop at the next step boundary.

@@ -13,14 +13,14 @@ One word, one meaning. The code used `turn` for two different things until it wa
 - **turn** — one prompt to its final answer. The whole `while` in `runAgent`. The `turn_end`
   event marks its end, and that is what the UI waits for.
 - **step** — one iteration of that loop: one model request plus the tools it asks for.
-  `streamStep`, `appendStep`, `MAX_STEPS`.
+  `streamStep`, `appendStep`, `NORMAL_STEP_POLICY`.
 - **response** — what the model produced inside a step. `AssistantResponse` holds its content,
   tool calls and usage.
 - **call** — one entry in a response's `tool_calls`.
 
 Note that the Agent SDK's `maxTurns` counts what this codebase calls a **step**. Both readings
 of `turn` are in use in the wider world; this project picked the conversational one because
-`MAX_STEPS` appears in text a user reads.
+step counts appear in text a user reads.
 
 ## Context
 
@@ -69,10 +69,12 @@ them against the parent's context would show a bar climbing toward a compaction
 that nothing in the conversation justifies. The money is real and is counted; the
 context is not and is not.
 
-`MAX_STEPS` (20, `loop.ts`) is a **checkpoint, not a ceiling**: every 20 steps without
-finishing, the loop asks to continue. `'session'` turns the checkpoint off for the rest of
-the run, `'deny'` stops with a message. Esc there is neither: it is a stop, so the
-loop returns silently and the UI's own `stopped` notice says what happened.
+`NORMAL_STEP_POLICY` keeps ordinary prompts bounded without rushing healthy work. After 20
+completed steps in each segment, the next model request temporarily appends a completion audit
+to the system prompt. The audit is model-only and is never stored in session history. After 30
+completed steps, the loop asks the user before starting another 30-step segment. The gate cannot
+be suppressed for the rest of the turn. `'deny'` stops with a message. Esc there is neither: it
+is a stop, so the loop returns silently and the UI's own `stopped` notice says what happened.
 
 ### Streaming tool calls
 
@@ -100,7 +102,7 @@ promise the signal cannot break.** Esc ends the turn from anywhere inside it —
 model streams, while a command runs, while the approval box is open, and while the judge is
 thinking. The checks that keep that true:
 
-- `loop.ts`, at the top of each step, and again after the `MAX_STEPS` checkpoint's
+- `loop.ts`, at the top of each step, and again after the step gate's
   `confirm` returns.
 - `loop.ts`, at the top of each call in a tool batch.
 - `registry.ts`, in `permitted()`, three times: on entry, after the judge answers, and

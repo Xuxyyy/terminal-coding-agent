@@ -57,11 +57,10 @@ down, so the arrow points one way only.
 
 An unattended run has nobody watching it, so it is bounded on **both** axes.
 
-**Steps.** `MAX_STEPS = 20` is a checkpoint, not a ceiling: the loop asks for
-permission to keep going (`src/core/loop.ts:141`). Print mode always denies that
-request, under `--yes` too. A run that answers yes to its own checkpoint has no
-upper bound at all, and denying gives the step cap for free with no new
-machinery. A larger cap is a flag someone can add later; it is not a default.
+**Steps.** Normal turns receive a model-only completion audit after 20 completed
+steps and ask for permission to keep going after 30. Print mode always denies the
+gate, under `--yes` too, so 30 is a real ceiling. The audit is not printed or
+included in the result transcript.
 
 **Wall clock.** `--max-seconds`, default 300, is a timer that aborts the
 controller. The same signal reaches the model request, `bash`, the permission
@@ -70,7 +69,7 @@ that is already in flight. Work that completed before the abort is not undone.
 A `maxSeconds` of zero or less aborts before the first model call, rather than
 racing a timer.
 
-Either cap alone leaves a hole: 20 steps can still take an hour, and a wall
+Either cap alone leaves a hole: 30 steps can still take an hour, and a wall
 clock alone lets a fast model loop hundreds of times inside it.
 
 ## Deny is the default, and silence is forbidden

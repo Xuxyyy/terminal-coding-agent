@@ -53,12 +53,12 @@ eventually someone forgets to.
 - **turn** — one prompt through to its final answer. The whole `while` in
   `runAgent`. The `turn_end` event marks its end, and the UI waits for it.
 - **step** — one iteration of that loop: one model request plus the tools it
-  asks for. `streamStep`, `appendStep`, `MAX_STEPS`.
+  asks for. `streamStep`, `appendStep`, `NORMAL_STEP_POLICY`.
 - **response** — what the model produced inside a step.
 - **call** — one entry in a response's `tool_calls`.
 
 The wider world uses both readings of `turn`. This project picked the
-conversational one because `MAX_STEPS` appears in text a user reads.
+conversational one because step counts appear in text a user reads.
 
 ### The shape
 
@@ -91,8 +91,9 @@ shared client preserves it on assistant messages for later tool-enabled
 requests, sessions, compaction, and model switches, but never sends it through
 the UI event stream. The core loop has no provider-name branches.
 
-`MAX_STEPS` is 20, and it is a **checkpoint, not a ceiling**: every twenty steps
-without finishing, the loop asks whether to keep going.
+`NORMAL_STEP_POLICY` gives the model a private completion audit after 20 completed
+steps, then asks the user whether to keep going after 30. Approval grants another
+bounded 30-step segment.
 
 ### When the window fills
 

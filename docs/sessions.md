@@ -21,22 +21,29 @@ Key names, so a search finds this file: `startSession`, `openSession`, `seed`, `
 half-streamed answer, an hour-long session — each is tokens already bought, and each used to be
 discarded because something hit a limit or a socket closed.
 
-## The step checkpoint
+## The normal step guard
 
-`MAX_STEPS = 20` exists so a confused model cannot burn money forever. It is a **checkpoint,
-not a ceiling**: on reaching it the loop asks through the existing seam.
+`NORMAL_STEP_POLICY` exists so a confused model cannot burn money forever without forcing a
+healthy long task to stop at an arbitrary limit. Each 30-step segment has two boundaries.
+
+After 20 completed steps, the next request temporarily appends a completion audit to the system
+prompt. It asks the model to reassess the original request, finish when the evidence is sufficient,
+and avoid repeated inspection. The audit is never added to `session.messages`, so it is neither
+saved nor restored.
+
+After 30 completed steps, the loop asks through the existing seam.
 
 ```ts
 const answer = await host.confirm({
   command: 'continue',
-  reason: `${step} steps without finishing`,
-  suppressible: true,
+  reason: `${step} steps without finishing; continue for up to 30 more steps`,
+  suppressible: false,
 });
 ```
 
-`once` runs another 20 turns then asks again, `session` stops asking for the rest of the run,
-`deny` stops. Reusing `confirm` rather than adding `Host.onLimit` keeps the seam at three
-methods, and it needed no UI work.
+`once` grants another 30-step segment and `deny` stops. The non-suppressible request removes the
+session-wide approval choice, so every extension stays bounded. Reusing `confirm` rather than
+adding `Host.onLimit` keeps the seam at three methods and needs no new UI state.
 
 ## Retry
 

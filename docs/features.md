@@ -154,7 +154,8 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 - A session written before v4 is skipped, never migrated: neither picker sees it.
 - Approvals are never stored — they die with the run.
 - Old sessions are evicted: 30 days, keeping the most recent 50.
-- The 20-turn limit is a checkpoint, not a wall: the agent asks to keep going.
+- Normal turns get a private completion audit after 20 steps and ask to keep
+  going after 30. Each approval grants another bounded segment.
 - A turn that dies **before any output** is retried (3 attempts, 1s/2s/4s, only
   connection errors, 429, 5xx). After output it reports the error instead, so
   no half-answer is printed twice.
@@ -182,7 +183,7 @@ of starting the binary.
   edit is allowed without a confirm, exactly as in the terminal app, so a print
   run can write without `--yes`. A `deny` rule or `ask-edits` is what makes a
   run read-only.
-- Bounded on both axes: the 20-step checkpoint is always denied, so it becomes a
+- Bounded on both axes: the 30-step gate is always denied, so it becomes a
   real ceiling, and `--max-seconds` (default 300) aborts between steps.
 - No session is written to `~/.acc`, so running dozens back to back leaves
   nothing behind, and a print run cannot be reopened with `/resume`.

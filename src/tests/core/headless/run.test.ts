@@ -129,3 +129,22 @@ test('every event of the run is kept in the order it was emitted', async () => {
   );
   assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
 });
+
+test('print mode stops at the thirty-step gate even under yes', async () => {
+  const {choice, calls} = fakeModel((nth) => callResponse('read_file', {path: 'note.txt'}));
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+
+  const result = await headless({root: work, choice, policy: 'yes'});
+
+  assert.equal(calls(), 30);
+  assert.equal(result.stopped, 'denied');
+  assert.deepEqual(
+    result.prompts.map((prompt) => [
+      prompt.request.command,
+      prompt.request.suppressible,
+      prompt.decision,
+    ]),
+    [['continue', false, 'deny']],
+  );
+});

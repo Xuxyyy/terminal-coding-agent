@@ -19,12 +19,24 @@ import {
 } from './session.js';
 import type {SessionStore} from './store.js';
 import {captureBefore} from './history.js';
+import {estimateTokens} from './tokens.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveTarget} from './tools/paths.js';
 import type {Judge, Tool} from './tools/registry.js';
 import {askJudge, judgeMessages} from './permission/judge.js';
 
-export const MAX_STEPS = 20;
+export const NORMAL_STEP_POLICY = {
+  softAuditAfter: 20,
+  hardGateEvery: 30,
+} as const;
+
+export const COMPLETION_AUDIT =
+  'This turn has involved substantial tool work. Reassess the original request and the evidence already collected. ' +
+  'If the request is satisfied, stop using tools and answer the user now. If essential work remains, continue with ' +
+  'the specific missing requirement. Avoid repeating inspections that are unlikely to change the result. Do not ' +
+  'claim completion without evidence.';
+
+const COMPLETION_AUDIT_SUFFIX = `\n\n${COMPLETION_AUDIT}`;
 
 export {INTERRUPTED, INTERRUPTED_TURN};
 
@@ -37,6 +49,24 @@ function aborted(error: unknown, host: Host): boolean {
 }
 
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
+
+function shouldAudit(step: number): boolean {
+  return (
+    step > 0 &&
+    step % NORMAL_STEP_POLICY.hardGateEvery === NORMAL_STEP_POLICY.softAuditAfter
+  );
+}
+
+function messagesForStep(session: Session, step: number): Session['messages'] {
+  if (!shouldAudit(step)) return session.messages;
+  const messages = [...session.messages];
+  const first = messages[0];
+  if (first?.role !== 'system' || typeof first.content !== 'string') {
+    return session.messages;
+  }
+  messages[0] = {...first, content: first.content + COMPLETION_AUDIT_SUFFIX};
+  return messages;
+}
 
 function judgeFor(session: Session, host: Host, model: string): Judge | undefined {
   if (session.mode !== 'auto') return undefined;
@@ -80,7 +110,6 @@ export async function runAgent(
   const judge = judgeFor(session, host, choice.model);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
-  let checkpoints = true;
   let reportedThreshold = false;
 
   const backup = store
@@ -118,11 +147,13 @@ export async function runAgent(
         markInterrupted();
         return;
       }
-      if (checkpoints && step > 0 && step % MAX_STEPS === 0) {
+      if (step > 0 && step % NORMAL_STEP_POLICY.hardGateEvery === 0) {
         const answer = await host.confirm({
           command: 'continue',
-          reason: `${step} steps without finishing`,
-          suppressible: true,
+          reason:
+            `${step} steps without finishing; continue for up to ` +
+            `${NORMAL_STEP_POLICY.hardGateEvery} more steps`,
+          suppressible: false,
         });
         if (host.signal.aborted) {
           markInterrupted();
@@ -136,7 +167,6 @@ export async function runAgent(
           host.onEvent({type: 'turn_end', usage: total});
           return;
         }
-        if (answer === 'session') checkpoints = false;
       }
 
       if (overThreshold(session, process.env, registry)) {
@@ -174,8 +204,11 @@ export async function runAgent(
         addUsage(session.usage, result.usage);
       }
 
+      const requestMessages = messagesForStep(session, step);
+      const auditTokens =
+        requestMessages === session.messages ? 0 : estimateTokens(COMPLETION_AUDIT_SUFFIX);
       if (
-        projectedTokens(session, registry) + MAX_OUTPUT_TOKENS >
+        projectedTokens(session, registry) + auditTokens + MAX_OUTPUT_TOKENS >
         session.contextWindow
       ) {
         host.onEvent({
@@ -186,7 +219,7 @@ export async function runAgent(
         return;
       }
 
-      const result = await streamStep(choice, session.messages, definitions, host);
+      const result = await streamStep(choice, requestMessages, definitions, host);
       addUsage(total, result.usage);
       session.messages.push(
         assistantMessage(result.content, result.toolCalls, result.continuation),

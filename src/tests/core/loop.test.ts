@@ -21,14 +21,15 @@ import {
 } from '../fakes.js';
 import type {AgentEvent, Usage} from '../../core/host.js';
 import {
+  COMPLETION_AUDIT,
   INTERRUPTED,
   INTERRUPTED_TURN,
-  MAX_STEPS,
+  NORMAL_STEP_POLICY,
   runAgent,
 } from '../../core/loop.js';
 import {filesDir} from '../../core/history.js';
 import {createSession, type Session} from '../../core/session.js';
-import {startSession} from '../../core/store.js';
+import {loadSession, startSession} from '../../core/store.js';
 import {writeFile} from '../../core/tools/write.js';
 import type {Tool} from '../../core/tools/registry.js';
 
@@ -116,9 +117,86 @@ test('the agent asks to keep going instead of giving up', async () => {
 
   assert.equal(asked.length, 2);
   assert.equal(asked[0]!.command, 'continue');
-  assert.match(asked[0]!.reason, /20 steps/);
-  assert.equal(asked[0]!.suppressible, true);
-  assert.equal(calls(), MAX_STEPS * 2);
+  assert.match(asked[0]!.reason, /30 steps/);
+  assert.equal(asked[0]!.suppressible, false);
+  assert.equal(calls(), NORMAL_STEP_POLICY.hardGateEvery * 2);
+});
+
+test('a short turn receives neither a completion audit nor a gate', async () => {
+  const sent: OpenAI.ChatCompletionMessageParam[][] = [];
+  const {choice} = fakeModel((nth, body) => {
+    sent.push([
+      ...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? []),
+    ]);
+    return nth < NORMAL_STEP_POLICY.softAuditAfter ? toolResponse(nth) : finalResponse();
+  });
+  const {host, asked} = fakeHost();
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.equal(asked.length, 0);
+  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditAfter);
+  assert.ok(
+    sent.every((messages) =>
+      messages.every(
+        (message) =>
+          typeof message.content !== 'string' || !message.content.includes(COMPLETION_AUDIT),
+      ),
+    ),
+  );
+});
+
+test('the request after twenty completed steps receives a model-only completion audit', async () => {
+  const sent: OpenAI.ChatCompletionMessageParam[][] = [];
+  const {choice} = fakeModel((nth, body) => {
+    sent.push([
+      ...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? []),
+    ]);
+    return nth <= NORMAL_STEP_POLICY.softAuditAfter ? toolResponse(nth) : finalResponse();
+  });
+  const {host, asked, events} = fakeHost();
+  const work = tempDir('acc-work-');
+  const home = tempDir('acc-home-');
+  const active = createSession(work, 'rules', 1_000_000);
+  const store = startSession(work, home);
+
+  await runAgent(active, choice, host, [noop], store);
+
+  assert.equal(asked.length, 0);
+  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditAfter + 1);
+  const auditedSystem = sent[NORMAL_STEP_POLICY.softAuditAfter]![0];
+  assert.equal(auditedSystem?.role, 'system');
+  assert.equal(typeof auditedSystem?.content, 'string');
+  assert.match(auditedSystem!.content as string, new RegExp(COMPLETION_AUDIT));
+  assert.ok(
+    active.messages.every(
+      (message) =>
+        typeof message.content !== 'string' || !message.content.includes(COMPLETION_AUDIT),
+    ),
+  );
+  assert.ok(
+    events.every(
+      (event) => event.type !== 'text_delta' || !event.text.includes(COMPLETION_AUDIT),
+    ),
+  );
+  const stored = loadSession(work, store.id, home);
+  assert.ok(
+    stored.messages.every(
+      (message) =>
+        typeof message.content !== 'string' || !message.content.includes(COMPLETION_AUDIT),
+    ),
+  );
+  store.close();
+});
+
+test('finishing between the audit and gate does not ask to continue', async () => {
+  const {choice, calls} = finishesAt(25);
+  const {host, asked} = fakeHost();
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.equal(calls(), 25);
+  assert.equal(asked.length, 0);
 });
 
 test('answering no at the checkpoint stops the run', async () => {
@@ -128,7 +206,7 @@ test('answering no at the checkpoint stops the run', async () => {
   await runAgent(session(), choice, host, [noop]);
 
   assert.equal(asked.length, 1);
-  assert.equal(calls(), MAX_STEPS);
+  assert.equal(calls(), NORMAL_STEP_POLICY.hardGateEvery);
   assert.ok(events.some((event) => event.type === 'turn_end'));
 });
 
@@ -139,7 +217,7 @@ test('answering no at the checkpoint says how many steps ran', async () => {
   await runAgent(session(), choice, host, [noop]);
 
   assert.deepEqual(errors(events), [
-    `stopped after ${MAX_STEPS} steps without finishing`,
+    `stopped after ${NORMAL_STEP_POLICY.hardGateEvery} steps without finishing`,
   ]);
 });
 
@@ -152,7 +230,7 @@ test('escaping at the checkpoint stops without reporting a refusal', async () =>
 
   await runAgent(session(), choice, host, [noop]);
 
-  assert.equal(calls(), MAX_STEPS);
+  assert.equal(calls(), NORMAL_STEP_POLICY.hardGateEvery);
   assert.deepEqual(
     events.filter(
       (event) => event.type === 'error' || event.type === 'turn_end',
@@ -161,14 +239,38 @@ test('escaping at the checkpoint stops without reporting a refusal', async () =>
   );
 });
 
-test('answering always does not ask again this run', async () => {
+test('a session answer cannot suppress later step gates', async () => {
   const {choice, calls} = finishesAt(65);
   const {host, asked} = fakeHost(() => 'session');
 
   await runAgent(session(), choice, host, [noop]);
 
-  assert.equal(asked.length, 1);
+  assert.equal(asked.length, 2);
   assert.equal(calls(), 65);
+});
+
+test('an approved segment receives another audit and another gate', async () => {
+  const auditedRequests: number[] = [];
+  const {choice, calls} = fakeModel((nth, body) => {
+    const messages =
+      ((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? [];
+    if (
+      messages.some(
+        (message) =>
+          typeof message.content === 'string' && message.content.includes(COMPLETION_AUDIT),
+      )
+    ) {
+      auditedRequests.push(nth);
+    }
+    return toolResponse(nth);
+  });
+  const {host, asked} = fakeHost((_request, nth) => (nth === 1 ? 'once' : 'deny'));
+
+  await runAgent(session(), choice, host, [noop]);
+
+  assert.deepEqual(auditedRequests, [21, 51]);
+  assert.equal(asked.length, 2);
+  assert.equal(calls(), 60);
 });
 
 test('a session is written after every step', async () => {
