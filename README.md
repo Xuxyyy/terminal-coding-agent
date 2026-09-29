@@ -12,7 +12,7 @@ directory.
 
 ## What it is
 
-One TypeScript package with 816 tests. You start it inside a
+One TypeScript package with 821 tests. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
@@ -91,6 +91,12 @@ are the truth about *why*.
 black-box package/CLI scenarios. Independent paid checks also exercise a
 packed print-mode edit and TUI resume in a real terminal. Safety and
 installed-product behavior are reported separately.
+
+The separate [Coding Agent Eval Harness](https://github.com/Xuxyyy/coding-agent-eval-harness)
+evaluates ACC, Codex, and Claude Code through their public CLIs. It provides a
+shared 25-case portable suite and an explicit SWE-bench Verified path for
+external integration evidence. The harness remains outside this repository;
+its live runs are not part of ACC's test count or release score.
 
 The embedded Task/Case Evaluation has been removed. Its complete sanitized
 2026-09-17 result remains in the historical baseline, alongside the Judge,

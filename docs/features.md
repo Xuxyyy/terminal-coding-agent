@@ -9,7 +9,7 @@ See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, and
 
 One TypeScript package. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 816 tests, all
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`). 821 tests, all
 passing.
 
 The workspace is the current directory. Installed as the `acc` command.
