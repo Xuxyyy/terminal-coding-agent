@@ -9,12 +9,6 @@ sidebar:
 embedded Task/Case Evaluation has been removed. Its dated results remain in
 the historical baseline.
 
-The separate [Coding Agent Eval Harness](https://github.com/Xuxyyy/coding-agent-eval-harness)
-evaluates ACC, Codex, and Claude Code through their public CLIs. It provides a
-shared 25-case portable suite and an explicit SWE-bench Verified path for
-external integration evidence. The harness remains outside this repository;
-its live runs are not part of ACC's test count or release score.
-
 ## Active checks
 
 ### Free repository tests

@@ -22,14 +22,6 @@ The active evaluation system keeps three questions separate:
 
 There is no combined score. A package pass cannot hide a safety failure.
 
-## External integration evaluation
-
-The separate [Coding Agent Eval Harness](https://github.com/Xuxyyy/coding-agent-eval-harness)
-evaluates ACC, Codex, and Claude Code through their public CLIs. It provides a
-shared 25-case portable suite and an explicit SWE-bench Verified path for
-external integration evidence. The harness remains outside this repository;
-its live runs are not part of ACC's test count or release score.
-
 ## Free offline tests
 
 `npm test` typechecks first and then runs the complete Node test suite. No

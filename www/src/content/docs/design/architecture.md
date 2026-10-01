@@ -161,7 +161,7 @@ JSON argument, and a mid-stream disconnect all ordinary test cases.
 **No test spends money.** The model client is faked in every one of them; there
 is no API key in the suite and no network call.
 
-The suite is **821 tests** — `src/tests/core` and
+The suite includes `src/tests/core` and
 `src/tests/ui` mirroring the two halves of the seam, plus the eval unit tests
 that sit beside the eval code in `src/evals`. `npm test` is the whole
 check, and it **typechecks first** — the script runs a clean build and then
