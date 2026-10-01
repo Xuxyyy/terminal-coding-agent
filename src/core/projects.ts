@@ -7,7 +7,7 @@ import {acquireSessionLock, SessionLockedError} from './session-lock.js';
 
 export const SESSION_MAX_AGE_DAYS = 30;
 export const SESSION_KEEP = 50;
-export const SESSION_VERSION = 2;
+export const SESSION_VERSION = 3;
 
 export type Entry = {dir: string; meta: SessionMeta};
 
@@ -93,6 +93,7 @@ export function evictSessions(
 ): number {
   const cutoff = now.getTime() - SESSION_MAX_AGE_DAYS * 86_400_000;
   const doomed = allEntries(home)
+    .filter((entry) => isCurrent(entry.meta))
     .slice(keep)
     .filter((entry) => Date.parse(entry.meta.updatedAt) < cutoff);
 

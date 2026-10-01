@@ -153,10 +153,18 @@ export function useAgent(
           setPhase({kind: 'busy'});
           return;
         }
+        if (event.type === 'model_retry') {
+          setPhase({kind: 'busy', label: `Retrying Gemini (${event.attempt}/${event.total})…`});
+          return;
+        }
         if (event.type === 'text_delta') {
+          setPhase({kind: 'busy'});
           liveTextRef.current += event.text;
           setStreamText(liveTextRef.current);
           return;
+        }
+        if (event.type === 'tool_start') {
+          setPhase({kind: 'busy'});
         }
         if (event.type === 'turn_end') {
           flushText();

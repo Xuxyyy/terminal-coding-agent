@@ -8,8 +8,8 @@ project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
 
-It is one npm package with a local test suite and no dependency on a hosted service:
-two providers work through one client, and one API key is enough.
+It is one npm package with a local test suite. Gemini supplies the model;
+conversation history, tools, permissions, and sessions stay in `acc`.
 
 ## Three decisions worth defending
 
@@ -29,8 +29,8 @@ two providers work through one client, and one API key is enough.
 - **Six tools.** It reads files, searches them with ripgrep, edits one exact
   piece of text, writes whole files, runs shell commands, and hands a
   self-contained job to a sub-agent.
-- **Two providers, four models.** DeepSeek and Kimi both work through one
-  client. One API key is enough — `acc` picks a model from the key it finds.
+- **One provider, two models.** Gemini works through the native Interactions
+  API. Set `GEMINI_API_KEY`; Gemini 3.8 Flash is the default.
 - **One permission gate.** Everything the agent does passes through it. Changes
   git can undo run silently; deletes, writes to protected paths, and anything
   reaching outside the project stop and ask.

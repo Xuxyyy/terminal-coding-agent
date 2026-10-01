@@ -18,7 +18,7 @@ npm registry yet, so there is no `npm install -g acc`.
   shell instead. That works, but it is slower and it ignores your `.gitignore`.
   Install ripgrep with `brew install ripgrep`, `apt install ripgrep`, or from
   [the ripgrep releases](https://github.com/BurntSushi/ripgrep/releases).
-- **An API key** for DeepSeek or Kimi. One is enough — see
+- **A Gemini API key.** See
   [Models](/configure/models).
 
 ## Install
@@ -72,7 +72,7 @@ terminal; piping into it does not work.
 Agentic Coding CLI
 workspace: /Users/you/code/my-project
 permissions: auto-edits
-──────────────────────────── DeepSeek v4 Flash ────────────────────────────
+──────────────────────────── Gemini 3.8 Flash ────────────────────────────
 ```
 
 The workspace, the permission mode the session starts in, and the model. Under

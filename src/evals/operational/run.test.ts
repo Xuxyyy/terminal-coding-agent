@@ -61,19 +61,15 @@ test('runCommand reports a missing executable', () => {
   assert.match(result.error ?? '', /ENOENT|not found/i);
 });
 
-test('isolatedEnv keeps ordinary values and masks every provider key', () => {
+test('isolatedEnv keeps ordinary values and masks the Gemini key', () => {
   const result = isolatedEnv('/tmp/acc-operational-home', {
     PATH: '/bin',
-    DEEPSEEK_API_KEY: 'secret-one',
-    GLM_API_KEY: 'secret-two',
-    MOONSHOT_API_KEY: 'secret-three',
+    GEMINI_API_KEY: 'secret-one',
   });
 
   assert.equal(result.PATH, '/bin');
   assert.equal(result.ACC_HOME, '/tmp/acc-operational-home');
-  assert.equal(result.DEEPSEEK_API_KEY, '');
-  assert.equal(result.GLM_API_KEY, '');
-  assert.equal(result.MOONSHOT_API_KEY, '');
+  assert.equal(result.GEMINI_API_KEY, '');
 });
 
 test('scenarioResult distinguishes assertion failure from command error', () => {

@@ -1,4 +1,5 @@
 import {MODELS, providerLabelOf} from './models.js';
+import {ModelTimeoutError} from './client.js';
 
 export type ExplainedError = {message: string; hint?: string};
 
@@ -17,6 +18,10 @@ function messageOf(error: unknown): string {
 
 export function explainError(error: unknown, model: string): ExplainedError {
   const raw = messageOf(error);
+  if (error instanceof ModelTimeoutError ||
+    (error as Error)?.cause instanceof ModelTimeoutError) {
+    return {message: raw, hint: 'try again, or check your Gemini connection'};
+  }
   const provider = providerLabelOf(model);
   if (!provider) return {message: raw};
 
@@ -30,6 +35,12 @@ export function explainError(error: unknown, model: string): ExplainedError {
     };
   }
   if (status === 429) {
+    if (/requests? per day|\bdaily\b|\bRPD\b/i.test(raw)) {
+      return {
+        message: `${provider} daily limit reached for ${label}`,
+        hint: 'wait for the daily reset at midnight Pacific, or choose another available model with /model',
+      };
+    }
     return {
       message: `${provider} rate limit — ${label} sent more requests than your plan allows`,
       hint: `switch model with /model, or raise your ${provider} plan`,

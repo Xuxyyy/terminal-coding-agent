@@ -2,6 +2,7 @@ export type RetryOptions = {
   retries: number;
   sleep: (ms: number) => Promise<void>;
   signal?: AbortSignal;
+  onRetry?: (nextAttempt: number, totalAttempts: number) => void;
 };
 
 export const RETRIES = 3;
@@ -44,6 +45,9 @@ export function isRetryable(error: unknown): boolean {
   if (typeof name === 'string' && CONNECTION_NAMES.has(name)) return true;
   if (typeof code === 'string' && CONNECTION_CODES.has(code)) return true;
   if (typeof status !== 'number') return false;
+  if (status === 429 && /requests? per day|\bdaily\b|\bRPD\b/i.test((error as Error).message ?? '')) {
+    return false;
+  }
   return status === 429 || status >= 500;
 }
 
@@ -73,6 +77,7 @@ export async function withRetry<T>(
       if (attempt >= retries) throw error;
       if (signal?.aborted) throw error;
       if (!isRetryable(error)) throw error;
+      options.onRetry?.(attempt + 2, retries + 1);
       await sleep(backoff(attempt));
       if (signal?.aborted) throw error;
     }

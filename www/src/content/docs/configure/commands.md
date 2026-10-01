@@ -214,30 +214,28 @@ it worked, and reopening `/permission` shows the new mode marked `(current)`.
 
 *Switch the model.*
 
-Opens a picker of all four models, in registry order, on the one you are using:
+Opens a picker of both Gemini models, on the one you are using:
 
 ```
 Choose a model
-  Kimi K3 — needs MOONSHOT_API_KEY
-  Kimi K2.7 Code — needs MOONSHOT_API_KEY
-  DeepSeek v4 Pro — deepseek-v4-pro
-❯ DeepSeek v4 Flash (current) — deepseek-v4-flash
+❯ Gemini 3.8 Flash (current) — gemini-3.8-flash
+  Gemini 3.1 Pro Preview — gemini-3.1-pro-preview
 ↑↓ to move · enter to choose · esc to cancel
 ```
 
 A model whose provider key is not set is shown rather than hidden, so you can
 see it is there and read which variable it wants. Such a row stays grey when you
 move onto it, `enter` does nothing, and the hint line becomes
-`set MOONSHOT_API_KEY to use this model`.
+`set GEMINI_API_KEY to use this model`.
 
-Choosing one prints `switched to Kimi K3`, draws a divider across the
+Choosing one prints `switched to Gemini 3.1 Pro Preview`, draws a divider across the
 transcript where the change happened, and saves the id to `~/.acc/settings.json`
 for next time. If it could not be saved, the notice says so:
-`switched to Kimi K3 (not saved to settings.json)`.
+`switched to Gemini 3.1 Pro Preview (not saved to settings.json)`.
 
 The conversation carries over untouched — only the client changes. Earlier rows
 keep naming the model that answered them, and the new one picks up the context
-budget of its own window. [Models](/configure/models) lists the four.
+budget of its own window. [Models](/configure/models) lists both.
 
 ## Keys and leaving
 

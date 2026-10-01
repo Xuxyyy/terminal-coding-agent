@@ -62,11 +62,11 @@ function records(dir: string): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line));
 }
 
-function legacySession(work: string, root: string, id: string): string {
+function legacySession(work: string, root: string, id: string, version = 1): string {
   const dir = path.join(projectDir(work, root), 'sessions', id);
   fs.mkdirSync(dir, {recursive: true});
   const meta: SessionMeta = {
-    version: 1,
+    version,
     id,
     workspace: work,
     startedAt: '2026-08-10T09:00:00.000Z',
@@ -134,6 +134,17 @@ test('a version 1 session is not loaded', () => {
   assert.throws(() => loadSession(work, null, root), /no session/);
   assert.throws(() => loadSession(work, '20260810-090000-aaaabbbb', root), /no session/);
   assert.deepEqual(listSessions(work, root), []);
+  assert.equal(fs.existsSync(old), true);
+});
+
+test('version 2 sessions stay on disk but cannot be resumed or evicted', () => {
+  const root = home();
+  const work = workspace();
+  const old = legacySession(work, root, '20260810-090000-ccccdddd', 2);
+  assert.throws(() => loadSession(work, null, root), /no session/);
+  assert.throws(() => openSession(work, '20260810-090000-ccccdddd', root), /no session/);
+  assert.deepEqual(listSessions(work, root), []);
+  evictSessions(root, new Date('2026-10-01T00:00:00Z'), 0);
   assert.equal(fs.existsSync(old), true);
 });
 

@@ -7,14 +7,9 @@ import {chooseModel, DEFAULT_MODEL} from '../../core/client.js';
 import {loadEnvFiles, parseEnv} from '../../core/env.js';
 import {MODEL_IDS, PROVIDERS} from '../../core/models.js';
 
-test('supported providers and models exclude Z.ai', () => {
-  assert.deepEqual(Object.keys(PROVIDERS), ['deepseek', 'kimi']);
-  assert.deepEqual(MODEL_IDS, [
-    'kimi-k3',
-    'kimi-k2.7-code',
-    'deepseek-v4-pro',
-    'deepseek-v4-flash',
-  ]);
+test('Gemini is the only provider with two model choices', () => {
+  assert.deepEqual(Object.keys(PROVIDERS), ['gemini']);
+  assert.deepEqual(MODEL_IDS, ['gemini-3.8-flash', 'gemini-3.1-pro-preview']);
 });
 
 test('parseEnv reads plain, quoted, and exported lines', () => {
@@ -63,18 +58,18 @@ test('loadEnvFiles fills gaps without overriding the real environment', () => {
 });
 
 test('chooseModel prefers the default model when its key is present', () => {
-  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}), DEFAULT_MODEL);
-  assert.equal(DEFAULT_MODEL, 'deepseek-v4-flash');
+  assert.equal(chooseModel({GEMINI_API_KEY: 'k'}), DEFAULT_MODEL);
+  assert.equal(DEFAULT_MODEL, 'gemini-3.8-flash');
 });
 
-test('chooseModel falls back to a model whose key is set', () => {
-  assert.equal(chooseModel({MOONSHOT_API_KEY: 'k'}), 'kimi-k3');
+test('chooseModel uses the default even without a key', () => {
+  assert.equal(chooseModel({}), 'gemini-3.8-flash');
 });
 
 test('chooseModel obeys an explicit ACC_MODEL', () => {
   assert.equal(
-    chooseModel({ACC_MODEL: 'kimi-k3', DEEPSEEK_API_KEY: 'k'}),
-    'kimi-k3',
+    chooseModel({ACC_MODEL: 'gemini-3.1-pro-preview', GEMINI_API_KEY: 'k'}),
+    'gemini-3.1-pro-preview',
   );
 });
 
@@ -83,14 +78,13 @@ test('chooseModel names the default when nothing is configured', () => {
 });
 
 test('chooseModel takes the saved model when the environment names none', () => {
-  assert.equal(chooseModel({}, 'kimi-k3'), 'kimi-k3');
+  assert.equal(chooseModel({}, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
 });
 
 test('an explicit ACC_MODEL beats a saved model', () => {
-  assert.equal(chooseModel({ACC_MODEL: 'deepseek-v4-pro'}, 'kimi-k3'), 'deepseek-v4-pro');
+  assert.equal(chooseModel({ACC_MODEL: 'gemini-3.8-flash'}, 'gemini-3.1-pro-preview'), 'gemini-3.8-flash');
 });
 
 test('a saved model beats the key scan', () => {
-  assert.equal(chooseModel({MOONSHOT_API_KEY: 'k'}, 'kimi-k2.7-code'), 'kimi-k2.7-code');
-  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}, 'kimi-k2.7-code'), 'kimi-k2.7-code');
+  assert.equal(chooseModel({GEMINI_API_KEY: 'k'}, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
 });

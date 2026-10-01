@@ -37,6 +37,15 @@ test('rate limits and server errors are retryable', () => {
   assert.equal(isRetryable(statusError(503)), true);
 });
 
+test('a daily Gemini quota error is not retried', async () => {
+  const quota = statusError(429, 'Rate limit exceeded (limit: 20 requests per day on Free Tier)');
+  const attempt = counted(() => quota);
+
+  assert.equal(isRetryable(quota), false);
+  await assert.rejects(withRetry(attempt.run, {sleep: noSleep}), /requests per day/);
+  assert.equal(attempt.calls(), 1);
+});
+
 test('a bad request is not retryable', () => {
   assert.equal(isRetryable(statusError(400)), false);
   assert.equal(isRetryable(statusError(401)), false);
@@ -66,11 +75,16 @@ test('withRetry returns the first success without sleeping', async () => {
 
 test('withRetry recovers on a later attempt', async () => {
   const attempt = counted((n) => (n < 3 ? statusError(500) : 'ok'));
+  const retries: Array<[number, number]> = [];
 
-  const value = await withRetry(attempt.run, {sleep: noSleep});
+  const value = await withRetry(attempt.run, {
+    sleep: noSleep,
+    onRetry: (next, total) => retries.push([next, total]),
+  });
 
   assert.equal(value, 'ok');
   assert.equal(attempt.calls(), 3);
+  assert.deepEqual(retries, [[2, 4], [3, 4]]);
 });
 
 test('withRetry retries three times, then gives up', async () => {

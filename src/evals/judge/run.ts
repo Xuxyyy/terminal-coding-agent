@@ -20,7 +20,7 @@ import {
 } from './score.js';
 
 export const DEFAULT_CASES = 'evals/cases/judge.jsonl';
-export const DEFAULT_MODEL = 'deepseek-v4-flash';
+export const DEFAULT_MODEL = 'gemini-3.8-flash';
 export const RESULTS_DIR = 'evals/results';
 
 export type RunOptions = {

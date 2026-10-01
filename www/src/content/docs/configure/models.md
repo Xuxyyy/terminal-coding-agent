@@ -1,87 +1,46 @@
 ---
 title: Models
-description: Two providers and four model ids behind one client, the model key, where your API key is read from, and the order acc uses to pick a model.
+description: Gemini model choices, API key setup, and how acc selects a model.
 sidebar:
   order: 5
 ---
 
-`acc` talks to two providers through one OpenAI-compatible client. You need a
-key for **one** of them.
+`acc` uses the native Gemini Interactions API. It keeps conversation history
+locally and sends it with each request using `store: false`. It does not use a
+Google-hosted agent. File and shell tools still run on your computer.
 
-| Provider | Environment variable | Sign up |
-|---|---|---|
-| DeepSeek | `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com) |
-| Moonshot / Kimi | `MOONSHOT_API_KEY` | [platform.moonshot.ai](https://platform.moonshot.ai) |
+| Model id | Role | Context window |
+|---|---|---:|
+| `gemini-3.8-flash` | Default | 1,048,576 tokens |
+| `gemini-3.1-pro-preview` | Optional | 1,048,576 tokens |
 
-| Model id | Provider | Context window |
-|---|---|---|
-| `deepseek-v4-flash` | DeepSeek | 262,144 |
-| `deepseek-v4-pro` | DeepSeek | 262,144 |
-| `kimi-k3` | Kimi | 262,144 |
-| `kimi-k2.7-code` | Kimi | 262,144 |
+Every reply is capped at 32,000 output tokens.
 
-`deepseek-v4-flash` is the default. Every reply is capped at 32,000 output
-tokens.
+## API key
 
-## `model`
-
-```json
-{ "model": "deepseek-v4-flash" }
-```
-
-One of the four ids above. Absent everywhere means `acc` falls back to the first
-provider key it finds.
-
-**It is read from `~/.acc/settings.json` only.** The key in a project's
-`.acc/settings.json` is a startup error naming the user file, and an unknown id
-is a startup error listing the four valid ones.
-
-An older saved GLM model is ignored after upgrading. Pick a supported model
-with `/model` to replace that saved setting.
-
-[`/model`](/configure/commands) writes this key, so what you read in the file is
-always what the next run starts on. `ACC_MODEL` still wins over it.
-
-## Where your key is read from
-
-At startup `acc` reads two files, in this order:
-
-1. `.env` in the folder you started it in
-2. `~/.acc/.env`
-
-A variable already set in your shell wins over both, and the first file to
-define a key wins over the second. So `~/.acc/.env` is the good place for a key
-you always want, and a project's own `.env` overrides it when you need
-something different there.
-
-The repository ships a `.env.example`. Copy it and fill in one line:
+Create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set
+`GEMINI_API_KEY`. `acc` checks your shell first, then `.env` in the current
+project, then `~/.acc/.env`.
 
 ```bash
 cp .env.example .env
 ```
 
-```bash
-# .env
-DEEPSEEK_API_KEY=sk-...
+Fill in the key in `.env`. Keep that file private and out of Git.
+
+## Model selection
+
+`acc` uses `ACC_MODEL` if it is set. Otherwise it uses the model saved in
+`~/.acc/settings.json`. Otherwise it starts with `gemini-3.8-flash`.
+
+Use [`/model`](/configure/commands) to switch models and save your choice.
+The saved setting has this form:
+
+```json
+{ "model": "gemini-3.1-pro-preview" }
 ```
 
-## How the model is chosen
-
-1. If `ACC_MODEL` is set, that model is used.
-2. Otherwise, if `"model"` is saved in `~/.acc/settings.json`, that model is
-   used. The [`/model`](/configure/commands) picker writes that key, so a model
-   you switch to is still there tomorrow.
-3. Otherwise, if `DEEPSEEK_API_KEY` is set, the default `deepseek-v4-flash` is
-   used.
-4. Otherwise the first model whose provider key is present is used.
-
-`ACC_MODEL` stays above the saved model on purpose: an override a settings file
-could beat would not be an override.
-
-If the chosen model needs a key you have not set, `acc` stops at startup with
-`DEEPSEEK_API_KEY is not set — needed for DeepSeek v4 Flash.` If `ACC_MODEL`
-names a model that does not exist, it stops with `Unknown model` and lists the
-four valid ids.
-
-The model in use is printed in the header when `acc` starts — see
-[Install](/start/install).
+A model setting in a project's `.acc/settings.json` is a startup error; the
+setting belongs in the user file. Old DeepSeek and Kimi model settings are
+ignored after this update. If the selected model is unknown or the Gemini key
+is missing, `acc` stops with a clear error.

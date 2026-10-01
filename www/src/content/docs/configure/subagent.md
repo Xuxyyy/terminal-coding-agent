@@ -41,7 +41,7 @@ Save this as `~/.acc/agents/explorer.md`:
 ```md
 ---
 description: Explores and explains code without editing it
-model: deepseek-v4-flash
+model: gemini-3.8-flash
 tools:
   - read_file
   - grep

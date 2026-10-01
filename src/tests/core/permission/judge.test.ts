@@ -376,11 +376,9 @@ test('anything else the judge says is a question for the user', () => {
   }
 });
 
-test('every model is judged by a model of its own provider', () => {
-  assert.equal(judgeModelFor('deepseek-v4-pro'), 'deepseek-v4-flash');
-  assert.equal(judgeModelFor('deepseek-v4-flash'), 'deepseek-v4-flash');
-  assert.equal(judgeModelFor('kimi-k3'), 'kimi-k2.7-code');
-  assert.equal(judgeModelFor('kimi-k2.7-code'), 'kimi-k2.7-code');
+test('both Gemini models use Flash for permission judging', () => {
+  assert.equal(judgeModelFor('gemini-3.1-pro-preview'), 'gemini-3.8-flash');
+  assert.equal(judgeModelFor('gemini-3.8-flash'), 'gemini-3.8-flash');
 });
 
 test('an unknown model id is judged by itself', () => {

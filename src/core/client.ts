@@ -1,4 +1,5 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
+import {geminiClient} from './gemini.js';
 import {loadEnvFiles} from './env.js';
 import type {Host, ModelTokenUsage, Usage} from './host.js';
 import type {AssistantContinuation} from './messages.js';
@@ -23,6 +24,14 @@ export function judgeModelFor(model: string): string {
 }
 
 export const MAX_OUTPUT_TOKENS = 32_000;
+export const MODEL_REQUEST_TIMEOUT_MS = 120_000;
+
+export class ModelTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Gemini did not finish within ${Math.ceil(timeoutMs / 1_000)} seconds`);
+    this.name = 'ModelTimeoutError';
+  }
+}
 
 export type ModelChoice = {
   client: OpenAI;
@@ -57,7 +66,7 @@ export function createClient(modelId?: string): ModelChoice {
     throw new Error(`${provider.keyEnv} is not set — needed for ${info.label}.`);
   }
   return {
-    client: new OpenAI({apiKey, baseURL: provider.baseUrl}),
+    client: geminiClient(apiKey),
     model: resolved,
     label: info.label,
     contextWindow: info.contextWindow,
@@ -126,6 +135,8 @@ async function attemptStep(
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
+  signal: AbortSignal,
+  isActive: () => boolean,
 ): Promise<AssistantResponse> {
   let content = '';
   let reasoningContent: string | undefined;
@@ -159,10 +170,12 @@ async function attemptStep(
         stream_options: {include_usage: true},
         max_tokens: MAX_OUTPUT_TOKENS,
       },
-      {signal: host.signal},
+      {signal},
     );
+    if (!isActive()) throw new DOMException('The request was interrupted', 'AbortError');
 
     for await (const chunk of stream) {
+      if (!isActive()) throw new DOMException('The request was interrupted', 'AbortError');
       if (chunk.usage) {
         usage.prompt = chunk.usage.prompt_tokens ?? 0;
         usage.completion = chunk.usage.completion_tokens ?? 0;
@@ -210,10 +223,60 @@ export async function streamStep(
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
-  retry: Partial<RetryOptions> = {},
+  retry: Partial<RetryOptions> & {timeoutMs?: number} = {},
 ): Promise<AssistantResponse> {
-  return withRetry(() => attemptStep(choice, messages, toolDefs, host), {
+  const {timeoutMs = MODEL_REQUEST_TIMEOUT_MS, ...retryOptions} = retry;
+  return withRetry(() => {
+    const controller = new AbortController();
+    const signal = AbortSignal.any([host.signal, controller.signal]);
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let abortTimer: ReturnType<typeof setTimeout> | undefined;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    let onAbort: (() => void) | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      onAbort = () => {
+        // Give the stream a moment to report any text it already yielded.
+        // The fallback still settles an SDK call that ignores cancellation.
+        abortTimer = setTimeout(
+          () => reject(new DOMException('The request was interrupted', 'AbortError')),
+          50,
+        );
+      };
+      if (host.signal.aborted) {
+        onAbort();
+        return;
+      }
+      host.signal.addEventListener('abort', onAbort, {once: true});
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        timeoutTimer = setTimeout(() => reject(new ModelTimeoutError(timeoutMs)), 50);
+      }, timeoutMs);
+    });
+    return Promise.race([attemptStep(choice, messages, toolDefs, host, signal, () => active), deadline])
+      .catch((error: unknown) => {
+        if (!timedOut) throw error;
+        const timeout = new ModelTimeoutError(timeoutMs);
+        if (error instanceof StreamFailure) {
+          throw new StreamFailure(timeout.message, error.partial, timeout);
+        }
+        throw timeout;
+      })
+      .finally(() => {
+        active = false;
+        if (timer) clearTimeout(timer);
+        if (abortTimer) clearTimeout(abortTimer);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (onAbort) host.signal.removeEventListener('abort', onAbort);
+      });
+  }, {
     signal: host.signal,
-    ...retry,
+    ...retryOptions,
+    onRetry: (attempt, total) => {
+      host.onEvent({type: 'model_retry', attempt, total});
+      retryOptions.onRetry?.(attempt, total);
+    },
   });
 }

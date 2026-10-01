@@ -16,6 +16,14 @@ const RULE_PATTERN = /^(bash|edit)\((.*)\)$/;
 const WRITE_PATTERN = /^write\(/;
 const MODE_KEY = 'permission_mode';
 const MODEL_KEY = 'model';
+const RETIRED_MODELS = new Set([
+  'glm-5.2',
+  'glm-4.7-flash',
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'kimi-k3',
+  'kimi-k2.7-code',
+]);
 
 export class SettingsError extends Error {}
 
@@ -82,7 +90,7 @@ export function parseModel(
         'remove it from this file',
     );
   }
-  if (value === 'glm-5.2' || value === 'glm-4.7-flash') return null;
+  if (typeof value === 'string' && RETIRED_MODELS.has(value)) return null;
   if (typeof value !== 'string' || !MODELS[value]) {
     throw new SettingsError(
       `${file}: "${MODEL_KEY}" is ${JSON.stringify(value)}; use ${MODEL_IDS.join(', ')}`,
