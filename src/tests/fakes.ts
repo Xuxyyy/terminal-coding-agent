@@ -5,6 +5,7 @@ import type {
   ConfirmDecision,
   ConfirmRequest,
   Host,
+  ModelTokenUsage,
 } from '../core/host.js';
 import type {SessionStore} from '../core/store.js';
 
@@ -43,13 +44,20 @@ export function finishChunk(reason: string): unknown {
   return {choices: [{index: 0, delta: {}, finish_reason: reason}]};
 }
 
-export function usageChunk(prompt: number, completion: number): unknown {
+export function usageChunk(
+  prompt: number,
+  completion: number,
+  cacheHit = 0,
+  cacheMiss = prompt - cacheHit,
+): unknown {
   return {
     choices: [],
     usage: {
       prompt_tokens: prompt,
       completion_tokens: completion,
       total_tokens: prompt + completion,
+      prompt_cache_hit_tokens: cacheHit,
+      prompt_cache_miss_tokens: cacheMiss,
     },
   };
 }
@@ -110,22 +118,27 @@ export function fakeHost(
   host: Host;
   events: AgentEvent[];
   asked: ConfirmRequest[];
+  modelUsage: ModelTokenUsage[];
   controller: AbortController;
 } {
   const events: AgentEvent[] = [];
   const asked: ConfirmRequest[] = [];
+  const modelUsage: ModelTokenUsage[] = [];
   const controller = new AbortController();
   const host: Host = {
     signal: controller.signal,
     onEvent(event) {
       events.push(event);
     },
+    onModelUsage(usage) {
+      modelUsage.push(usage);
+    },
     async confirm(request) {
       asked.push(request);
       return answer(request, asked.length);
     },
   };
-  return {host, events, asked, controller};
+  return {host, events, asked, modelUsage, controller};
 }
 
 export function fakeStore(overrides: Partial<SessionStore> = {}): SessionStore {

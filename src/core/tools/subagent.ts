@@ -53,6 +53,9 @@ export function childHost(host: Host): {host: Host; events: AgentEvent[]} {
   return {
     host: {
       signal: host.signal,
+      ...(host.onModelUsage
+        ? {onModelUsage: (usage) => host.onModelUsage?.(usage)}
+        : {}),
       onEvent(event) {
         events.push(event);
       },

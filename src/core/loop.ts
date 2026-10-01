@@ -89,6 +89,7 @@ function judgeFor(session: Session, host: Host, model: string): Judge | undefine
         denied: session.denied,
       }),
       host.signal,
+      host.onModelUsage,
     );
   };
 }

@@ -142,12 +142,16 @@ test('narration before a tool call is not glued to the final message', async () 
 
 test('the usage the parent sees is the whole child turn', async () => {
   const root = workspace();
-  const {host} = fakeHost();
+  const {host, modelUsage} = fakeHost();
   const {choice} = readsThenAnswers(root);
 
   const output = await subagent.run(job, context(root, host, choice));
 
   assert.deepEqual(output.usage, {prompt: 13, completion: 6, total: 19});
+  assert.deepEqual(
+    modelUsage.map((usage) => usage.totalTokens),
+    [12, 7],
+  );
 });
 
 test('a sub-agent is never offered a sub-agent of its own', () => {
@@ -262,7 +266,7 @@ test('a named type uses its lazy model, appended prompt, tool order, and stricte
   const tool = makeSubagent(
     [
       definition({
-        model: 'glm-5.2',
+        model: 'kimi-k3',
         tools: ['grep', 'read_file'],
         permissionMode: 'ask-edits',
       }),
@@ -279,7 +283,7 @@ test('a named type uses its lazy model, appended prompt, tool order, and stricte
   );
 
   assert.equal(output.text, ANSWER);
-  assert.deepEqual(requested, ['glm-5.2']);
+  assert.deepEqual(requested, ['kimi-k3']);
   const body = child.bodies[0]!;
   const messages = body.messages as {role: string; content: string}[];
   assert.equal(messages[0]!.content, subagentPrompt(root, 'ask-edits', 'Report exact paths.'));
@@ -351,8 +355,8 @@ test('a client factory failure is tool text that names the selected agent', asyn
   const root = workspace();
   const {host} = fakeHost();
   const parent = recordingChoice();
-  const tool = makeSubagent([definition({model: 'glm-5.2'})], () => {
-    throw new Error('GLM_API_KEY is not set');
+  const tool = makeSubagent([definition({model: 'kimi-k3'})], () => {
+    throw new Error('MOONSHOT_API_KEY is not set');
   });
 
   const output = await tool.run(
@@ -362,7 +366,7 @@ test('a client factory failure is tool text that names the selected agent', asyn
 
   assert.match(output.text, /^Error:/);
   assert.match(output.text, /explorer/);
-  assert.match(output.text, /GLM_API_KEY/);
+  assert.match(output.text, /MOONSHOT_API_KEY/);
   assert.equal(parent.calls(), 0);
 });
 

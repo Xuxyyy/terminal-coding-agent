@@ -281,12 +281,16 @@ test('the usage of every attempt is reported', async () => {
   const texts = [DSML, RECAP];
   let at = 0;
   const {choice} = recordingModel(() => summaryResponse(texts[at++]!));
-  const {host} = fakeHost();
+  const {host, modelUsage} = fakeHost();
 
   const result = await compactSession(session(), choice, host);
 
   assert.equal(result?.usage.prompt, 1_000);
   assert.equal(result?.usage.completion, 80);
+  assert.deepEqual(
+    modelUsage.map((usage) => usage.totalTokens),
+    [540, 540],
+  );
 });
 
 test('recent user prompts are retained newest-first and restored chronologically', () => {

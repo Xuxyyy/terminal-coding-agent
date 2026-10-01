@@ -376,13 +376,11 @@ test('anything else the judge says is a question for the user', () => {
   }
 });
 
-test('every model is judged by the cheaper model of its own provider', () => {
+test('every model is judged by a model of its own provider', () => {
   assert.equal(judgeModelFor('deepseek-v4-pro'), 'deepseek-v4-flash');
   assert.equal(judgeModelFor('deepseek-v4-flash'), 'deepseek-v4-flash');
   assert.equal(judgeModelFor('kimi-k3'), 'kimi-k2.7-code');
   assert.equal(judgeModelFor('kimi-k2.7-code'), 'kimi-k2.7-code');
-  assert.equal(judgeModelFor('glm-5.2'), 'glm-4.7-flash');
-  assert.equal(judgeModelFor('glm-4.7-flash'), 'glm-4.7-flash');
 });
 
 test('an unknown model id is judged by itself', () => {
@@ -392,12 +390,15 @@ test('an unknown model id is judged by itself', () => {
 
 type Sent = {model: string; messages: Message[]; max_tokens: number; stream: boolean};
 
-function fakeJudge(reply: string | Error): {choice: ModelChoice; sent: () => Sent} {
+function fakeJudge(
+  reply: string | Error,
+  usage?: Record<string, unknown>,
+): {choice: ModelChoice; sent: () => Sent} {
   let seen: Sent | null = null;
   const create = async (request: Sent) => {
     seen = request;
     if (reply instanceof Error) throw reply;
-    return {choices: [{message: {content: reply}}]};
+    return {choices: [{message: {content: reply}}], ...(usage ? {usage} : {})};
   };
   const choice = {
     client: {chat: {completions: {create}}},
@@ -450,4 +451,28 @@ test('the judge reads the model reply, and anything short of it asks the user', 
     );
     assert.equal(verdict, expected, String(reply));
   }
+});
+
+test('the judge reports the provider token usage', async () => {
+  const judge = fakeJudge('ALLOW', {
+    prompt_tokens: 80,
+    completion_tokens: 1,
+    total_tokens: 81,
+    prompt_tokens_details: {cached_tokens: 50},
+  });
+  const usage: unknown[] = [];
+
+  await askJudge(judge.choice, built([]), NEVER_ABORTED, (value) => {
+    usage.push(value);
+  });
+
+  assert.deepEqual(usage, [
+    {
+      inputTokens: 80,
+      outputTokens: 1,
+      totalTokens: 81,
+      cacheHitInputTokens: 50,
+      cacheMissInputTokens: 30,
+    },
+  ]);
 });

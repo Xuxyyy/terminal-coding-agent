@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
-import type {ModelChoice} from '../client.js';
+import {modelTokenUsage, type ModelChoice} from '../client.js';
+import type {ModelTokenUsage} from '../host.js';
 import type {Request} from './decide.js';
 
 export const JUDGE_RUBRIC = [
@@ -147,12 +148,14 @@ export async function askJudge(
   choice: ModelChoice,
   messages: OpenAI.ChatCompletionMessageParam[],
   signal: AbortSignal,
+  onModelUsage?: (usage: ModelTokenUsage) => void,
 ): Promise<'allow' | 'ask'> {
   try {
     const reply = await choice.client.chat.completions.create(
       {model: choice.model, messages, stream: false, max_tokens: JUDGE_MAX_TOKENS},
       {signal: AbortSignal.any([signal, AbortSignal.timeout(JUDGE_TIMEOUT)])},
     );
+    if (reply.usage) onModelUsage?.(modelTokenUsage(reply.usage));
     return judgeVerdict(reply.choices[0]?.message?.content ?? '');
   } catch {
     return 'ask';

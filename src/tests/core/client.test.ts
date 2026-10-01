@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {StreamFailure, streamStep} from '../../core/client.js';
+import {
+  modelTokenUsage,
+  StreamFailure,
+  streamStep,
+} from '../../core/client.js';
 import {
   connectionError,
   fakeHost,
@@ -47,7 +51,7 @@ test('a response collects the text, the tool calls and the usage', async () => {
       usageChunk(120, 30),
     ),
   );
-  const {host, events} = fakeHost();
+  const {host, events, modelUsage} = fakeHost();
 
   const response = await streamStep(choice, [], [], host, fast);
 
@@ -61,8 +65,55 @@ test('a response collects the text, the tool calls and the usage', async () => {
     {id: 'c1', name: 'read_file', args: '{"path":"a.js"}'},
   ]);
   assert.deepEqual(response.usage, {prompt: 120, completion: 30, total: 150});
+  assert.deepEqual(modelUsage, [
+    {
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+      cacheHitInputTokens: 0,
+      cacheMissInputTokens: 120,
+    },
+  ]);
   assert.equal(calls(), 1);
   assert.deepEqual(texts(events), ['look', 'ing']);
+});
+
+test('standard cached-token details produce cache hit and miss usage', () => {
+  assert.deepEqual(
+    modelTokenUsage({
+      prompt_tokens: 120,
+      completion_tokens: 30,
+      total_tokens: 150,
+      prompt_tokens_details: {cached_tokens: 80},
+    }),
+    {
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+      cacheHitInputTokens: 80,
+      cacheMissInputTokens: 40,
+    },
+  );
+});
+
+test('provider cache hit and miss fields are used directly', () => {
+  assert.deepEqual(
+    modelTokenUsage({
+      prompt_tokens: 120,
+      completion_tokens: 30,
+      total_tokens: 150,
+      prompt_tokens_details: {cached_tokens: 1},
+      prompt_cache_hit_tokens: 70,
+      prompt_cache_miss_tokens: 50,
+    }),
+    {
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+      cacheHitInputTokens: 70,
+      cacheMissInputTokens: 50,
+    },
+  );
 });
 
 test('a dropped connection before any output is retried', async () => {

@@ -29,6 +29,7 @@ export function jsonLines(result: HeadlessResult): string[] {
       stopped: result.stopped,
       message: result.text,
       usage: result.usage,
+      tokenUsage: result.tokenUsage,
       prompts: result.prompts.length,
       steps,
       ...(result.error ? {error: result.error} : {}),

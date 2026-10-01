@@ -99,18 +99,67 @@ test('no time at all stops before the model is ever called', async () => {
   assert.equal(result.text, '');
   assert.deepEqual(result.events, []);
   assert.deepEqual(result.usage, {prompt: 0, completion: 0, total: 0});
+  assert.deepEqual(result.tokenUsage, {
+    requests: [],
+    totals: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheHitInputTokens: 0,
+      cacheMissInputTokens: 0,
+    },
+  });
 });
 
-test('usage adds up over every step of the run', async () => {
+test('usage records every request and adds up provider totals', async () => {
   const {choice} = fakeModel((nth) =>
     nth === 1
-      ? callResponse('write_file', {path: 'note.txt', content: 'two\n'}, 10, 2)
-      : textResponse(['wrote it'], 30, 5),
+      ? streamOf(
+          toolCallChunk(
+            'call-write_file',
+            'write_file',
+            JSON.stringify({path: 'note.txt', content: 'two\n'}),
+          ),
+          finishChunk('tool_calls'),
+          usageChunk(10, 2, 4, 6),
+        )
+      : streamOf(
+          textChunk('wrote it'),
+          finishChunk('stop'),
+          usageChunk(30, 5, 20, 10),
+        ),
   );
 
   const result = await headless({root: tempDir(), choice, policy: 'yes'});
 
   assert.deepEqual(result.usage, {prompt: 40, completion: 7, total: 47});
+  assert.deepEqual(result.tokenUsage, {
+    requests: [
+      {
+        request: 1,
+        inputTokens: 10,
+        outputTokens: 2,
+        totalTokens: 12,
+        cacheHitInputTokens: 4,
+        cacheMissInputTokens: 6,
+      },
+      {
+        request: 2,
+        inputTokens: 30,
+        outputTokens: 5,
+        totalTokens: 35,
+        cacheHitInputTokens: 20,
+        cacheMissInputTokens: 10,
+      },
+    ],
+    totals: {
+      inputTokens: 40,
+      outputTokens: 7,
+      totalTokens: 47,
+      cacheHitInputTokens: 24,
+      cacheMissInputTokens: 16,
+    },
+  });
 });
 
 test('every event of the run is kept in the order it was emitted', async () => {

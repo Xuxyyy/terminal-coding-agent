@@ -6,6 +6,7 @@ import {addTask, createSession} from '../session.js';
 import {modeOf} from '../settings.js';
 import {
   createHeadlessHost,
+  type HeadlessTokenUsage,
   type HeadlessPolicy,
   type RecordedPrompt,
 } from './host.js';
@@ -17,6 +18,7 @@ export type HeadlessResult = {
   events: AgentEvent[];
   prompts: RecordedPrompt[];
   usage: Usage;
+  tokenUsage: HeadlessTokenUsage;
   stopped: StopReason;
   error?: string;
 };
@@ -36,7 +38,7 @@ export async function runHeadless(options: {
   addTask(session, options.task);
 
   const controller = new AbortController();
-  const {host, events, prompts} = createHeadlessHost({
+  const {host, events, prompts, tokenUsage} = createHeadlessHost({
     policy: options.policy,
     signal: controller.signal,
   });
@@ -77,5 +79,13 @@ export async function runHeadless(options: {
         ? 'error'
         : 'done';
 
-  return {text, events, prompts, usage, stopped, ...(error ? {error} : {})};
+  return {
+    text,
+    events,
+    prompts,
+    usage,
+    tokenUsage,
+    stopped,
+    ...(error ? {error} : {}),
+  };
 }

@@ -112,7 +112,7 @@ acc -p "list the tools" --json
 {"type":"tool_end","id":"call_1","name":"read_file","result":"…","diff":null}
 {"type":"text_delta","text":"There are five tools."}
 {"type":"turn_end","usage":{"prompt":1840,"completion":96,"total":1936}}
-{"kind":"result","schemaVersion":1,"stopped":"done","message":"There are five tools.","usage":{"prompt":1840,"completion":96,"total":1936},"prompts":0,"steps":1}
+{"kind":"result","schemaVersion":1,"stopped":"done","message":"There are five tools.","usage":{"prompt":1840,"completion":96,"total":1936},"tokenUsage":{"requests":[{"request":1,"inputTokens":1840,"outputTokens":96,"totalTokens":1936,"cacheHitInputTokens":1024,"cacheMissInputTokens":816}],"totals":{"inputTokens":1840,"outputTokens":96,"totalTokens":1936,"cacheHitInputTokens":1024,"cacheMissInputTokens":816}},"prompts":0,"steps":1}
 ```
 
 Every line parses on its own. The event lines carry a `type`; the one summary
@@ -124,6 +124,7 @@ line carries a `kind` instead, so the two never blur together.
 | `stopped` | `done`, `denied`, `timeout`, or `error` — why the run ended. |
 | `message` | The authoritative final assistant text. |
 | `usage` | Prompt, completion and total tokens for the whole run. |
+| `tokenUsage` | Provider-reported token use for each numbered model request and accumulated totals, including cache hits and misses. |
 | `prompts` | How many permission confirms the run was asked, whatever the answer. |
 | `steps` | How many tool calls the run made. |
 

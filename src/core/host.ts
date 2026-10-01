@@ -14,6 +14,14 @@ export type DiffPayload = {
 
 export type Usage = {prompt: number; completion: number; total: number};
 
+export type ModelTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheHitInputTokens: number;
+  cacheMissInputTokens: number;
+};
+
 export type AgentEvent =
   | {type: 'text_delta'; text: string}
   | {type: 'tool_start'; id: string; name: string; args: unknown}
@@ -45,5 +53,6 @@ export type ConfirmRequest = {
 export interface Host {
   confirm(request: ConfirmRequest): Promise<ConfirmDecision>;
   onEvent(event: AgentEvent): void;
+  onModelUsage?(usage: ModelTokenUsage): void;
   signal: AbortSignal;
 }

@@ -104,6 +104,9 @@ export function withoutText(host: Host): Host {
   return {
     signal: host.signal,
     confirm: (request) => host.confirm(request),
+    ...(host.onModelUsage
+      ? {onModelUsage: (usage) => host.onModelUsage?.(usage)}
+      : {}),
     onEvent: (event) => {
       if (event.type !== 'text_delta') host.onEvent(event);
     },

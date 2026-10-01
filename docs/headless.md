@@ -137,13 +137,19 @@ activity, the prompts with their decisions, and the stop reason go to stderr.
 
 `--json` moves the whole event stream to stdout instead: one JSON object per
 `AgentEvent` in order, then a final
-`{kind: 'result', schemaVersion, stopped, message, usage, prompts, steps}` line.
+`{kind: 'result', schemaVersion, stopped, message, usage, tokenUsage, prompts,
+steps}` line.
 `schemaVersion` versions this public record, and `message` is the authoritative
 final assistant text so a harness does not need to rebuild it from deltas. The trailing summary
 mirrors the judge eval's result file (`evals.md`), so a harness reads a shape it
-already knows. `steps` there is the number of tool calls the run made — the
-loop's own iteration count is not derivable from the event stream, and every
-step but the last makes at least one call.
+already knows. `usage.prompt`, `usage.completion`, and `usage.total` remain the
+original accumulated fields. `tokenUsage.requests` records each model response
+in request order, and `tokenUsage.totals` adds those provider-reported values,
+including cache-hit and cache-miss input tokens. When a provider reports only
+cached input tokens, cache misses are the provider's input count minus that
+cache-hit count; no local tokenizer estimate is used. `steps` is the number of
+tool calls the run made — the loop's own iteration count is not derivable from
+the event stream, and every step but the last makes at least one call.
 
 ## The exit code says whether the run finished
 

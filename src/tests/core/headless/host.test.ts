@@ -80,6 +80,53 @@ test('events arrive in the order they were pushed', () => {
   assert.deepEqual(events, sent);
 });
 
+test('model usage is numbered and accumulated in provider units', () => {
+  const {host, tokenUsage} = headless('deny');
+
+  host.onModelUsage?.({
+    inputTokens: 10,
+    outputTokens: 2,
+    totalTokens: 12,
+    cacheHitInputTokens: 4,
+    cacheMissInputTokens: 6,
+  });
+  host.onModelUsage?.({
+    inputTokens: 30,
+    outputTokens: 5,
+    totalTokens: 35,
+    cacheHitInputTokens: 20,
+    cacheMissInputTokens: 10,
+  });
+
+  assert.deepEqual(tokenUsage, {
+    requests: [
+      {
+        request: 1,
+        inputTokens: 10,
+        outputTokens: 2,
+        totalTokens: 12,
+        cacheHitInputTokens: 4,
+        cacheMissInputTokens: 6,
+      },
+      {
+        request: 2,
+        inputTokens: 30,
+        outputTokens: 5,
+        totalTokens: 35,
+        cacheHitInputTokens: 20,
+        cacheMissInputTokens: 10,
+      },
+    ],
+    totals: {
+      inputTokens: 40,
+      outputTokens: 7,
+      totalTokens: 47,
+      cacheHitInputTokens: 24,
+      cacheMissInputTokens: 16,
+    },
+  });
+});
+
 test('the host carries the signal it was given', () => {
   const controller = new AbortController();
 

@@ -7,6 +7,17 @@ import {
 } from '../../../core/headless/output.js';
 import type {HeadlessResult} from '../../../core/headless/run.js';
 
+const emptyTokenUsage: HeadlessResult['tokenUsage'] = {
+  requests: [],
+  totals: {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cacheHitInputTokens: 0,
+    cacheMissInputTokens: 0,
+  },
+};
+
 function headlessResult(
   overrides: Partial<HeadlessResult> = {},
 ): HeadlessResult {
@@ -15,6 +26,7 @@ function headlessResult(
     events: [],
     prompts: [],
     usage: {prompt: 0, completion: 0, total: 0},
+    tokenUsage: emptyTokenUsage,
     stopped: 'done',
     ...overrides,
   };
@@ -130,6 +142,25 @@ test('the result line counts the prompts and the tool steps', () => {
         },
       ],
       usage: {prompt: 40, completion: 7, total: 47},
+      tokenUsage: {
+        requests: [
+          {
+            request: 1,
+            inputTokens: 40,
+            outputTokens: 7,
+            totalTokens: 47,
+            cacheHitInputTokens: 12,
+            cacheMissInputTokens: 28,
+          },
+        ],
+        totals: {
+          inputTokens: 40,
+          outputTokens: 7,
+          totalTokens: 47,
+          cacheHitInputTokens: 12,
+          cacheMissInputTokens: 28,
+        },
+      },
       stopped: 'denied',
     }),
   );
@@ -140,6 +171,25 @@ test('the result line counts the prompts and the tool steps', () => {
     stopped: 'denied',
     message: '',
     usage: {prompt: 40, completion: 7, total: 47},
+    tokenUsage: {
+      requests: [
+        {
+          request: 1,
+          inputTokens: 40,
+          outputTokens: 7,
+          totalTokens: 47,
+          cacheHitInputTokens: 12,
+          cacheMissInputTokens: 28,
+        },
+      ],
+      totals: {
+        inputTokens: 40,
+        outputTokens: 7,
+        totalTokens: 47,
+        cacheHitInputTokens: 12,
+        cacheMissInputTokens: 28,
+      },
+    },
     prompts: 2,
     steps: 2,
   });

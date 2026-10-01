@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import {loadEnvFiles} from './env.js';
-import type {Host, Usage} from './host.js';
+import type {Host, ModelTokenUsage, Usage} from './host.js';
 import type {AssistantContinuation} from './messages.js';
 import {
   DEFAULT_MODEL,
@@ -74,6 +74,43 @@ export type AssistantResponse = {
   usage: Usage;
 };
 
+type ProviderUsage = {
+  prompt_tokens?: unknown;
+  completion_tokens?: unknown;
+  total_tokens?: unknown;
+  prompt_cache_hit_tokens?: unknown;
+  prompt_cache_miss_tokens?: unknown;
+  prompt_tokens_details?: {cached_tokens?: unknown} | null;
+};
+
+function tokenCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export function modelTokenUsage(usage: ProviderUsage): ModelTokenUsage {
+  const inputTokens = tokenCount(usage.prompt_tokens);
+  const outputTokens = tokenCount(usage.completion_tokens);
+  const totalTokens = tokenCount(usage.total_tokens);
+  const detailedCacheHits = tokenCount(
+    usage.prompt_tokens_details?.cached_tokens,
+  );
+  const cacheHitInputTokens =
+    typeof usage.prompt_cache_hit_tokens === 'number'
+      ? tokenCount(usage.prompt_cache_hit_tokens)
+      : detailedCacheHits;
+  const cacheMissInputTokens =
+    typeof usage.prompt_cache_miss_tokens === 'number'
+      ? tokenCount(usage.prompt_cache_miss_tokens)
+      : Math.max(0, inputTokens - cacheHitInputTokens);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    cacheHitInputTokens,
+    cacheMissInputTokens,
+  };
+}
+
 export class StreamFailure extends Error {
   readonly partial: AssistantResponse;
 
@@ -94,6 +131,7 @@ async function attemptStep(
   let reasoningContent: string | undefined;
   let finishReason = 'stop';
   let emitted = false;
+  let providerUsage: ModelTokenUsage | null = null;
   const calls: RawToolCall[] = [];
   const usage: Usage = {prompt: 0, completion: 0, total: 0};
   const soFar = (): AssistantResponse => ({
@@ -129,6 +167,7 @@ async function attemptStep(
         usage.prompt = chunk.usage.prompt_tokens ?? 0;
         usage.completion = chunk.usage.completion_tokens ?? 0;
         usage.total = chunk.usage.total_tokens ?? 0;
+        providerUsage = modelTokenUsage(chunk.usage as ProviderUsage);
       }
       const choiceChunk = chunk.choices[0];
       if (!choiceChunk) continue;
@@ -154,11 +193,14 @@ async function attemptStep(
       }
     }
   } catch (error) {
+    if (providerUsage) host.onModelUsage?.(providerUsage);
     if (!emitted) throw error;
     const message =
       (error as Error)?.message || 'the stream ended before the answer did';
     throw new StreamFailure(message, soFar(), error);
   }
+
+  if (providerUsage) host.onModelUsage?.(providerUsage);
 
   return soFar();
 }
