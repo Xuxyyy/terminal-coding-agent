@@ -266,7 +266,7 @@ a file whose text contains the word `ALLOW` is the agent supplying the answer to
 being asked about it. Summarizing closes that channel; truncating alone would not.
 
 The order is fixed rubric first, varying part last. That is the shape prompt caching wants, and
-it is already right for it — the three providers cache differently, so turning it on is a
+it is already right for it — the two providers cache differently, so turning it on is a
 separate slice.
 
 ### What it is not
@@ -292,7 +292,7 @@ Deliberately not a latch, so the mode behaves the same at the end of a turn as a
 
 **The session provider's lower tier**, via `judgeModelFor` in `client.ts`:
 `deepseek-v4-pro`/`deepseek-v4-flash` → `deepseek-v4-flash`, `kimi-k3`/`kimi-k2.7-code` →
-`kimi-k2.7-code`, `glm-5.2`/`glm-4.7-flash` → `glm-4.7-flash`. No new API key, no new settings
+`kimi-k2.7-code`. No new API key, no new settings
 key, and it works whichever provider the user has. A session already on the lower tier judges
 with the same model. One attempt, no retry, a 20-second timeout: a judge that is slow or broken
 must reach the human fast, and a retry only delays that. If `createClient` throws for that

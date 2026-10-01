@@ -1319,7 +1319,7 @@ test('/permission while the agent is busy does nothing', async () => {
   unmount();
 });
 
-const GLM = {model: 'glm-5.2', label: 'GLM 5.2', contextWindow: 200_000};
+const KIMI = {model: 'kimi-k3', label: 'Kimi K3', contextWindow: 262_144};
 
 function switchable(): {
   agent: Ref;
@@ -1331,7 +1331,7 @@ function switchable(): {
   loadSettings([]);
   const first = fakeModel(() => answer('done'));
   const second = fakeModel(() => answer('done'));
-  const swapped = {...second.choice, ...GLM};
+  const swapped = {...second.choice, ...KIMI};
   const {agent, unmount} = mount(root, first.choice, () => swapped);
   return {agent, unmount, first: first.calls, second: second.calls};
 }
@@ -1351,8 +1351,8 @@ test('a switch hands the new client to the next turn', async () => {
   await settle(agent);
   assert.equal(first(), 1);
 
-  await switchTo(agent, GLM.model);
-  assert.equal(agent.current!.modelId, GLM.model);
+  await switchTo(agent, KIMI.model);
+  assert.equal(agent.current!.modelId, KIMI.model);
 
   assert.equal(agent.current!.send('and the checkout'), true);
   await settle(agent);
@@ -1371,12 +1371,12 @@ test('a model switch preserves shared continuation metadata', async () => {
     secondBody = body;
     return answer('done');
   });
-  const swapped = {...second.choice, ...GLM};
+  const swapped = {...second.choice, ...KIMI};
   const {agent, unmount} = mount(root, first.choice, () => swapped);
 
   agent.current!.send('fix the cart');
   await settle(agent);
-  await switchTo(agent, GLM.model);
+  await switchTo(agent, KIMI.model);
   agent.current!.send('and the checkout');
   await settle(agent);
   unmount();
@@ -1401,13 +1401,13 @@ test('a switch moves the context budget to the new window', async () => {
   await tick();
   assert.equal((agent.current!.committed.at(-1) as ContextItem).budget, 1_000_000);
 
-  await switchTo(agent, GLM.model);
+  await switchTo(agent, KIMI.model);
   agent.current!.context();
   await tick();
 
   assert.equal(
     (agent.current!.committed.at(-1) as ContextItem).budget,
-    GLM.contextWindow,
+    KIMI.contextWindow,
   );
   unmount();
 });
@@ -1417,15 +1417,15 @@ test('a switch marks the transcript and leaves the old header alone', async () =
   const header = agent.current!.committed[0] as HeaderItem;
   assert.equal(header.ready!.model.label, 'Fake');
 
-  await switchTo(agent, GLM.model);
+  await switchTo(agent, KIMI.model);
 
   const divider = agent.current!.committed.at(-2) as ModelItem;
   assert.equal(divider.kind, 'model');
-  assert.equal(divider.id, GLM.model);
-  assert.equal(divider.label, GLM.label);
+  assert.equal(divider.id, KIMI.model);
+  assert.equal(divider.label, KIMI.label);
   const notice = agent.current!.committed.at(-1) as NoticeItem;
   assert.equal(notice.kind, 'notice');
-  assert.equal(notice.text, `switched to ${GLM.label}`);
+  assert.equal(notice.text, `switched to ${KIMI.label}`);
   assert.deepEqual(agent.current!.committed[0], header);
   unmount();
 });
@@ -1434,12 +1434,12 @@ test('a switch is written to the user settings file', async () => {
   const {agent, unmount} = switchable();
   const home = process.env.ACC_HOME!;
 
-  await switchTo(agent, GLM.model);
+  await switchTo(agent, KIMI.model);
 
-  assert.equal(modelOf(), GLM.model);
+  assert.equal(modelOf(), KIMI.model);
   assert.deepEqual(
     JSON.parse(fs.readFileSync(path.join(home, 'settings.json'), 'utf8')),
-    {model: GLM.model},
+    {model: KIMI.model},
   );
   unmount();
 });
@@ -1511,16 +1511,16 @@ test('a client that refuses to build leaves the model where it was', async () =>
   const home = process.env.ACC_HOME!;
   const {choice} = fakeModel(() => answer('done'));
   const {agent, unmount} = mount(root, choice, () => {
-    throw new Error('GLM_API_KEY is not set — needed for GLM 5.2.');
+    throw new Error('MOONSHOT_API_KEY is not set — needed for Kimi K3.');
   });
 
-  await switchTo(agent, GLM.model);
+  await switchTo(agent, KIMI.model);
 
   assert.equal(agent.current!.phase.kind, 'idle');
   assert.equal(agent.current!.modelId, 'fake-model');
   const notice = agent.current!.committed.at(-1) as NoticeItem;
   assert.equal(notice.kind, 'notice');
-  assert.match(notice.text, /GLM_API_KEY is not set/);
+  assert.match(notice.text, /MOONSHOT_API_KEY is not set/);
   assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
 });

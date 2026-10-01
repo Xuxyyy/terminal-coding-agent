@@ -219,13 +219,13 @@ test('splitRows keeps a stale unpaired tool printable', () => {
 });
 
 test('a model item draws its label between the divider rules', () => {
-  const screen = renderHistory([{kind: 'model', id: 'glm-5.2', label: 'GLM 5.2'}]);
+  const screen = renderHistory([{kind: 'model', id: 'kimi-k3', label: 'Kimi K3'}]);
 
   const line = screen
     .split('\n')
-    .find((row) => row.includes('GLM 5.2'));
+    .find((row) => row.includes('Kimi K3'));
   assert.ok(line, screen);
-  assert.match(line!, /^─+ GLM 5\.2 ─+\s*$/);
+  assert.match(line!, /^─+ Kimi K3 ─+\s*$/);
 });
 
 test('a model label too wide for the divider is elided, not wrapped', () => {

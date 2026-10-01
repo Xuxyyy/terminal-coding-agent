@@ -5,6 +5,17 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {chooseModel, DEFAULT_MODEL} from '../../core/client.js';
 import {loadEnvFiles, parseEnv} from '../../core/env.js';
+import {MODEL_IDS, PROVIDERS} from '../../core/models.js';
+
+test('supported providers and models exclude Z.ai', () => {
+  assert.deepEqual(Object.keys(PROVIDERS), ['deepseek', 'kimi']);
+  assert.deepEqual(MODEL_IDS, [
+    'kimi-k3',
+    'kimi-k2.7-code',
+    'deepseek-v4-pro',
+    'deepseek-v4-flash',
+  ]);
+});
 
 test('parseEnv reads plain, quoted, and exported lines', () => {
   const values = parseEnv(
@@ -62,8 +73,8 @@ test('chooseModel falls back to a model whose key is set', () => {
 
 test('chooseModel obeys an explicit ACC_MODEL', () => {
   assert.equal(
-    chooseModel({ACC_MODEL: 'glm-5.2', DEEPSEEK_API_KEY: 'k'}),
-    'glm-5.2',
+    chooseModel({ACC_MODEL: 'kimi-k3', DEEPSEEK_API_KEY: 'k'}),
+    'kimi-k3',
   );
 });
 
@@ -72,14 +83,14 @@ test('chooseModel names the default when nothing is configured', () => {
 });
 
 test('chooseModel takes the saved model when the environment names none', () => {
-  assert.equal(chooseModel({}, 'glm-5.2'), 'glm-5.2');
+  assert.equal(chooseModel({}, 'kimi-k3'), 'kimi-k3');
 });
 
 test('an explicit ACC_MODEL beats a saved model', () => {
-  assert.equal(chooseModel({ACC_MODEL: 'kimi-k3'}, 'glm-5.2'), 'kimi-k3');
+  assert.equal(chooseModel({ACC_MODEL: 'deepseek-v4-pro'}, 'kimi-k3'), 'deepseek-v4-pro');
 });
 
 test('a saved model beats the key scan', () => {
-  assert.equal(chooseModel({MOONSHOT_API_KEY: 'k'}, 'glm-5.2'), 'glm-5.2');
-  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}, 'glm-5.2'), 'glm-5.2');
+  assert.equal(chooseModel({MOONSHOT_API_KEY: 'k'}, 'kimi-k2.7-code'), 'kimi-k2.7-code');
+  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}, 'kimi-k2.7-code'), 'kimi-k2.7-code');
 });

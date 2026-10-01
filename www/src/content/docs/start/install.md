@@ -18,7 +18,7 @@ npm registry yet, so there is no `npm install -g acc`.
   shell instead. That works, but it is slower and it ignores your `.gitignore`.
   Install ripgrep with `brew install ripgrep`, `apt install ripgrep`, or from
   [the ripgrep releases](https://github.com/BurntSushi/ripgrep/releases).
-- **An API key** for DeepSeek, GLM, or Kimi. One is enough — see
+- **An API key** for DeepSeek or Kimi. One is enough — see
   [Models](/configure/models).
 
 ## Install

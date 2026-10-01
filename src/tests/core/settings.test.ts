@@ -394,11 +394,11 @@ test('a saved model round-trips through remembering and loading again', () => {
     loadSettings(files);
     assert.equal(modelOf(), null);
 
-    rememberModel('glm-5.2');
-    assert.equal(modelOf(), 'glm-5.2');
+    rememberModel('kimi-k3');
+    assert.equal(modelOf(), 'kimi-k3');
 
     loadSettings(files);
-    assert.equal(modelOf(), 'glm-5.2');
+    assert.equal(modelOf(), 'kimi-k3');
   });
 });
 
@@ -412,9 +412,19 @@ test('an unknown model refuses to start and lists the valid ids', () => {
   });
 });
 
+test('a saved model from the removed provider no longer blocks startup', () => {
+  for (const id of ['glm-5.2', 'glm-4.7-flash']) {
+    withHome((home) => {
+      const files = settingsIn(home, {model: id});
+      loadSettings(files);
+      assert.equal(modelOf(), null);
+    });
+  }
+});
+
 test('a model in a project file refuses to start and names the user file', () => {
   withHome((home) => {
-    const files = settingsIn(home, {}, {model: 'glm-5.2'});
+    const files = settingsIn(home, {}, {model: 'kimi-k3'});
     const message = refused(files).message;
 
     assert.ok(message.includes('"model"'), message);

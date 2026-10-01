@@ -14,7 +14,6 @@ const NO_KEYS: NodeJS.ProcessEnv = {};
 
 const EVERY_KEY: NodeJS.ProcessEnv = {
   DEEPSEEK_API_KEY: 'sk-deepseek',
-  GLM_API_KEY: 'sk-glm',
   MOONSHOT_API_KEY: 'sk-moonshot',
 };
 
@@ -29,11 +28,11 @@ test('the rows list every model in the order the registry keeps them', () => {
 });
 
 test('the row for the model the session runs is the marked one', () => {
-  const rows = modelRows('glm-5.2', EVERY_KEY);
+  const rows = modelRows('kimi-k3', EVERY_KEY);
 
   assert.deepEqual(
     rows.filter((row) => row.current).map((row) => row.id),
-    ['glm-5.2'],
+    ['kimi-k3'],
   );
 });
 
@@ -61,9 +60,9 @@ test('a key that is set leaves nothing missing on the row', () => {
 });
 
 test('an empty variable counts as no key at all', () => {
-  const rows = modelRows('deepseek-v4-flash', {...EVERY_KEY, GLM_API_KEY: ''});
+  const rows = modelRows('deepseek-v4-flash', {...EVERY_KEY, MOONSHOT_API_KEY: ''});
 
-  assert.equal(rows.find((row) => row.id === 'glm-5.2')!.missingKey, 'GLM_API_KEY');
+  assert.equal(rows.find((row) => row.id === 'kimi-k3')!.missingKey, 'MOONSHOT_API_KEY');
   assert.equal(
     rows.find((row) => row.id === 'deepseek-v4-flash')!.missingKey,
     null,
@@ -84,11 +83,11 @@ test('only the label is in the part the picker bolds', () => {
 });
 
 test('a row without a key says which variable it needs instead of the id', () => {
-  const row = modelRows('kimi-k3', NO_KEYS).find((r) => r.id === 'glm-4.7-flash')!;
+  const row = modelRows('kimi-k3', NO_KEYS).find((r) => r.id === 'kimi-k2.7-code')!;
 
   const {head, tail} = modelLine(row, false, 80);
-  assert.equal(head, '  GLM 4.7 Flash');
-  assert.equal(tail, ' — needs GLM_API_KEY');
+  assert.equal(head, '  Kimi K2.7 Code');
+  assert.equal(tail, ' — needs MOONSHOT_API_KEY');
 });
 
 test('a row is cut to the width it is given', () => {
@@ -121,9 +120,9 @@ test('the notice names the model that was picked', () => {
 });
 
 test('the notice says so when the pick could not be saved', () => {
-  const notice = modelNotice('GLM 5.2', false);
+  const notice = modelNotice('Kimi K3', false);
 
-  assert.ok(notice.includes('GLM 5.2'), notice);
+  assert.ok(notice.includes('Kimi K3'), notice);
   assert.ok(notice.endsWith(NOT_REMEMBERED), notice);
 });
 

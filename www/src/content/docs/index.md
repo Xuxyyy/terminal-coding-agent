@@ -8,8 +8,8 @@ project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done — asking you first
 before anything it cannot take back.
 
-It is one npm package, 821 tests, and no dependency on a hosted service:
-three providers work through one client, and one API key is enough.
+It is one npm package with a local test suite and no dependency on a hosted service:
+two providers work through one client, and one API key is enough.
 
 ## Three decisions worth defending
 
@@ -29,7 +29,7 @@ three providers work through one client, and one API key is enough.
 - **Six tools.** It reads files, searches them with ripgrep, edits one exact
   piece of text, writes whole files, runs shell commands, and hands a
   self-contained job to a sub-agent.
-- **Three providers, six models.** DeepSeek, GLM, and Kimi all work through one
+- **Two providers, four models.** DeepSeek and Kimi both work through one
   client. One API key is enough — `acc` picks a model from the key it finds.
 - **One permission gate.** Everything the agent does passes through it. Changes
   git can undo run silently; deletes, writes to protected paths, and anything

@@ -82,6 +82,7 @@ export function parseModel(
         'remove it from this file',
     );
   }
+  if (value === 'glm-5.2' || value === 'glm-4.7-flash') return null;
   if (typeof value !== 'string' || !MODELS[value]) {
     throw new SettingsError(
       `${file}: "${MODEL_KEY}" is ${JSON.stringify(value)}; use ${MODEL_IDS.join(', ')}`,

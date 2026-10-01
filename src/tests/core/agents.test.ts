@@ -60,7 +60,7 @@ test('two definitions load in filename order and preserve every field and body',
     definition(
       [
         'description: Makes focused edits',
-        'model: glm-5.2',
+        'model: kimi-k3',
         'tools:',
         '  - read_file',
         '  - edit_file',
@@ -97,7 +97,7 @@ test('two definitions load in filename order and preserve every field and body',
       name: 'zeta',
       description: 'Makes focused edits',
       prompt: 'Edit only the requested files.\n\nReport the checks you ran.',
-      model: 'glm-5.2',
+      model: 'kimi-k3',
       tools: ['read_file', 'edit_file'],
       permissionMode: 'auto-edits',
       file: zeta,
@@ -170,7 +170,7 @@ test('unknown front matter keys are refused by name', () => {
 
 test('description is required and must be a non-empty string', () => {
   for (const header of [
-    'model: glm-5.2',
+    'model: kimi-k3',
     'description:',
     'description: ""',
     'description: "   "',

@@ -24,7 +24,7 @@ step counts appear in text a user reads.
 
 ## Context
 
-Three choices shape the code. The **OpenAI SDK** is the model client, so DeepSeek / GLM /
+Three choices shape the code. The **OpenAI SDK** is the model client, so DeepSeek and
 Kimi keep working through `baseURL`. The TUI is **Ink**. It is **one package**, with
 `src/core` and `src/ui` as folders rather than workspaces.
 
@@ -136,7 +136,7 @@ message holding `INTERRUPTED_TURN` — `[the user interrupted this turn]`. Witho
 text-only step just stops mid-sentence and the next turn can read that as *I finished*; the
 `INTERRUPTED` tool replies only imply it, and on a step with no tool calls there is nothing
 to imply it from. It is a `user` message and not a `system` one because every provider behind
-the OpenAI-compatible endpoint (DeepSeek, GLM, Kimi) accepts a `user` message anywhere, while
+the OpenAI-compatible endpoint (DeepSeek, Kimi) accepts a `user` message anywhere, while
 a mid-conversation `system` message is handled inconsistently. Two `user` messages in a row
 are legal, and are exactly what the next turn should see. The helper appends nothing when the
 marker is already last, so no path can double it, and `appendStep` writes only messages it has
@@ -192,12 +192,10 @@ remains the separate command that intentionally starts a new conversation.
 
 | window | threshold (0.8) | floor | room between |
 | --- | --- | --- | --- |
-| 262,144 — five of the six models | 209,715 | 230,144 | 20,429 |
-| 200,000 — `glm-4.7-flash` | 160,000 | 168,000 | 8,000 |
+| 262,144 — all four models | 209,715 | 230,144 | 20,429 |
 
-The first line is the configurable compaction policy. The second is the physical request-fit
-guard, which reserves the maximum 32,000-token reply. They are different checks, not two
-compaction policies.
+The threshold is the configurable compaction policy. The floor is the physical request-fit
+guard, which reserves the maximum 32,000-token reply. They are different checks.
 
 ### The threshold
 
@@ -323,7 +321,7 @@ coming.
 
 `MAX_OUTPUT_TOKENS` (32,000, `client.ts`) is the right reserve because the reply has to fit
 too. Note what this implies about the window: the reserve only sits above the 0.8 line when
-the window is at least 160,000 tokens. Every real model in the table is 200,000 or more, so
+the window is at least 160,000 tokens. Every real model in the table is 262,144 tokens, so
 this holds today — but a small-window model added later would trip the floor below its own
 compaction line.
 

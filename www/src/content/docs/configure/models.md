@@ -1,25 +1,22 @@
 ---
 title: Models
-description: Three providers and six model ids behind one client, the model key, where your API key is read from, and the order acc uses to pick a model.
+description: Two providers and four model ids behind one client, the model key, where your API key is read from, and the order acc uses to pick a model.
 sidebar:
   order: 5
 ---
 
-`acc` talks to three providers through one OpenAI-compatible client. You need a
+`acc` talks to two providers through one OpenAI-compatible client. You need a
 key for **one** of them.
 
 | Provider | Environment variable | Sign up |
 |---|---|---|
 | DeepSeek | `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com) |
-| GLM / Z.ai | `GLM_API_KEY` | [z.ai](https://z.ai) |
 | Moonshot / Kimi | `MOONSHOT_API_KEY` | [platform.moonshot.ai](https://platform.moonshot.ai) |
 
 | Model id | Provider | Context window |
 |---|---|---|
 | `deepseek-v4-flash` | DeepSeek | 262,144 |
 | `deepseek-v4-pro` | DeepSeek | 262,144 |
-| `glm-5.2` | GLM | 262,144 |
-| `glm-4.7-flash` | GLM | 200,000 |
 | `kimi-k3` | Kimi | 262,144 |
 | `kimi-k2.7-code` | Kimi | 262,144 |
 
@@ -32,12 +29,15 @@ tokens.
 { "model": "deepseek-v4-flash" }
 ```
 
-One of the six ids above. Absent everywhere means `acc` falls back to the first
+One of the four ids above. Absent everywhere means `acc` falls back to the first
 provider key it finds.
 
 **It is read from `~/.acc/settings.json` only.** The key in a project's
 `.acc/settings.json` is a startup error naming the user file, and an unknown id
-is a startup error listing the six valid ones.
+is a startup error listing the four valid ones.
+
+An older saved GLM model is ignored after upgrading. Pick a supported model
+with `/model` to replace that saved setting.
 
 [`/model`](/configure/commands) writes this key, so what you read in the file is
 always what the next run starts on. `ACC_MODEL` still wins over it.
@@ -81,7 +81,7 @@ could beat would not be an override.
 If the chosen model needs a key you have not set, `acc` stops at startup with
 `DEEPSEEK_API_KEY is not set — needed for DeepSeek v4 Flash.` If `ACC_MODEL`
 names a model that does not exist, it stops with `Unknown model` and lists the
-six valid ids.
+four valid ids.
 
 The model in use is printed in the header when `acc` starts — see
 [Install](/start/install).

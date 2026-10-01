@@ -20,7 +20,7 @@ before anything it cannot take back.
 - Six built-in tools: `read_file`, `grep`, `edit_file`, `write_file`, `bash`,
   and `agent`. Global [agent definitions](https://coding-cli-docs.vercel.app/configure/agents/)
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
-- Three providers — DeepSeek, GLM, and Kimi — six models behind one client.
+- Two providers — DeepSeek and Kimi — four models behind one client.
 - One permission gate that every tool call passes through.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
   the conversation *and* the files back to before a message you sent.
@@ -56,8 +56,8 @@ workspace-independent.
   `bash`, so Windows needs WSL.
 - ripgrep (`rg`) on your `PATH`, for the `grep` tool. Without it the agent falls
   back to shell `grep` — that works, but it is slower and ignores `.gitignore`.
-- One API key is enough. Copy `.env.example` to `.env` and fill in DeepSeek,
-  GLM, or Kimi; `acc` picks a model from whichever key it finds. The six model
+- One API key is enough. Copy `.env.example` to `.env` and fill in DeepSeek
+  or Kimi; `acc` picks a model from whichever key it finds. The four model
   ids are on [Models](https://coding-cli-docs.vercel.app/configure/models/).
 
 ## How it works

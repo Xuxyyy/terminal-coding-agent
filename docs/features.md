@@ -47,8 +47,8 @@ The workspace is the current directory. Installed as the `acc` command.
 
 ## Models
 
-OpenAI-compatible client, so three providers work through one code path:
-DeepSeek, GLM, and Kimi (six model ids). Default is DeepSeek v4 Flash. Keys
+OpenAI-compatible client, so two providers work through one code path:
+DeepSeek and Kimi (four model ids). Default is DeepSeek v4 Flash. Keys
 load from `.env` files, including `~/.acc/.env`.
 
 The model is chosen in three steps, first hit wins: `ACC_MODEL`, then the
@@ -320,18 +320,17 @@ runs ~28% low. Two numbers, one of them shaky, said less than one. Type
 `/context` if you want it. See `sessions.md`.
 
 `/model` switches the provider while you work, in the same box, marker and hint
-style as `/permission`. All six models are listed in registry order, opened on
+style as `/permission`. All four models are listed in registry order, opened on
 the one you are on. A model whose provider key is unset is **shown, not
 hidden**: the row stays grey when the cursor lands on it, `enter` refuses it,
-and the hint line under the box turns into `set GLM_API_KEY to use this model`.
+and the hint line under the box turns into `set MOONSHOT_API_KEY to use this model`.
 Hiding the row would leave you wondering where your model went; the grey row
 names the variable instead.
 
 A pick swaps the live client, so the next turn — and the permission judge, which
 follows the model for free — runs on the new provider. It also moves
 `session.contextWindow`, which is what `/context` measures against and what the
-80% compaction trigger reads: switching to a 200k model without it would leave
-the threshold budgeting for 262k the model does not have.
+80% compaction trigger reads. It stays tied to the active model's window.
 
 Unlike `/permission`, a switch does **not** rewrite the transcript. A mode is a
 fact about now, so it repaints every past header; a model is a fact about a

@@ -28,9 +28,9 @@ test('an empty balance is told apart from a rate limit', () => {
 
 test('an empty balance reported as a rate limit still reads as billing', () => {
   const quota = statusError(429, 'You exceeded your insufficient_quota');
-  const explained = explainError(quota, 'glm-5.2');
+  const explained = explainError(quota, 'kimi-k3');
 
-  assert.match(explained.message, /Z\.ai refused the request/);
+  assert.match(explained.message, /Moonshot refused the request/);
 });
 
 test('a status carried by the cause is still recognised', () => {

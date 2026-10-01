@@ -38,7 +38,7 @@ Everything is optional.
 |---|---|---|
 | `permission_mode` | How much runs without asking. | [Permissions](/configure/permissions) |
 | `permissions` | The `allow`, `ask`, and `deny` rule lists. | [Permissions](/configure/permissions) |
-| `model` | Which of the six models to start on. | [Models](/configure/models) |
+| `model` | Which of the four models to start on. | [Models](/configure/models) |
 
 Unknown keys at the **top level** are ignored, so you can keep notes there.
 Unknown keys *inside* `permissions` are startup errors because a typo would
