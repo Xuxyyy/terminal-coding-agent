@@ -39,5 +39,5 @@ export function keyEnvOf(id: string): string | null {
 
 export function hasKey(id: string, env: NodeJS.ProcessEnv): boolean {
   const keyEnv = keyEnvOf(id);
-  return keyEnv ? Boolean(env[keyEnv]) : false;
+  return keyEnv ? Boolean(env.ACC_MODEL_RELAY_URL || env[keyEnv]) : false;
 }

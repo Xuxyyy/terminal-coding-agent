@@ -21,6 +21,25 @@ workspace asks every time and can never be remembered for the session, and no
 `allow` rule can silence an escape such as `sudo`, `git push`, or `dd of=`.
 `docs/permissions.md` has the full model and the reasoning.
 
+## Credentials during third-party evaluations
+
+Local ACC runs still use the provider key in their process environment. Shell
+commands in a local run inherit that environment; the permission gate does not
+isolate credentials from approved scripts.
+
+Evaluation adapters can instead set `ACC_MODEL_RELAY_URL` and `ACC_MODEL` in a
+task container, without a provider key. ACC uses the host relay for model calls
+and skips loading `.env` files in this mode. The host holds the key and accepts
+only bounded, stateless model requests through a temporary capability. This
+mode requires a compatible, rebuilt ACC runtime and deliberately has no
+direct-key fallback when the relay fails.
+
+The task container must also exclude host credential files, host process
+namespaces, and the Docker socket. Environment filtering alone cannot protect
+credentials that untrusted code can read elsewhere. A task can use its relay
+capability within the trial limits, so this protects the provider credential,
+while allowing the model use needed for the evaluation.
+
 ## What is worth reporting
 
 Anything that gets past that gate:

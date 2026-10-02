@@ -15,7 +15,7 @@ type Body = {
 };
 type Step = Record<string, unknown> & {type: string};
 type Event = Record<string, unknown> & {event_type?: string; index?: number};
-type Invoke = (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
+export type Invoke = (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -221,15 +221,19 @@ function unaryResponse(raw: unknown): unknown {
   };
 }
 
-export function geminiClient(apiKey: string, invoke?: Invoke): OpenAI {
-  const ai = invoke ? null : new GoogleGenAI({apiKey});
-  const call: Invoke = invoke ?? ((request, signal) =>
-    ai!.interactions.create(request as never, {
+export function geminiInvoke(apiKey: string): Invoke {
+  const ai = new GoogleGenAI({apiKey});
+  return (request, signal) =>
+    ai.interactions.create(request as never, {
       signal,
       // The turn loop owns retries. SDK retries can hide connection failures
       // for a long time before the CLI can report them or honor interruption.
       retries: {strategy: 'none'},
-    }));
+    });
+}
+
+export function geminiClient(apiKey: string, invoke?: Invoke): OpenAI {
+  const call = invoke ?? geminiInvoke(apiKey);
   const create = async (body: Body, options?: {signal?: AbortSignal}): Promise<unknown> => {
     const response = await call(interactionRequest(body), options?.signal);
     return body.stream

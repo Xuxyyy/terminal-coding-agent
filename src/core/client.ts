@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import {geminiClient} from './gemini.js';
 import {loadEnvFiles} from './env.js';
+import {relayInvoke} from './model-relay-client.js';
 import type {Host, ModelTokenUsage, Usage} from './host.js';
 import type {AssistantContinuation} from './messages.js';
 import {
@@ -52,7 +53,8 @@ export function chooseModel(
 }
 
 export function createClient(modelId?: string): ModelChoice {
-  loadEnvFiles();
+  const relay = process.env.ACC_MODEL_RELAY_URL;
+  if (!relay) loadEnvFiles();
   const resolved = modelId ?? chooseModel();
   const info = MODELS[resolved];
   if (!info) {
@@ -62,11 +64,11 @@ export function createClient(modelId?: string): ModelChoice {
   }
   const provider = PROVIDERS[info.provider]!;
   const apiKey = process.env[provider.keyEnv];
-  if (!apiKey) {
+  if (!relay && !apiKey) {
     throw new Error(`${provider.keyEnv} is not set — needed for ${info.label}.`);
   }
   return {
-    client: geminiClient(apiKey),
+    client: relay ? geminiClient('', relayInvoke(relay)) : geminiClient(apiKey!),
     model: resolved,
     label: info.label,
     contextWindow: info.contextWindow,
