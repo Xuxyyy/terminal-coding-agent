@@ -15,6 +15,7 @@ test('the menu offers only the commands this version has', () => {
       '/resume',
       '/rewind',
       '/permission',
+      '/sandbox',
       '/model',
     ],
   );
@@ -62,4 +63,9 @@ test('completeCommand picks the highlighted match, not always the first', () => 
 test('completeCommand leaves the input alone when the index misses', () => {
   assert.equal(completeCommand('/c', 9), '/c');
   assert.equal(completeCommand('hello', 0), 'hello');
+});
+
+
+test('/sandbox completes from a prefix', () => {
+  assert.equal(completeCommand('/sand'), '/sandbox');
 });

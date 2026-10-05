@@ -384,3 +384,23 @@ test('a configured recursive agent tool is unavailable and never reaches the chi
   assert.match(output.text, /agent.*unavailable|unavailable.*agent/i);
   assert.equal(choice.calls(), 0);
 });
+
+for (const sandbox of ['off', 'on'] as const) {
+  test(`subagent inherits Sandbox ${sandbox} in its instructions and tool execution`, async () => {
+    const root = workspace();
+    fs.writeFileSync(path.join(root, '.env'), 'fake-file-secret');
+    const {host} = fakeHost();
+    const requests: string[] = [];
+    const {choice} = fakeModel((nth, body) => {
+      requests.push(JSON.stringify(body));
+      return nth === 1
+        ? streamOf(toolCallChunk('call-1', 'read_file', JSON.stringify({path: '.env'})), finishChunk('tool_calls'))
+        : streamOf(textChunk('done'), finishChunk('stop'));
+    });
+    await subagent.run(job, {...context(root, host, choice), sandbox});
+    assert.match(requests[0]!, new RegExp(`Sandbox: ${sandbox === 'on' ? 'On' : 'Off'}`));
+    assert.equal(requests[1]!.includes('fake-file-secret'), sandbox === 'off');
+    if (sandbox === 'on') assert.match(requests[1]!, /sandbox blocks credential storage/);
+    fs.rmSync(root, {recursive: true, force: true});
+  });
+}

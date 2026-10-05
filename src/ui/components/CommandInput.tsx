@@ -10,6 +10,7 @@ const COMMANDS = [
   {value: '/resume', description: 'reopen a past conversation'},
   {value: '/rewind', description: 'go back to before an earlier message'},
   {value: '/permission', description: 'change what runs without asking'},
+  {value: '/sandbox', description: 'turn OS isolation On or Off for this process'},
   {value: '/model', description: 'switch the model'},
 ];
 

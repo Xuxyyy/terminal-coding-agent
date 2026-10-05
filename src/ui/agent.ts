@@ -4,6 +4,7 @@ import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
 import type {Mode} from '../core/permission/mode.js';
+import {DEFAULT_SANDBOX, type SandboxMode} from '../core/sandbox/mode.js';
 import {systemPrompt} from '../core/prompt.js';
 import {rewindPlan, rewindSession} from '../core/rewind.js';
 import {
@@ -13,6 +14,7 @@ import {
   createSession,
   setMeasured,
   setMode,
+  setSandbox as setSessionSandbox,
   type Session,
 } from '../core/session.js';
 import {modeOf, rememberMode, rememberModel} from '../core/settings.js';
@@ -29,12 +31,16 @@ import {
 } from './events.js';
 import {modelNotice} from './model.js';
 import {permissionNotice, withPermission} from './permission.js';
+import {sandboxLabel} from './sandbox.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
 
 export type Agent = {
   committed: Item[];
   mode: Mode;
+  sandbox: SandboxMode;
+  pickSandbox: () => void;
+  setSandbox: (sandbox: SandboxMode) => void;
   modelId: string;
   streamText: string;
   phase: Phase;
@@ -73,6 +79,7 @@ export function useAgent(
   workspaceRoot: string,
   initial: ModelChoice,
   makeClient: (id: string) => ModelChoice = createClient,
+  initialSandbox: SandboxMode = DEFAULT_SANDBOX,
 ): Agent {
   const choiceRef = useRef(initial);
   const [choice, setChoice] = useState(initial);
@@ -94,8 +101,9 @@ export function useAgent(
   if (sessionRef.current === null) {
     sessionRef.current = createSession(
       workspaceRoot,
-      systemPrompt(workspaceRoot, modeOf()),
+      systemPrompt(workspaceRoot, modeOf(), initialSandbox),
       choiceRef.current.contextWindow,
+      initialSandbox,
     );
   }
   const session = sessionRef.current;
@@ -229,6 +237,7 @@ export function useAgent(
       phase.kind !== 'picking' &&
       phase.kind !== 'rewinding' &&
       phase.kind !== 'permission' &&
+      phase.kind !== 'sandbox' &&
       phase.kind !== 'model'
     ) {
       return;
@@ -384,6 +393,19 @@ export function useAgent(
     setPhase({kind: 'permission'});
   };
 
+  const pickSandbox = () => {
+    if (phase.kind !== 'idle') return;
+    setPhase({kind: 'sandbox'});
+  };
+
+  const setSandbox = (sandbox: SandboxMode) => {
+    if (phase.kind !== 'sandbox') return;
+    setPhase({kind: 'idle'});
+    if (sandbox === session.sandbox) return;
+    setSessionSandbox(session, sandbox);
+    commit([{kind: 'notice', text: `Sandbox: ${sandboxLabel(sandbox)} (for this ACC process)`}]);
+  };
+
   const setPermission = (mode: Mode) => {
     if (phase.kind !== 'permission') return;
     setPhase({kind: 'idle'});
@@ -453,6 +475,9 @@ export function useAgent(
   return {
     committed,
     mode: session.mode,
+    sandbox: session.sandbox,
+    pickSandbox,
+    setSandbox,
     modelId: choice.model,
     streamText,
     phase,

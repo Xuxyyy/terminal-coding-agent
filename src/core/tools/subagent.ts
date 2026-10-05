@@ -169,8 +169,9 @@ export function makeSubagent(
 
       const session = createSession(
         ctx.root,
-        subagentPrompt(ctx.root, mode, definition?.prompt),
+        subagentPrompt(ctx.root, mode, definition?.prompt, ctx.sandbox),
         choice.contextWindow,
+        ctx.sandbox,
       );
       session.mode = mode;
       session.allowed = ctx.allowed;

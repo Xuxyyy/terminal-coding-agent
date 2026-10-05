@@ -1573,3 +1573,111 @@ test('the interrupted command is answered as interrupted, never as refused', asy
   assert.equal(tools.at(-1)!.content, INTERRUPTED);
   assert.equal(JSON.stringify(stored.messages).includes(DENIED), false);
 });
+
+async function sandboxTo(agent: Ref, sandbox: 'off' | 'on'): Promise<void> {
+  agent.current!.pickSandbox();
+  await tick();
+  agent.current!.setSandbox(sandbox);
+  await tick();
+}
+
+test('sandbox is process-local, refreshes instructions, and survives clear, resume, rewind and permission changes', async () => {
+  const root = workspace();
+  const home = process.env.ACC_HOME!;
+  loadSettings([]);
+  const prompts: string[] = [];
+  const {choice} = fakeModel((_nth, body) => {
+    prompts.push(JSON.stringify(body));
+    return answer('done');
+  });
+  const {agent, unmount} = mount(root, choice);
+  assert.equal(agent.current!.sandbox, 'off');
+  await sandboxTo(agent, 'on');
+  assert.equal(agent.current!.sandbox, 'on');
+  assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
+  agent.current!.send('first');
+  await settle(agent);
+  agent.current!.send('second');
+  await settle(agent);
+  agent.current!.pickRewind();
+  await tick();
+  agent.current!.rewind(agent.current!.checkpoints()[1]!.id);
+  await tick();
+  assert.equal(agent.current!.sandbox, 'on');
+  agent.current!.clear();
+  await tick();
+  assert.equal(agent.current!.sandbox, 'on');
+  const [meta] = listSessions(root, home);
+  agent.current!.pick();
+  await tick();
+  agent.current!.resume(meta!.id);
+  await tick();
+  assert.equal(agent.current!.sandbox, 'on');
+  agent.current!.permission();
+  await tick();
+  agent.current!.setPermission('ask-edits');
+  await tick();
+  agent.current!.send('after resume');
+  await settle(agent);
+  assert.match(prompts.at(-1)!, /Sandbox: On/);
+  await sandboxTo(agent, 'off');
+  agent.current!.send('after switching Off');
+  await settle(agent);
+  assert.match(prompts.at(-1)!, /Sandbox: Off/);
+  assert.doesNotMatch(prompts.at(-1)!, /Known credential storage is hidden/);
+  unmount();
+  const next = mount(root, choice);
+  assert.equal(next.agent.current!.sandbox, 'off');
+  next.unmount();
+});
+
+test('sandbox picker cancellation and selecting the current choice leave state unchanged', async () => {
+  const root = workspace();
+  loadSettings([]);
+  const {choice} = fakeModel(() => answer('done'));
+  const {agent, unmount} = mount(root, choice);
+  const before = agent.current!.committed;
+  agent.current!.pickSandbox();
+  await tick();
+  agent.current!.cancelPick();
+  await tick();
+  assert.equal(agent.current!.sandbox, 'off');
+  assert.equal(agent.current!.phase.kind, 'idle');
+  await sandboxTo(agent, 'off');
+  assert.deepEqual(agent.current!.committed, before);
+  unmount();
+});
+
+test('sandbox cannot change while a task is running or awaiting permission', async () => {
+  const root = workspace();
+  loadSettings([]);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const {choice} = fakeModel((nth) => nth === 1 ? {
+    async *[Symbol.asyncIterator]() {
+      await held;
+      yield toolCallChunk('call-1', 'bash', JSON.stringify({command: 'rm build.log'}));
+      yield finishChunk('tool_calls');
+    },
+  } : answer('done'));
+  const {agent, unmount} = mount(root, choice);
+  agent.current!.send('task');
+  await tick();
+  agent.current!.pickSandbox();
+  agent.current!.setSandbox('on');
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'busy');
+  assert.equal(agent.current!.sandbox, 'off');
+  release();
+  await until(() => agent.current!.phase.kind === 'confirming', 'no permission prompt');
+  agent.current!.pickSandbox();
+  agent.current!.setSandbox('on');
+  await tick();
+  assert.equal(agent.current!.phase.kind, 'confirming');
+  assert.equal(agent.current!.sandbox, 'off');
+  agent.current!.interrupt();
+  await settle(agent);
+  await sandboxTo(agent, 'on');
+  assert.equal(agent.current!.sandbox, 'on');
+  unmount();
+});

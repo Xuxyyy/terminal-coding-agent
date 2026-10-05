@@ -9,6 +9,10 @@ carry a `request`, and so reach the gate at all)
 **Goal:** the agent runs a real task start to finish without a single prompt, and still stops
 before anything git cannot undo.
 
+The classification below governs action approval. With Sandbox On, OS isolation also enforces file,
+credential, and network boundaries: credential storage such as `.acc` is refused,
+and extra resource grants require explicit approval. See `sandbox.md`.
+
 ## The rule
 
 The split is not "bash vs file tools". It is **what git can undo** versus what it cannot.
@@ -704,15 +708,15 @@ because the two fail differently: the gate judges the argument the model sent, t
 resolves what is actually on disk. A symlink pointing out of the project is refused by both,
 and that is the point — neither is asked to be right alone.
 
-## Not built
+## Sandbox access
 
-The sandbox.
-
-The sandbox is macOS-only (`/usr/bin/sandbox-exec`) and built on an API Apple has deprecated.
-It buys exactly one thing — the ability to stop asking — and all three modes ask more, not
-less. The one real gap it would close is that `npm test` is auto-allowed in `auto-edits` while
-its `package.json` script can do anything; the cheap answer to that is an `ask` rule in
-`settings.json`. For a portable CLI the classifier may be the better permanent answer.
+The permission gate authorizes actions; the OS sandbox enforces resource access.
+With Sandbox On, an approved `npm test` remains confined, including its child scripts. Extra paths
+or network are one-call human grants and cannot be supplied by the model judge,
+an allow rule, or command approval memory. File tools derive these grants from
+outside targets or protected writes. With On, known credential storage is always refused. Off skips sandbox-specific
+grants and validation but keeps these action permission checks.
+See `sandbox.md` for platform requirements, examples, and limits.
 
 If `classify.ts` grows past ~200 lines, stop: the extra cases belong in the rules file, where
 the user writes them, not in code.

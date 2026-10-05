@@ -1,7 +1,7 @@
-import * as fs from 'node:fs';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
 import {resolveTarget} from './paths.js';
+import {fileOperation} from '../sandbox/files.js';
 
 const DEFAULT_LIMIT = 400;
 const MAX_LINE_LENGTH = 500;
@@ -56,16 +56,7 @@ export const readFile: Tool = {
   async run(args, ctx) {
     const parsed = schema.parse(args);
     const target = resolveTarget(ctx.root, parsed.path);
-    const stat = fs.statSync(target);
-    if (stat.isDirectory()) {
-      throw new Error(`${parsed.path} is a directory, not a file`);
-    }
-    if (stat.size > MAX_BYTES) {
-      throw new Error(
-        `${parsed.path} is ${stat.size} bytes, larger than the ${MAX_BYTES} byte limit`,
-      );
-    }
-    const content = fs.readFileSync(target, 'utf8');
+    const {content} = await fileOperation({kind: 'read', target, maxBytes: MAX_BYTES, display: parsed.path}, ctx);
     const lines = content.split('\n');
     if (lines[lines.length - 1] === '') lines.pop();
     const offset = parsed.offset ?? 1;

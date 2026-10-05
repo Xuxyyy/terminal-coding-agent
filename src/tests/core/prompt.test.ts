@@ -11,3 +11,14 @@ test('the prompt reserves a single-run verifier for final verification', () => {
   assert.match(prompt, /never retry it/);
   assert.match(prompt, /Follow the required verifier order exactly/);
 });
+
+
+test('the prompt describes only the selected sandbox mode', () => {
+  const off = systemPrompt(process.cwd());
+  assert.match(off, /Sandbox: Off/);
+  assert.match(off, /does not stop commands from reading credential files/);
+  assert.doesNotMatch(off, /Known credential storage is hidden/);
+  const on = systemPrompt(process.cwd(), 'auto-edits', 'on');
+  assert.match(on, /Sandbox: On/);
+  assert.match(on, /never falls back to Off/);
+});

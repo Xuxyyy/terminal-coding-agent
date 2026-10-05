@@ -4,7 +4,12 @@ import type {ModelChoice} from '../client.js';
 import {INTERRUPTED, type DiffPayload, type Host, type Usage} from '../host.js';
 import {approvalKey, decide, type Request} from '../permission/decide.js';
 import type {Mode} from '../permission/mode.js';
+import type {SandboxMode} from '../sandbox/mode.js';
 import type {Rules} from '../settings.js';
+import {insideRoot, isProtectedPath} from '../permission/protected.js';
+import {absoluteTarget, accessReason, hasAccess, normalizeAccess, type SandboxAccess} from '../sandbox/policy.js';
+import {fileOperation} from '../sandbox/files.js';
+import {resolveTarget} from './paths.js';
 
 export type Judge = (
   request: Request,
@@ -17,10 +22,12 @@ export type ToolContext = {
   allowed: Set<string>;
   rules: Rules;
   mode: Mode;
+  sandbox?: SandboxMode;
   choice?: ModelChoice;
-  backup?: (path: string) => void;
+  backup?: (path: string, snapshot: Buffer | null) => void;
   judge?: Judge;
   denied?: string[];
+  sandboxAccess?: SandboxAccess;
 };
 
 export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage};
@@ -31,6 +38,7 @@ export type Tool = {
   schema: z.ZodTypeAny;
   parameters?: Record<string, unknown>;
   request?: (args: unknown) => Request;
+  access?: (args: unknown) => SandboxAccess;
   run: (args: unknown, ctx: ToolContext) => Promise<ToolOutput>;
 };
 
@@ -77,7 +85,7 @@ export const DENIED =
   'another way to do the same thing. carry on with the rest of the task ' +
   'if there is one, then tell the user what you could not do.';
 
-type Permission = {denied?: string; interrupted?: true; args: unknown};
+type Permission = {denied?: string; interrupted?: true; args: unknown; access?: SandboxAccess};
 
 function approved(request: Request, args: unknown, command?: string): Permission {
   return {args: request.kind === 'command' && command ? {...(args as object), command} : args};
@@ -92,8 +100,36 @@ async function permitted(
   if (!tool.request) return {args};
   const request = tool.request(args);
   const outcome = decide(request, ctx.root, ctx.rules, ctx.mode);
-  if (outcome.decision === 'allow') return approved(request, args, outcome.command);
   if (outcome.decision === 'deny') return {denied: outcome.reason, args};
+  let access: SandboxAccess = {};
+  if (ctx.sandbox === 'on') {
+    access = tool.access?.(args) ?? {};
+    if (request.kind !== 'command') {
+      // Also validate in-project targets, so credential files cannot be exposed by another tool.
+      const target = absoluteTarget(ctx.root, request.path);
+      normalizeAccess(ctx.root, {read_paths: [request.path]});
+      if (!insideRoot(target, ctx.root) || (request.kind === 'write' && isProtectedPath(target, ctx.root))) {
+        access = request.kind === 'read' ? {read_paths: [request.path]} : {write_paths: [request.path]};
+      }
+    }
+    access = normalizeAccess(ctx.root, access);
+  }
+  if (hasAccess(access)) {
+    // Resource grants are explicit, one-call human approvals. Neither the model judge,
+    // an allow rule, nor a remembered command approval can grant host access.
+    const decision = await ctx.host.confirm({
+      command: outcome.command ?? `${tool.name} ${describe(request)}`,
+      reason: `${outcome.reason ? `${outcome.reason}. ` : ''}${accessReason(access)}`,
+      suppressible: false,
+    });
+    if (ctx.host.signal.aborted) return {interrupted: true, args};
+    if (decision === 'deny') {
+      ctx.denied?.push(outcome.command ?? describe(request));
+      return {denied: DENIED, args};
+    }
+    return {...approved(request, args, outcome.command), access};
+  }
+  if (outcome.decision === 'allow') return approved(request, args, outcome.command);
   const key = approvalKey(request);
   if (ctx.allowed.has(key)) return approved(request, args, outcome.command);
   if (outcome.decision === 'judge' && ctx.judge) {
@@ -154,13 +190,15 @@ export async function runTool(
     const permission = await permitted(tool, parsed.data, ctx);
     if (permission.interrupted) return {text: INTERRUPTED};
     if (permission.denied) return {text: `Error: ${permission.denied}`};
+    const execution = {...ctx, sandboxAccess: permission.access};
     if (ctx.backup && tool.request) {
-      try {
-        const request = tool.request(parsed.data);
-        if (request.kind === 'write') ctx.backup(request.path);
-      } catch {}
+      const request = tool.request(parsed.data);
+      if (request.kind === 'write') {
+        const snapshot = await fileOperation({kind: 'snapshot', target: resolveTarget(ctx.root, request.path)}, execution);
+        try { ctx.backup(request.path, snapshot.bytes === null ? null : Buffer.from(snapshot.bytes, 'base64')); } catch {}
+      }
     }
-    return await tool.run(permission.args, ctx);
+    return await tool.run(permission.args, execution);
   } catch (error) {
     if (ctx.host.signal.aborted) return {text: INTERRUPTED};
     return {text: `Error: ${(error as Error).message}`};

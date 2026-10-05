@@ -217,7 +217,7 @@ Ink TUI, adapted from the Python agent's interface: streaming markdown,
 diffs in history, spinner and status line, an input box with a slash-command
 menu, ↑/↓ prompt history saved to disk, the y/a/n confirm prompt, an exit
 summary, and `/clear`, `/context`, `/compact`, `/resume`, `/rewind`,
-`/permission`, `/model` plus `exit`/`quit`/`q`.
+`/permission`, `/sandbox`, `/model` plus `exit`/`quit`/`q`.
 
 A tool row is `• name`, then the argument, then what came back. `bash` splits in
 two when the model wrote a `description`: the sentence sits on the row and the
@@ -363,7 +363,7 @@ and the picker both already correct.
 
 A byte cap on the copies a write stores, and a git-backed snapshot that would
 catch what `bash` changes — both wait for numbers from real use (see
-`sessions.md`). The sandbox, network tools, a
+`sessions.md`). Domain filtering, authenticated network tools, a
 debugging transcript, todo panel, skills, memory.
 
 For sub-agents, deliberately: project-local definitions, parallel or background
@@ -375,3 +375,14 @@ Reacting to a provider's context-length rejection by compacting and
 retrying — the safety net under the 80% trigger — is also still open: the error
 shape differs per provider and none of it can be tested without paying for a
 deliberate failure.
+
+
+## Sandbox control
+
+Sandbox defaults to Off. `/sandbox` opens an On/Off picker while idle, and a persistent
+status line shows the current mode during tasks and approvals. Press Esc and wait for
+an active task to stop before switching. `--sandbox on|off` selects the launch mode in
+interactive or print mode. The choice lasts for this ACC process through clear, resume,
+and rewind; it is not saved. Permission checks and Shell cleanup run in both modes.
+Off removes OS file and network restrictions; cleanup is not full credential protection.
+See `sandbox.md` for enforcement, platform requirements, and Harbor verification.

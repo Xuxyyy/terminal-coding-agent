@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import {DEFAULT_SANDBOX, isSandboxMode, type SandboxMode} from '../core/sandbox/mode.js';
 
 export type CliOptions = {
   workspaceRoot: string;
@@ -9,6 +10,7 @@ export type CliOptions = {
   yes: boolean;
   maxSeconds: number;
   version: boolean;
+  sandbox: SandboxMode;
 };
 
 const DEFAULT_MAX_SECONDS = 300;
@@ -39,9 +41,18 @@ export function parseArgs(
   let maxSeconds = DEFAULT_MAX_SECONDS;
   let maxSecondsGiven = false;
   let version = false;
+  let sandbox: SandboxMode = DEFAULT_SANDBOX;
+  let sandboxGiven = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]!;
+    if (arg === '--sandbox') {
+      const value = valueFor(args, ++i, arg);
+      if (!isSandboxMode(value)) throw new Error('--sandbox needs on or off');
+      sandbox = value;
+      sandboxGiven = true;
+      continue;
+    }
     if (arg === '--workspace') {
       throw new Error(
         '--workspace was removed; cd into the folder you want to work on',
@@ -85,6 +96,7 @@ export function parseArgs(
       json ? '--json' : null,
       yes ? '--yes' : null,
       maxSecondsGiven ? '--max-seconds' : null,
+      sandboxGiven ? '--sandbox' : null,
     ].filter((flag): flag is string => flag !== null);
     if (combined.length > 0) {
       throw new Error(`--version cannot be combined with ${combined.join(' or ')}`);
@@ -96,6 +108,7 @@ export function parseArgs(
       yes,
       maxSeconds,
       version,
+      sandbox,
     };
   }
 
@@ -121,5 +134,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot, print, json, yes, maxSeconds, version};
+  return {workspaceRoot, print, json, yes, maxSeconds, version, sandbox};
 }

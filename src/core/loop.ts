@@ -18,7 +18,7 @@ import {
   type Session,
 } from './session.js';
 import type {SessionStore} from './store.js';
-import {captureBefore} from './history.js';
+import {captureSnapshot} from './history.js';
 import {estimateTokens} from './tokens.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveTarget} from './tools/paths.js';
@@ -114,9 +114,9 @@ export async function runAgent(
   let reportedThreshold = false;
 
   const backup = store
-    ? (asked: string): void => {
+    ? (asked: string, snapshot: Buffer | null): void => {
         const target = resolveTarget(session.root, asked);
-        const before = captureBefore(store.dir, target);
+        const before = captureSnapshot(store.dir, snapshot);
         store.appendCode(displayPath(session.root, target), before);
       }
     : undefined;
@@ -266,6 +266,7 @@ export async function runAgent(
           allowed: session.allowed,
           rules: session.rules,
           mode: session.mode,
+          sandbox: session.sandbox,
           choice,
           backup,
           judge,

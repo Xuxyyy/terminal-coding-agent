@@ -1,6 +1,7 @@
-import {spawn} from 'node:child_process';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
+import {accessSchema, executable} from '../sandbox/policy.js';
+import {runCommand} from '../sandbox/run.js';
 
 const TIMEOUT_MS = 120_000;
 const HEAD_CHARS = 10_000;
@@ -12,6 +13,7 @@ const schema = z.object({
     .string()
     .optional()
     .describe('Short sentence saying what this command is for, shown to the user.'),
+  access: accessSchema.optional().describe('Extra access when Sandbox is On; ignored when Off. Requires approval for this call.'),
 });
 
 export function capOutput(text: string): string {
@@ -29,41 +31,35 @@ export const bash: Tool = {
   description:
     'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
     'To search file contents use the grep tool instead; reach for a shell search only to build a pipeline, ' +
-    "to search git history, or to search another command's output.",
+    "to search git history, or to search another command's output. " +
+    'Clean environment and private HOME/temp files. ' +
+    'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
   schema,
   request(args) {
     const parsed = schema.parse(args);
     return {kind: 'command', command: parsed.command, reason: parsed.description};
   },
-  run(args, ctx) {
+  access(args) {
+    return schema.parse(args).access ?? {};
+  },
+  async run(args, ctx) {
     const parsed = schema.parse(args);
-    return new Promise((resolve) => {
-      const child = spawn('bash', ['-lc', parsed.command], {
-        cwd: ctx.root,
-        signal: ctx.host.signal,
-        timeout: TIMEOUT_MS,
-      });
-      let output = '';
-      const collect = (chunk: Buffer) => {
-        output += chunk.toString('utf8');
-      };
-      child.stdout.on('data', collect);
-      child.stderr.on('data', collect);
-      child.on('error', (error: NodeJS.ErrnoException) => {
-        if (error.name === 'AbortError') {
-          resolve({text: '[exit 130]\nstopped by the user'});
-          return;
-        }
-        resolve({text: `[exit 1]\n${error.message}`});
-      });
-      child.on('close', (code, signal) => {
-        const status = code === null ? 124 : code;
-        const note =
-          signal === 'SIGTERM' && code === null
-            ? `\ncommand timed out after ${TIMEOUT_MS / 1000}s`
-            : '';
-        resolve({text: `[exit ${status}]\n${capOutput(output)}${note}`});
-      });
+    const program = executable('bash');
+    if (!program) throw new Error('bash is not on PATH');
+    const result = await runCommand({
+      root: ctx.root,
+      sandbox: ctx.sandbox,
+      program,
+      args: ['--noprofile', '--norc', '-c', parsed.command],
+      signal: ctx.host.signal,
+      timeoutMs: TIMEOUT_MS,
+      access: ctx.sandboxAccess,
     });
+    const note = result.interrupted ? '\nstopped by the user' : result.timedOut ? `\ncommand timed out after ${TIMEOUT_MS / 1000}s` : '';
+    const output = result.stdout + result.stderr;
+    const blocked = ctx.sandbox === 'on' && /Operation not permitted|Permission denied/.test(output)
+      ? '\n[sandbox blocked access; request a specific path or network grant if needed. Earlier parts of the command may already have run.]'
+      : '';
+    return {text: `[exit ${result.code}]\n${capOutput(output)}${note}${blocked}`};
   },
 };

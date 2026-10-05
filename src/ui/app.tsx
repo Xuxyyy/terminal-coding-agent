@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useApp, useInput, useStdout} from 'ink';
 import type {ModelChoice} from '../core/client.js';
+import type {SandboxMode} from '../core/sandbox/mode.js';
 import {useAgent} from './agent.js';
 import {statusFor} from './events.js';
 import {streamRowBudget, tailLines} from './stream-view.js';
@@ -31,14 +32,17 @@ import {NOTHING_TO_REWIND, rewindLine} from './rewind.js';
 import {sessionRows} from './sessions.js';
 import {HistoryList} from './components/history/HistoryList.js';
 import {theme} from './theme.js';
+import {sandboxLabel, sandboxLine, sandboxRows} from './sandbox.js';
 
 export function App({
   workspaceRoot,
   choice,
+  sandbox: initialSandbox,
   onCleanExit,
 }: {
   workspaceRoot: string;
   choice: ModelChoice;
+  sandbox?: SandboxMode;
   onCleanExit: () => void;
 }) {
   const {exit} = useApp();
@@ -46,6 +50,9 @@ export function App({
   const {
     committed,
     mode,
+    sandbox,
+    pickSandbox,
+    setSandbox,
     modelId,
     streamText,
     phase,
@@ -69,7 +76,7 @@ export function App({
     model,
     setModel,
     shutdown,
-  } = useAgent(workspaceRoot, choice);
+  } = useAgent(workspaceRoot, choice, undefined, initialSandbox);
   const [input, setInput] = useState('');
   const [commandHistory, setCommandHistory] = useState(loadCommandHistory);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -79,7 +86,7 @@ export function App({
   const inputShown = phase.kind === 'idle' && !closing;
   const menuOpen = commandMatches(input).length > 0;
   const visibleStream = useMemo(
-    () => tailLines(streamText, streamRowBudget(stdout.rows), stdout.columns),
+    () => tailLines(streamText, streamRowBudget(stdout.rows, 1), stdout.columns),
     [streamText, stdout.columns, stdout.rows],
   );
   const rows = useMemo(
@@ -137,6 +144,11 @@ export function App({
     }
     if (command === '/permission') {
       permission();
+      setInput('');
+      return;
+    }
+    if (command === '/sandbox') {
+      pickSandbox();
       setInput('');
       return;
     }
@@ -198,6 +210,7 @@ export function App({
         awaitingApproval={phase.kind === 'confirming'}
       />
       <Box flexDirection="column" marginTop={1}>
+        <Text color={theme.muted}>Sandbox: {sandboxLabel(sandbox)}</Text>
         {visibleStream ? <Markdown text={visibleStream} /> : null}
         {phase.kind === 'confirming' ? (
           <Confirm request={phase.request} onRespond={respond} onStop={interrupt} />
@@ -224,6 +237,17 @@ export function App({
             onPick={setPermission}
             onCancel={cancelPick}
             initial={permissionAt(mode)}
+          />
+        ) : phase.kind === 'sandbox' ? (
+          <Picker
+            title="Choose sandbox mode for this ACC process"
+            rows={sandboxRows(sandbox)}
+            hint="↑↓ to move · enter to choose · esc to cancel"
+            empty=""
+            renderRow={sandboxLine}
+            onPick={setSandbox}
+            onCancel={cancelPick}
+            initial={sandbox === 'on' ? 1 : 0}
           />
         ) : phase.kind === 'model' ? (
           <Picker

@@ -1,8 +1,9 @@
-import {spawn} from 'node:child_process';
 import * as fs from 'node:fs';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
 import {displayPath, resolveTarget} from './paths.js';
+import {executable} from '../sandbox/policy.js';
+import {runCommand} from '../sandbox/run.js';
 
 const TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_CHARS = 32_000;
@@ -106,6 +107,8 @@ function argv(args: Args, target: string): string[] {
     ...chosenFlags(args),
     '--glob',
     '!.git',
+    ...['.acc', '.claude', '.ssh', '.aws', '.azure', '.gnupg', '.docker', '.codex', '.kube', '.env*', '.npmrc', '.netrc', '.git-credentials', 'id_rsa', 'id_ed25519', 'credentials.json', '*.pem', '*.key', '*.p12', '*.pfx']
+      .flatMap((name) => ['--glob', `!${name}`]),
     '--regexp',
     args.pattern,
     target,
@@ -120,35 +123,6 @@ export function chosenArgv(raw: unknown): string[] {
     ? ['--regexp', args.pattern]
     : [args.pattern];
   return ['rg', ...chosenFlags(args), ...pattern, args.path ?? '.'];
-}
-
-function ripgrep(args: string[], cwd: string, signal: AbortSignal): Promise<Run> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('rg', args, {
-      cwd,
-      signal,
-      timeout: TIMEOUT_MS,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString('utf8');
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8');
-    });
-    child.on('error', (error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') {
-        reject(new Error(MISSING_RG));
-        return;
-      }
-      reject(error);
-    });
-    child.on('close', (code) => {
-      resolve({code: code === null ? 124 : code, stdout, stderr});
-    });
-  });
 }
 
 function nothingFound(args: Args, stats: Stats | null, where: string): string {
@@ -176,7 +150,9 @@ export const grep: Tool = {
       throw new Error(`path not found: ${where}`);
     }
     const searchPath = displayPath(ctx.root, resolved);
-    const run = await ripgrep(argv(args, searchPath), ctx.root, ctx.host.signal);
+    const program = executable('rg');
+    if (!program) throw new Error(MISSING_RG);
+    const run: Run = await runCommand({root: ctx.root, sandbox: ctx.sandbox, program, args: argv(args, searchPath), signal: ctx.host.signal, access: ctx.sandboxAccess, timeoutMs: TIMEOUT_MS});
     if (run.code === 124) {
       return {text: `search timed out after ${TIMEOUT_MS / 1000}s; narrow it with glob or path`};
     }
@@ -185,6 +161,9 @@ export const grep: Tool = {
       return {text: nothingFound(args, stats, where)};
     }
     if (run.code === 2) {
+      if (ctx.sandbox === 'on' && /Operation not permitted|Permission denied/.test(run.stderr)) {
+        return {text: capSearch(body ? `${body}\n[sandbox skipped protected files]` : 'sandbox blocked search access')};
+      }
       return {text: `invalid pattern: ${run.stderr.trim() || 'ripgrep exited 2'}`};
     }
     if (run.code === 1 || body === '') {

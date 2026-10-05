@@ -28,9 +28,9 @@ Three choices shape the code. The **OpenAI SDK** is the model client, so DeepSee
 Kimi keep working through `baseURL`. The TUI is **Ink**. It is **one package**, with
 `src/core` and `src/ui` as folders rather than workspaces.
 
-There is no sandbox. The welcome screen shows no sandbox status line and `ReadyInfo` carries
-no `sandbox` field. Whoever builds one adds both back, in the shape the sandbox actually
-needs — it will probably pair with permission modes, so an on/off boolean may be wrong.
+Tools execute with the process sandbox mode, Off by default, independently of permission mode. The model client,
+approval host, and private session store remain outside. Backups receive bytes read by a
+mode-aware worker instead of reopening model-supplied paths on the host. See `sandbox.md`.
 
 ## Architecture
 

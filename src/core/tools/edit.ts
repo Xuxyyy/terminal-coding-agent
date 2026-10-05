@@ -1,8 +1,8 @@
-import * as fs from 'node:fs';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
 import {diffPayload} from './diff.js';
 import {displayPath, resolveTarget} from './paths.js';
+import {fileOperation} from '../sandbox/files.js';
 
 const schema = z.object({
   path: z.string().describe('File to change, relative to the workspace root.'),
@@ -13,17 +13,6 @@ const schema = z.object({
     ),
   new_string: z.string().describe('Text to put in its place.'),
 });
-
-function occurrences(haystack: string, needle: string): number {
-  if (!needle) return 0;
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count += 1;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
-}
 
 export const editFile: Tool = {
   name: 'edit_file',
@@ -37,24 +26,7 @@ export const editFile: Tool = {
     const parsed = schema.parse(args);
     const target = resolveTarget(ctx.root, parsed.path);
     const shown = displayPath(ctx.root, target);
-    if (!fs.existsSync(target)) {
-      throw new Error(`no such file: ${shown}`);
-    }
-    if (!parsed.old_string) {
-      throw new Error('old_string is empty; use write_file to create a file');
-    }
-    const before = fs.readFileSync(target, 'utf8');
-    const found = occurrences(before, parsed.old_string);
-    if (found === 0) {
-      throw new Error(`old_string not found in ${shown}`);
-    }
-    if (found > 1) {
-      throw new Error(
-        `old_string appears ${found} times in ${shown}; include more surrounding text so it matches once`,
-      );
-    }
-    const after = before.replace(parsed.old_string, () => parsed.new_string);
-    fs.writeFileSync(target, after, 'utf8');
+    const {before, after} = await fileOperation({kind: 'edit', target, old: parsed.old_string, replacement: parsed.new_string, display: shown}, ctx);
     return {
       text: `Edited '${shown}'.`,
       diff: diffPayload(shown, before, after),

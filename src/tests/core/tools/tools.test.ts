@@ -40,6 +40,7 @@ function context(root: string, host: Host): ToolContext {
     allowed: new Set<string>(),
     rules: {allow: [], ask: [], deny: []},
     mode: 'auto-edits',
+    sandbox: 'on',
   };
 }
 
@@ -184,7 +185,7 @@ test('a path outside the workspace stays unread when the prompt is denied', asyn
   assert.doesNotMatch(output.text, /hello/);
 });
 
-test('a home path is asked about, not refused as a missing file', async () => {
+test('a home credential path is refused without prompting or reading it', async () => {
   const root = workspace();
   const {host, asked} = hostThatAnswers('deny');
   const output = await runTool(
@@ -194,9 +195,8 @@ test('a home path is asked about, not refused as a missing file', async () => {
     context(root, host),
   );
 
-  assert.equal(asked.length, 1);
-  assert.equal(asked[0].reason, "reads '~/.ssh/id_rsa' outside the project");
-  assert.equal(asked[0].suppressible, false);
+  assert.equal(asked.length, 0);
+  assert.match(output.text, /sandbox blocks credential storage/);
   assert.doesNotMatch(output.text, /ENOENT/);
 });
 

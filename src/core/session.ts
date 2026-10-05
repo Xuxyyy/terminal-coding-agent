@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
 import type {Mode} from './permission/mode.js';
+import {DEFAULT_SANDBOX, type SandboxMode} from './sandbox/mode.js';
 import {systemPrompt} from './prompt.js';
 import {modeOf, rulesOf, type Rules} from './settings.js';
 import {estimateMessages, estimateTokens, estimateTools} from './tokens.js';
@@ -25,6 +26,7 @@ export type Session = {
   denied: string[];
   rules: Rules;
   mode: Mode;
+  sandbox: SandboxMode;
   usage: Usage;
   lastContextTokens: number;
   measuredAt: number;
@@ -35,6 +37,7 @@ export function createSession(
   root: string,
   systemPrompt: string,
   contextWindow: number,
+  sandbox: SandboxMode = DEFAULT_SANDBOX,
 ): Session {
   return {
     root,
@@ -45,6 +48,7 @@ export function createSession(
     denied: [],
     rules: rulesOf(),
     mode: modeOf(),
+    sandbox,
     usage: {prompt: 0, completion: 0, total: 0},
     lastContextTokens: 0,
     measuredAt: 0,
@@ -104,7 +108,16 @@ export function restoreMessages(
 
 export function setMode(session: Session, mode: Mode): void {
   session.mode = mode;
-  session.systemPrompt = systemPrompt(session.root, mode);
+  refreshPrompt(session);
+}
+
+export function setSandbox(session: Session, sandbox: SandboxMode): void {
+  session.sandbox = sandbox;
+  refreshPrompt(session);
+}
+
+function refreshPrompt(session: Session): void {
+  session.systemPrompt = systemPrompt(session.root, session.mode, session.sandbox);
   session.messages = [
     {role: 'system', content: session.systemPrompt},
     ...session.messages.slice(1),

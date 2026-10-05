@@ -55,6 +55,7 @@ export type Phase =
   | {kind: 'picking'}
   | {kind: 'rewinding'}
   | {kind: 'permission'}
+  | {kind: 'sandbox'}
   | {kind: 'model'}
   | {kind: 'rewind-confirm'; id: string; title: string; files: RewindFile[]}
   | {kind: 'closed'};

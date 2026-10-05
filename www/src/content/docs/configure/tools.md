@@ -7,9 +7,9 @@ sidebar:
 
 The model gets six tools: read a file, search with ripgrep, edit one exact
 piece of text, write a whole file, run a shell command, and hand a job to a
-sub-agent. They are the complete tool set. None of them reaches the network,
-none opens a browser, and none reaches a file outside the workspace
-without asking you first.
+sub-agent. They are the complete tool set. File and shell execution defaults to Sandbox Off.
+Permission checks apply in both modes. With Sandbox On, extra network access and
+host paths require approval for each call, and known credential storage stays hidden.
 
 | Tool | What it does |
 |---|---|
@@ -145,8 +145,25 @@ everything, so a mistake costs the whole file rather than one line.
 
 ## `bash`
 
-Runs a shell command in the workspace root, with `bash -lc`. This is how tests
-get run, git gets used, and files get deleted.
+Runs a shell command in the workspace root, with `bash --noprofile --norc -c`
+with the current sandbox mode. This is how tests get run, git gets used, and files get
+deleted. Personal shell startup files do not load. Each call gets a private HOME
+and temporary directory; provider credentials and the model relay URL are omitted.
+
+With Sandbox On, network is off by default. An optional `access` object can request `read_paths`,
+`write_paths`, or `network: true`. Extra access asks for approval once for that
+call and its children, and is never remembered. Credentials remain protected.
+A network grant allows data the command can read to be sent outward.
+
+Sandbox defaults to Off. Use `/sandbox` while idle or `--sandbox on|off` at launch.
+The choice lasts for this ACC process; it is not saved. Off ignores `access` and
+adds no OS file or network isolation. Permission checks and environment cleanup
+remain active; cleanup cannot stop commands from reading credential files.
+
+With On, macOS needs the built-in `sandbox-exec`. Linux needs Bubblewrap and working
+namespaces, including inside task containers. A failed backend stops the command;
+there is no unsandboxed fallback. A blocked command may already have changed files,
+so ACC must inspect its effects before retrying.
 
 ```
  • bash check the test suite

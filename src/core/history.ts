@@ -19,6 +19,11 @@ export function captureBefore(sessionDir: string, target: string): string | null
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+  return captureSnapshot(sessionDir, bytes);
+}
+
+export function captureSnapshot(sessionDir: string, bytes: Buffer | null): string | null {
+  if (bytes === null) return null;
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
   const dir = filesDir(sessionDir);
   const copy = path.join(dir, sha);

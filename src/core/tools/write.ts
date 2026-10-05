@@ -1,9 +1,8 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import {z} from 'zod';
 import type {Tool} from './registry.js';
 import {diffPayload} from './diff.js';
 import {displayPath, resolveTarget} from './paths.js';
+import {fileOperation} from '../sandbox/files.js';
 
 const schema = z.object({
   path: z
@@ -24,9 +23,7 @@ export const writeFile: Tool = {
     const parsed = schema.parse(args);
     const target = resolveTarget(ctx.root, parsed.path);
     const shown = displayPath(ctx.root, target);
-    const before = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '';
-    fs.mkdirSync(path.dirname(target), {recursive: true});
-    fs.writeFileSync(target, parsed.content, 'utf8');
+    const {before} = await fileOperation({kind: 'write', target, content: parsed.content}, ctx);
     return {
       text: `Wrote ${parsed.content.length} chars to '${shown}'.`,
       diff: diffPayload(shown, before, parsed.content),

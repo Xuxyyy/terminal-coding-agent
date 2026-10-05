@@ -1,3 +1,4 @@
+import type {SandboxMode} from '../sandbox/mode.js';
 import type {ModelChoice} from '../client.js';
 import type {AgentEvent, Usage} from '../host.js';
 import {runAgent} from '../loop.js';
@@ -29,11 +30,13 @@ export async function runHeadless(options: {
   choice: ModelChoice;
   policy: HeadlessPolicy;
   maxSeconds: number;
+  sandbox?: SandboxMode;
 }): Promise<HeadlessResult> {
   const session = createSession(
     options.root,
-    systemPrompt(options.root, modeOf()),
+    systemPrompt(options.root, modeOf(), options.sandbox),
     options.choice.contextWindow,
+    options.sandbox,
   );
   addTask(session, options.task);
 

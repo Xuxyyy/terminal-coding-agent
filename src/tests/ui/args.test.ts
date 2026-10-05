@@ -64,6 +64,7 @@ test('parseArgs reads the task after -p into print', () => {
     yes: false,
     maxSeconds: 300,
     version: false,
+    sandbox: 'off',
   });
 });
 
@@ -137,6 +138,7 @@ test('parseArgs defaults every print field when no flags are given', () => {
     yes: false,
     maxSeconds: 300,
     version: false,
+    sandbox: 'off',
   });
 });
 
@@ -157,6 +159,7 @@ test('parseArgs takes -p, --json and --yes together', () => {
     yes: true,
     maxSeconds: 300,
     version: false,
+    sandbox: 'off',
   });
 });
 
@@ -168,6 +171,7 @@ test('parseArgs accepts --version without a project workspace', () => {
     yes: false,
     maxSeconds: 300,
     version: true,
+    sandbox: 'off',
   });
 });
 
@@ -176,4 +180,20 @@ test('parseArgs keeps --version separate from run options', () => {
     () => parseArgs(['--version', '-p', 'hi'], process.cwd()),
     /--version cannot be combined with -p/,
   );
+});
+
+
+test('sandbox defaults Off and can be selected in interactive or print mode', () => {
+  assert.equal(parseArgs([]).sandbox, 'off');
+  assert.equal(parseArgs(['--sandbox', 'on']).sandbox, 'on');
+  assert.equal(parseArgs(['-p', 'hi', '--sandbox', 'on']).sandbox, 'on');
+  assert.equal(parseArgs(['-p', 'hi', '--sandbox', 'off']).sandbox, 'off');
+});
+
+test('sandbox rejects missing and invalid values and version combinations', () => {
+  assert.throws(() => parseArgs(['--sandbox']), /needs a value/);
+  for (const value of ['ON', '', 'true', '--yes']) {
+    assert.throws(() => parseArgs(['--sandbox', value]), /needs on or off/);
+  }
+  assert.throws(() => parseArgs(['--version', '--sandbox', 'off']), /cannot be combined with --sandbox/);
 });

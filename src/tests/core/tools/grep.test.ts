@@ -33,6 +33,7 @@ function context(root: string, host: Host): ToolContext {
     allowed: new Set<string>(),
     rules: {allow: [], ask: [], deny: []},
     mode: 'auto-edits',
+    sandbox: 'on',
   };
 }
 
@@ -58,14 +59,13 @@ async function search(root: string, args: object, answers: ConfirmDecision[] = [
   return {text: output.text, asked};
 }
 
-test('a search outside the project asks before it runs', async () => {
+test('a search of credential storage is refused before it runs', async () => {
   const root = seeded();
 
-  const {asked} = await search(root, {pattern: 'x', path: '~/.ssh'}, ['deny']);
+  const {asked, text} = await search(root, {pattern: 'x', path: '~/.ssh'}, ['deny']);
 
-  assert.equal(asked.length, 1);
-  assert.equal(asked[0].reason, "reads '~/.ssh' outside the project");
-  assert.equal(asked[0].suppressible, false);
+  assert.equal(asked.length, 0);
+  assert.match(text, /sandbox blocks credential storage/);
 });
 
 test('a match returns the file paths and nothing else', async () => {
@@ -147,13 +147,13 @@ test('a gitignored file is skipped and a dotfile is found', async () => {
   const root = seeded();
   write(root, '.gitignore', 'build/\n');
   write(root, 'build/generated.ts', 'const widget = 3;\n');
-  write(root, '.acc/settings.json', '{"widget": true}\n');
+  write(root, '.notes/settings.json', '{"widget": true}\n');
 
   const {text} = await search(root, {pattern: 'widget'});
   const files = text.split('\n').sort();
 
   assert.ok(!files.includes('build/generated.ts'), text);
-  assert.ok(files.includes('.acc/settings.json'), text);
+  assert.ok(files.includes('.notes/settings.json'), text);
 });
 
 test('.git is never searched', async () => {

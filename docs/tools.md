@@ -197,7 +197,12 @@ Both writers return a `DiffPayload`, which is what the scrollback draws. The
 ## `bash`
 
 `command`, and an optional `description` the confirm prompt shows as the reason.
-Runs `bash -lc` in the workspace root.
+Runs `bash --noprofile --norc -c` in the workspace root. Sandbox defaults to Off;
+`/sandbox` or `--sandbox on|off` selects it. Both modes use a private HOME and temporary
+directory with a clean environment. With On, network is off by default and `access`
+requests one-call grants for outside paths or network. Off ignores `access` and adds
+no OS file or network restrictions. Permission checks remain active in both modes.
+The file workers and backups use the same selected mode. See `sandbox.md`.
 
 Output is always `[exit N]` on its own first line, then stdout and stderr
 **interleaved into one stream** — the order they actually happened in, which is

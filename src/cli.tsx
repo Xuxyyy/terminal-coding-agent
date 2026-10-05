@@ -25,6 +25,7 @@ try {
       choice,
       policy: options.yes ? 'yes' : 'deny',
       maxSeconds: options.maxSeconds,
+      sandbox: options.sandbox,
     });
     if (options.json) {
       for (const line of jsonLines(result)) {
@@ -54,6 +55,7 @@ try {
     const instance = render(
       <App
         workspaceRoot={options.workspaceRoot}
+        sandbox={options.sandbox}
         choice={choice}
         onCleanExit={() => {
           summary = formatExitSummary();
