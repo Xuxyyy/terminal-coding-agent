@@ -38,9 +38,9 @@ function thrown(value: unknown): SettingsError {
   throw new Error(`expected ${JSON.stringify(value)} to be rejected`);
 }
 
-test('rulesOf is empty and modeOf is auto-edits before the settings are loaded', () => {
+test('rulesOf is empty and modeOf is auto before the settings are loaded', () => {
   assert.deepEqual(rulesOf(), {allow: [], ask: [], deny: []});
-  assert.equal(modeOf(), 'auto-edits');
+  assert.equal(modeOf(), 'auto');
 });
 
 test('parseSettings reads the three lists with the tag kept', () => {
@@ -272,8 +272,11 @@ function refused(files: string[]): SettingsError {
 test('the permission mode is read from the user file', () => {
   for (const mode of ['ask-edits', 'auto-edits', 'auto']) {
     withHome((home) => {
-      loadSettings(settingsIn(home, {permission_mode: mode}));
+      const files = settingsIn(home, {permission_mode: mode});
+      const before = fs.readFileSync(files[0], 'utf8');
+      loadSettings(files);
       assert.equal(modeOf(), mode);
+      assert.equal(fs.readFileSync(files[0], 'utf8'), before);
     });
   }
 });
@@ -312,10 +315,22 @@ test('an unknown permission mode refuses to start and lists the valid names', ()
   });
 });
 
-test('no permission mode anywhere leaves auto-edits', () => {
+test('no permission mode anywhere leaves auto without rewriting settings', () => {
   withHome((home) => {
-    loadSettings(settingsIn(home, {permissions: {allow: ['bash(ls *)']}}, {}));
-    assert.equal(modeOf(), 'auto-edits');
+    const files = settingsIn(home, {permissions: {allow: ['bash(ls *)']}}, {});
+    const before = files.map((file) => fs.readFileSync(file, 'utf8'));
+    loadSettings(files);
+    assert.equal(modeOf(), 'auto');
+    assert.deepEqual(files.map((file) => fs.readFileSync(file, 'utf8')), before);
+  });
+});
+
+test('missing settings files default to auto without creating a settings file', () => {
+  withHome((home) => {
+    const files = [path.join(home, 'settings.json'), path.join(home, 'project', '.acc', 'settings.json')];
+    loadSettings(files);
+    assert.equal(modeOf(), 'auto');
+    assert.ok(files.every((file) => !fs.existsSync(file)));
   });
 });
 
@@ -324,7 +339,7 @@ test('other unknown top-level keys are still ignored in every file', () => {
     loadSettings(
       settingsIn(home, {model: 'gemini-3.8-flash'}, {transcripts: true, hats: 3}),
     );
-    assert.equal(modeOf(), 'auto-edits');
+    assert.equal(modeOf(), 'auto');
   });
 });
 

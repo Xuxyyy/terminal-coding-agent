@@ -243,7 +243,7 @@ test('a low override moves the line down', () => {
 
 test('setMode moves the mode and the prompt together', () => {
   const session = createSession('/tmp/work', 'rules', 100_000);
-  assert.equal(session.mode, 'auto-edits');
+  assert.equal(session.mode, 'auto');
 
   setMode(session, 'ask-edits');
 
@@ -269,6 +269,27 @@ test('setMode rewrites the first message and nothing after it', () => {
   assert.equal(session.messages[0]!.content as string, asking);
   assert.equal(session.messages[0]!.content as string, session.systemPrompt);
   assert.deepEqual(session.messages.slice(1), tail);
+});
+
+test('switching into and out of auto updates guidance without changing session state', () => {
+  const session = createSession('/tmp/work', systemPrompt('/tmp/work'), 100_000);
+  addTask(session, 'fix the cart');
+  session.allowed.add('write src/cart.ts');
+  const tail = session.messages.slice(1);
+  const rules = session.rules;
+  const sandbox = session.sandbox;
+
+  for (const mode of ['auto-edits', 'auto', 'ask-edits', 'auto'] as const) {
+    setMode(session, mode);
+    assert.equal(session.mode, mode);
+    assert.equal(session.systemPrompt, systemPrompt('/tmp/work', mode, sandbox));
+    assert.equal(session.messages[0]!.content, session.systemPrompt);
+    assert.equal(session.systemPrompt.includes('Strongly prefer bash'), mode === 'auto');
+    assert.deepEqual(session.messages.slice(1), tail);
+    assert.deepEqual([...session.allowed], ['write src/cart.ts']);
+    assert.equal(session.rules, rules);
+    assert.equal(session.sandbox, sandbox);
+  }
 });
 
 test('a switch keeps the approvals the session already granted', () => {

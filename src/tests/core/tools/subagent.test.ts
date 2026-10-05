@@ -168,6 +168,34 @@ test('an allow list narrows the child to those tools alone', () => {
   );
 });
 
+test('auto child allowlists keep fallback tools without adding bash or recursive agents', () => {
+  const offered = childTools('auto', ['grep', 'read_file']);
+  assert.deepEqual(offered.map((tool) => tool.name), ['grep', 'read_file']);
+  assert.ok(offered.every((tool) => tool.description.includes('Prefer bash by default')));
+  assert.equal(childTools('auto').some((tool) => tool.name === 'agent'), false);
+});
+
+test('children use the parent auto preference unless configured with a stricter mode', async () => {
+  const root = workspace();
+  const {host} = fakeHost();
+
+  for (const configured of [undefined, 'auto-edits', 'ask-edits'] as const) {
+    const child = recordingChoice();
+    const tool = makeSubagent([definition({permissionMode: configured})]);
+    const ctx = {...context(root, host, child.choice), mode: 'auto' as const};
+    const output = await tool.run({...job, agent: 'explorer'}, ctx);
+    assert.equal(output.text, ANSWER);
+    const mode = configured ?? 'auto';
+    const body = child.bodies[0]!;
+    const messages = body.messages as {content: string}[];
+    assert.equal(messages[0]!.content, subagentPrompt(root, mode, 'Report exact paths.'));
+    const offered = body.tools as {function: {name: string; description: string}}[];
+    assert.deepEqual(offered.map((tool) => tool.function.name), ['read_file', 'grep', 'edit_file', 'write_file', 'bash']);
+    const shell = offered.find((tool) => tool.function.name === 'bash')!;
+    assert.equal(shell.function.description.includes('Strongly prefer this tool'), mode === 'auto');
+  }
+});
+
 test('a role is appended to the end of the sub-agent prompt', () => {
   const root = workspace();
   const withRole = subagentPrompt(root, 'auto-edits', 'you only read');

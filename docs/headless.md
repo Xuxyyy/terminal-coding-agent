@@ -80,16 +80,18 @@ does everywhere else.
 **What the policy governs is narrower than it sounds, and this is the thing to
 get right.** It answers confirms; it does not decide which actions produce one.
 An ordinary edit inside the workspace classifies as `recoverable`
-(`classify.ts:101`), the default mode `auto-edits` cuts at `recoverable`
+(`classify.ts:101`), the default mode `auto` cuts at `recoverable`
 (`mode.ts:11`), `withinCut` compares with `<=` (`mode.ts:26`), so `decide`
 returns `allow` (`decide.ts:36`) and `permitted()` returns before it ever calls
 `host.confirm` (`registry.ts:92`).
 
 So **a headless run under `'deny'` still edits files in its workspace, and
 reports `prompts: 0` while doing it.** That is correct: it is the same thing the
-terminal app does without asking. The policy only ever sees what sits above the
-cut — protected paths, deletes, anything reaching outside the project, escapes,
-and unclassified commands.
+terminal app does without asking. The policy only answers confirms that reach
+the host. In `auto`, above-cut actions go to the model judge first; a judge
+allowance can run them without a confirm. Protected paths, deletes, anything
+reaching outside the project, escapes, and unclassified commands reach the
+policy when the judge asks.
 
 A genuinely read-only run has to be configured, not assumed, and there is only
 one setting that does it: `"permission_mode": "ask-edits"`, which cuts at

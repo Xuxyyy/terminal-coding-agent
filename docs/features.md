@@ -63,17 +63,24 @@ is ignored and 0.8 is used.
 
 ## Permissions
 
-One gate, `permitted()` in `src/core/tools/registry.ts`. In the mode a session
-starts in, `auto-edits`, the rule is **recoverable vs not**, not "bash vs file
-tools":
+One gate, `permitted()` in `src/core/tools/registry.ts`. The default permission
+mode is `auto`, unless a mode is saved in user settings. Its automatic allowance
+threshold is the same as `auto-edits`:
 
 - reads and writes inside the project run silently;
-- protected paths (`protected.ts`), deletes, and unclassified commands ask, and
-  can be remembered for the session;
+- protected paths (`protected.ts`), deletes, and unclassified commands go to the
+  model judge, then ask a human if needed; human approvals can be remembered;
 - anything reaching outside the project — a file tool or a `bash` command
-  alike — asks every time and can never be remembered, and neither an `allow`
-  rule nor the `a` key can silence it;
-- an escape (`sudo`, `git push`, `dd of=`) asks the same way.
+  alike — goes to the judge and then asks if needed; its approval can never be
+  remembered. Sandbox resource grants still require explicit human approval;
+- an escape (`sudo`, `git push`, `dd of=`) follows the same judge route.
+
+In `auto`, instructions and tool descriptions strongly prefer Bash for reading,
+searching, editing, creating files, and running commands. All file tools remain
+available when they offer a clear benefit. Protecting uncommitted work through
+available file-tool backups is one such benefit: Bash changes are not captured
+for `/rewind`, and Git cannot reliably recover overwritten uncommitted content.
+Explicit `ask-edits` and `auto-edits` keep their previous tool guidance.
 
 Three **permission modes** move where that line falls, and what happens above it:
 `auto-edits` runs reads and project writes silently, `ask-edits` asks before

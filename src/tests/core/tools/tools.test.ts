@@ -12,7 +12,7 @@ import {grep} from '../../../core/tools/grep.js';
 import {decide} from '../../../core/permission/decide.js';
 import {displayPath, resolveTarget} from '../../../core/tools/paths.js';
 import {readFile} from '../../../core/tools/read.js';
-import {toolsFor} from '../../../core/tools/index.js';
+import {tools, toolsFor} from '../../../core/tools/index.js';
 import {DENIED, runTool, toolDefinitions, type Tool, type ToolContext} from '../../../core/tools/registry.js';
 import {writeFile} from '../../../core/tools/write.js';
 
@@ -229,7 +229,7 @@ test('a link out of the workspace is an escape the gate asks about', () => {
   fs.writeFileSync(path.join(outside, 'secret.txt'), 'x\n');
   fs.symlinkSync(outside, path.join(root, 'link'));
 
-  const outcome = decide({kind: 'read', path: 'link/secret.txt'}, root);
+  const outcome = decide({kind: 'read', path: 'link/secret.txt'}, root, undefined, 'auto-edits');
 
   assert.equal(outcome.decision, 'ask');
   assert.equal(outcome.suppressible, false);
@@ -663,8 +663,64 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
 test('every mode is offered every tool', () => {
   const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'];
 
-  assert.deepEqual(toolsFor('auto-edits').map((tool) => tool.name), full);
-  assert.deepEqual(toolsFor('ask-edits').map((tool) => tool.name), full);
+  for (const mode of ['auto-edits', 'ask-edits', 'auto'] as const) {
+    assert.deepEqual(toolsFor(mode).map((tool) => tool.name), full);
+  }
+});
+
+test('auto descriptions prefer bash without changing tool interfaces or shared tools', () => {
+  const original = toolDefinitions(tools);
+  const auto = toolsFor('auto').filter((tool) => tool.name !== 'agent');
+  const definitions = toolDefinitions(auto);
+
+  for (const [index, tool] of auto.entries()) {
+    const base = tools[index]!;
+    assert.notEqual(tool, base);
+    assert.equal(tool.name, base.name);
+    assert.equal(tool.schema, base.schema);
+    assert.equal(tool.run, base.run);
+    assert.equal(tool.request, base.request);
+    assert.equal(tool.access, base.access);
+    assert.deepEqual(definitions[index]!.function.parameters, original[index]!.function.parameters);
+    assert.match(tool.description, tool.name === 'bash' ? /Strongly prefer this tool/ : /Prefer bash by default/);
+    assert.doesNotMatch(tool.description, /To search file contents use the grep tool instead/);
+  }
+
+  const shell = auto.find((tool) => tool.name === 'bash')!;
+  assert.match(shell.description, /Shell changes are not backed up for \/rewind/);
+  assert.match(shell.description, /Clean environment and private HOME\/temp files/);
+  assert.match(shell.description, /When Sandbox is On, network is off/);
+  assert.match(shell.description, /Do not blindly retry blocked commands/);
+  for (const mode of ['ask-edits', 'auto-edits'] as const) {
+    assert.deepEqual(toolDefinitions(toolsFor(mode).filter((tool) => tool.name !== 'agent')), original);
+  }
+  assert.deepEqual(toolDefinitions(tools), original);
+});
+
+test('auto file tools still capture old content but shell edits do not', async () => {
+  const root = workspace();
+  const {host} = hostThatAnswers('once');
+  const ctx = {...context(root, host), mode: 'auto' as const};
+  const captured: Array<{path: string; bytes: string | null}> = [];
+  ctx.backup = (file, bytes) => captured.push({path: file, bytes: bytes?.toString() ?? null});
+  const offered = toolsFor('auto');
+  fs.writeFileSync(path.join(root, 'note.txt'), 'uncommitted work\n');
+
+  const edit = await runTool(offered, 'edit_file', JSON.stringify({
+    path: 'note.txt', old_string: 'uncommitted work', new_string: 'edited work',
+  }), ctx);
+  assert.equal(edit.text, "Edited 'note.txt'.");
+  const write = await runTool(offered, 'write_file', JSON.stringify({path: 'note.txt', content: 'written work\n'}), ctx);
+  assert.match(write.text, /^Wrote /);
+  assert.deepEqual(captured, [
+    {path: 'note.txt', bytes: 'uncommitted work\n'},
+    {path: 'note.txt', bytes: 'edited work\n'},
+  ]);
+
+  const shell = await runTool(offered, 'bash', JSON.stringify({command: "echo 'shell work' > note.txt"}), ctx);
+  assert.match(shell.text, /^\[exit 0\]/);
+  assert.equal(fs.readFileSync(path.join(root, 'note.txt'), 'utf8'), 'shell work\n');
+  assert.equal(captured.length, 2);
 });
 
 test('the sub-agent tool keeps its original schema when no definitions exist', () => {

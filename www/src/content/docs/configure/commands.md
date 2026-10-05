@@ -187,9 +187,9 @@ Opens a picker of the three permission modes, on the one you are in:
 
 ```
 Choose what runs without asking
-❯ ask-edits — asks before every edit
-  auto-edits (current) — edits without asking
-  auto — a model decides what would be asked
+  ask-edits — asks before every edit
+  auto-edits — edits without asking
+❯ auto (current) — a model decides what would be asked
 ↑↓ to move · enter to choose · esc to cancel
 ```
 
@@ -199,7 +199,7 @@ so: `switched to auto (not saved to settings.json)`.
 The choice takes effect from your next message and the conversation is not
 disturbed.
 
-`auto-edits` is where a session starts. **No mode refuses anything by itself** —
+`auto` is where a session starts when no permission mode is saved. **No mode refuses anything by itself** —
 above its line a mode asks or delegates, and that is all a mode can do. To make
 `acc` unable to do something, write a `deny` rule instead, which names paths.
 [Permissions](/configure/permissions) has what each mode runs without asking,

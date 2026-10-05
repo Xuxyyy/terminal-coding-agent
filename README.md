@@ -14,8 +14,9 @@ directory.
 
 One TypeScript package with a local test suite. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
-them, edits them, and runs commands until the task is done — asking you first
-before anything it cannot take back.
+them, edits them, and runs commands until the task is done. The default permission
+mode is `auto`: actions above its automatic allowance threshold go to a model
+judge, then to you when approval is still needed. An explicitly saved mode wins.
 
 - Six built-in tools: `read_file`, `grep`, `edit_file`, `write_file`, `bash`,
   and `agent`. Global [agent definitions](https://coding-cli-docs.vercel.app/configure/agents/)
@@ -23,8 +24,13 @@ before anything it cannot take back.
 - Gemini is the only model provider. Gemini 3.8 Flash is the default; Gemini
   3.1 Pro Preview is optional.
 - One permission gate that every tool call passes through.
+- In `auto`, Bash is strongly preferred for file work and commands. Read, Grep,
+  Edit, and Write remain available when they offer a clear benefit.
 - Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
-  the conversation *and* the files back to before a message you sent.
+  the conversation and files captured by file-tool backups back to before a
+  message you sent. Shell changes are not captured or restored. Git cannot
+  reliably recover overwritten uncommitted work; available file-tool backups
+  can be a reason to choose Edit or Write.
 - A context readout. `/context` prints how full the window is, with a
   breakdown; `/compact` keeps recent user prompts and summarizes the older
   conversation when it gets long.

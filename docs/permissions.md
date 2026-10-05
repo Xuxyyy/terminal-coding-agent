@@ -38,22 +38,27 @@ ever consulted — so it is never sent to the judge in `auto`. That is the invar
 to: the judge decides only what the classifier would otherwise have asked a human about, and
 never what the user already wrote down.
 
-One sentence you can say out loud: **git can undo a change to a file in the repo; it cannot
-undo a delete, a push, or anything outside the repo.**
+The `recoverable` label is a classification category, not a recovery guarantee.
+Git cannot reliably recover overwritten uncommitted work, and Shell changes
+are not captured by file-tool backups or restored by `/rewind`.
 
-That table is the `auto-edits` mode, which is what a session starts in when nothing is set.
-A stricter mode moves the `allow` rows down; nothing moves the `ask` rows up. No row in it
-says `deny` — only a rule in `settings.json` does. See *Modes*.
+The table shows the shared automatic allowance threshold for `auto-edits` and
+`auto`. A session starts in `auto` when no mode is configured; above-cut actions
+go to the model judge before human approval is requested.
+A stricter mode moves the `allow` rows down. In `auto`, the judge can allow an
+above-cut action based on the conversation. No mode says `deny` — only a rule
+in `settings.json` does. See *Modes*.
 
 Outside the project reads the same for both tools. *Read this file for me* about a file that
 happens to sit outside the workspace is a normal request, and refusing it outright made a real
-need impossible to meet; a confirm that must be given every time and is never remembered is
-the honest answer to "this is not mine to touch."
+need impossible to meet. Outside reads are above the cut: the edit modes ask a
+human, while `auto` consults the judge first. Any human approval is never remembered.
 
 What keeps that prompt safe is that it is **never remembered**. Approving one file never opens
 its directory, `a` is not offered, and an `allow` rule cannot reach past it either — the
-escape link sits above the `allow` link in the chain below. The user is asked every single
-time, which is the price of the door opening at all.
+escape link sits above the `allow` link in the chain below. In the edit modes,
+the user is asked every time; in `auto`, each action goes through the judge.
+Sandbox resource grants still require one-call human approval in every mode.
 
 ## What `n` tells the model
 
@@ -151,7 +156,7 @@ with nothing between the model's guess and the disk. No amount of context makes 
 because the context is exactly what a cut point cannot read: a cut is a fact about a command's
 *text*, and whether a delete was authorized is a fact about the *conversation*. That is the
 whole reason the judge sits above the cut rather than moving it. `auto-edits` is byte-for-byte
-the behaviour that shipped before modes existed, so anyone who sets nothing sees no change.
+the behaviour that shipped before modes existed, and remains available by explicitly selecting it.
 
 The first two names say what the mode does to **edits** — `ask-edits` asked, `auto-edits`
 automatic — so the order is legible in a settings file without a doc. `auto` breaks that
@@ -188,9 +193,9 @@ The mode lives on `Session`, beside `rules`, rather than in a module-level const
 what makes `/permission` a switch rather than a restart. `setMode(session, mode)` in
 `session.ts` does the whole job — the field, `session.systemPrompt`, and `messages[0]` — and
 `src/ui` calls only that. Splitting it would let a session run under one mode with a first
-message written for another, which is the one bug this function exists to prevent — the
-prompt is the same for every mode today, so nothing goes wrong now, but a mode that wants its
-own instructions gets them for free only because the three moves stayed together.
+message written for another. The auto prompt now strongly prefers Bash, while
+the two edit modes retain their existing file-tool guidance. Keeping the three
+moves together prevents stale tool preferences.
 
 **A switch keeps the conversation.** Only `messages[0]` is replaced; every later message
 stays, the same surgery `restoreMessages` does. The tool list and the `/context` readout need
@@ -205,15 +210,13 @@ have wanted to re-ask. Clearing them would only punish the user for switching. S
 or out of `auto` changes nothing here either: a judge `allow` is never written to
 `session.allowed`, so `auto` never puts a key there that another mode would inherit.
 
-`toolsFor(mode)` in `tools/index.ts` and `systemPrompt(root, mode)` in `prompt.ts` return the
-same answer for every mode today, `auto` included. They are kept as the seam a later mode uses,
-and a seam with no live second case needs a reason to stay: both run on every turn and are
-already threaded through `session.ts`, so a mode-specific tool list or prompt is a body change
-in one function with no call-site work. A mode wanting its own instructions — *nobody is
-watching, do not ask* — is exactly `systemPrompt(root, mode)`. `auto` deliberately does not
-take that seam: the agent is told nothing about being judged, so it cannot write for the judge,
-and the judge reads the same actions it would have taken anyway. Deleting the parameter now and
-rebuilding it later is churn, so it stays even while nothing reads it.
+`toolsFor(mode)` in `tools/index.ts` keeps all tools available in every mode.
+For `auto`, it copies the file and Bash tools with descriptions that prefer Bash;
+`systemPrompt(root, mode)` supplies matching guidance. The two edit modes keep
+their existing wording. Mode changes update the prompt and the next turn's tool
+descriptions, and subagents use their effective mode. This changes tool choice
+guidance, not the gate, sandbox, or backup policy. The prompt does not tell the
+agent how to obtain a favorable judge verdict.
 
 ## The judge
 
@@ -361,8 +364,12 @@ required the same day.**
 
 ## Where the mode comes from
 
-**`permission_mode` in `~/.acc/settings.json`, else `auto-edits`.** One value, global, and
+**`permission_mode` in `~/.acc/settings.json`, else `auto`.** One value, global, and
 `modeOf()` is still the only place it is read.
+
+The fallback is used when settings are missing or the key is absent. Existing
+saved choices are preserved; changing the default does not rewrite settings.
+Interactive and print mode use the same selection.
 
 `/permission` writes that same key. There is no second store and no precedence chain: the file
 that already answered *which mode does `acc` start in?* is the file the pick lands in, so what
@@ -390,7 +397,7 @@ Hand-written, read at boot, never reloaded. Two files, concatenated in this orde
 
 ```json
 {
-  "permission_mode": "auto-edits",
+  "permission_mode": "auto",
   "permissions": {
     "deny":  ["bash(curl *)"],
     "ask":   ["bash(npm run deploy*)"],
@@ -403,7 +410,7 @@ Hand-written, read at boot, never reloaded. Two files, concatenated in this orde
 `.acc/settings.json` is a startup error naming that file, because a settings key invites a
 repo to make itself permanently permissive and the project file is exactly what an untrusted
 repo ships. The user file is not shipped by a repo. An unknown value is a startup error
-listing the three names; absent everywhere means `auto-edits`. The loader identifies the user
+listing the three names; absent everywhere means `auto`. The loader identifies the user
 file by comparing the path against `userSettingsFile()`, not by its position in the array.
 
 Everything is optional, including `permissions`. Two tags exist, `bash(...)` and `edit(...)`;
@@ -652,9 +659,9 @@ keeps the whole permission chain testable with no network — every test in
 `permission.test.ts` and `judge.test.ts` runs against `decide()` and the pure builders, and
 `judge-gate.test.ts` drives the gate with a fake judge the test defines.
 
-`rules` defaults to empty and `mode` to `auto-edits`, which is what keeps every caller that
-has no rules to give — and every test written before either existed — compiling and behaving
-as it did. A `write` reads the `edit(...)` rules and takes whatever verdict they produce. A
+`rules` defaults to empty and `mode` to `auto`. Callers that need the former
+behavior must select `auto-edits` explicitly. A `write` reads the `edit(...)`
+rules and takes whatever verdict they produce. A
 `read` reads them too, but keeps only `deny`: `allow` and `ask` collapse to `null` before
 `fileOutcome` sees them. **A `deny` rule governs a read; nothing else does.** *Never read this
 file* is a thing a user needs to be able to say and had no other way to say — `~/.ssh` is the

@@ -22,7 +22,7 @@ read from your own file only, and each page below says so where it matters.
 
 ```json
 {
-  "permission_mode": "auto-edits",
+  "permission_mode": "auto",
   "model": "gemini-3.8-flash",
   "permissions": {
     "deny":  ["bash(curl *)"],
@@ -32,7 +32,8 @@ read from your own file only, and each page below says so where it matters.
 }
 ```
 
-Everything is optional.
+Everything is optional. If `permission_mode` is absent, `auto` is used.
+Existing saved modes are honored; the default does not rewrite your settings.
 
 | Key | What it does | Where it is documented |
 |---|---|---|

@@ -46,13 +46,16 @@ at a folder you care about.
 
 The gate only *asks* about what sits above the line your
 [permission mode](/configure/permissions) draws. In the default mode,
-`auto-edits`, that line is at "recoverable" — an ordinary edit inside the
-project is allowed outright, because git can undo it. It never becomes a
+`auto`, that line is at "recoverable" — an ordinary edit inside the
+project is allowed outright. This classification does not guarantee recovery
+of uncommitted content. The edit never becomes a
 prompt, so the policy never sees it. Print mode changes **the answer to a
 question**, not the question.
 
-What the policy does catch: protected paths, deletes, anything reaching outside
-the project, escapes like `sudo` or `git push`, and commands it cannot classify.
+In `auto`, protected paths, deletes, anything reaching outside the project,
+escapes like `sudo` or `git push`, and unclassified commands go to the model
+judge first. The policy answers only the confirms that still reach the host;
+a judge allowance can run an action without a confirm.
 
 For a run that truly cannot write, move the line down in `~/.acc/settings.json`:
 

@@ -38,28 +38,44 @@ above the line:
 | Mode | Runs without asking | Above the line |
 |---|---|---|
 | `ask-edits` | `observe` | asks you |
-| `auto-edits` *(default)* | `observe`, `recoverable` | asks you |
-| `auto` | `observe`, `recoverable` | [asks a model](#auto-mode) |
+| `auto-edits` | `observe`, `recoverable` | asks you |
+| `auto` *(default)* | `observe`, `recoverable` | [asks a model](#auto-mode) |
 
-A stricter mode moves rows down. **Nothing moves a row up** — no mode and no rule
-can make `acc` delete without asking. Anything outside the project asks in every
-mode.
+A stricter mode moves the automatic allowance threshold down. In `auto`, actions
+above that threshold go to the model judge before asking you. Permission rules
+still apply, and Sandbox On resource grants still require your approval.
 
 Set the mode in `settings.json`, or switch it mid-session with
 [`/permission`](/configure/commands), which saves the choice for next time:
 
 ```json
-{ "permission_mode": "auto-edits" }
+{ "permission_mode": "auto" }
 ```
 
 This key is read from **your** `~/.acc/settings.json` only. A project you cloned
 does not get to choose how much of itself runs unattended, so the key in a
 project's `.acc/settings.json` is a startup error.
 
-In [print mode](/start/headless) there is nobody at the keyboard, so everything
-above the line is answered for you — refused by default, approved with `--yes`.
-The line itself does not move, which is why a print run still edits files that
-sit below it.
+When the key or settings file is absent, `auto` is used. An explicitly saved
+`ask-edits` or `auto-edits` remains your choice; it is not rewritten.
+
+In `auto`, Bash is strongly preferred for reading, searching, editing, creating
+files, and running commands. Read, Grep, Edit, and Write remain available when
+they offer a clear benefit, such as exact-match replacement, bounded output,
+simpler handling, or protecting existing work through available session backups.
+The two edit modes keep their previous tool guidance.
+
+Shell changes are not backed up for `/rewind`. Git cannot reliably recover
+overwritten uncommitted work. Protecting those changes with available file-tool
+backups is a valid reason to choose Edit or Write. Shell searches also do not
+inherit Grep's sensitive-file exclusions. The auto guidance calls for narrow
+searches, targeted edits, and checking partial effects before retrying failures.
+
+In [print mode](/start/headless) there is nobody at the keyboard, so confirms
+that reach the host are answered for you — refused by default, approved with
+`--yes`. In `auto`, a judge allowance can run an above-line action without a
+confirm. The line itself does not move, which is why a print run still edits
+files that sit below it.
 
 ## Risk levels
 

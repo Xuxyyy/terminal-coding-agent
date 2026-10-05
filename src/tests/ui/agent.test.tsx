@@ -7,7 +7,9 @@ import {render} from 'ink';
 import {INTERRUPTED} from '../../core/host.js';
 import {listSessions, sessionsDir} from '../../core/projects.js';
 import type {Mode} from '../../core/permission/mode.js';
+import {systemPrompt} from '../../core/prompt.js';
 import {loadSettings, modeOf, modelOf, settingsFiles} from '../../core/settings.js';
+import {toolDefinitions, toolsFor} from '../../core/tools/index.js';
 import {loadSession, startSession} from '../../core/store.js';
 import {DENIED} from '../../core/tools/registry.js';
 import {useAgent, type Agent} from '../../ui/agent.js';
@@ -1230,10 +1232,40 @@ function headerIn(mode: Mode): HeaderItem {
 }
 
 test('the header names the mode, and only the name', () => {
-  for (const mode of ['ask-edits', 'auto-edits'] as Mode[]) {
+  for (const mode of ['ask-edits', 'auto-edits', 'auto'] as Mode[]) {
     const header = headerIn(mode);
     assert.deepEqual(header.ready!.permission, {id: mode}, mode);
   }
+});
+
+test('interactive startup uses auto by default and honors explicitly saved modes', async () => {
+  for (const saved of [undefined, 'ask-edits', 'auto-edits', 'auto'] as const) {
+    const root = workspace();
+    const file = path.join(process.env.ACC_HOME!, 'settings.json');
+    if (saved) fs.writeFileSync(file, JSON.stringify({permission_mode: saved}));
+    loadSettings(settingsFiles(root));
+    let request: {messages: {content: string}[]; tools: unknown} | undefined;
+    const {choice} = fakeModel((_nth, body) => {
+      request = body as typeof request;
+      return answer('done');
+    });
+    const {agent, unmount} = mount(root, choice);
+    try {
+      const mode = saved ?? 'auto';
+      assert.equal(agent.current!.mode, mode);
+      const header = agent.current!.committed[0] as HeaderItem;
+      assert.equal(header.ready!.permission.id, mode);
+      agent.current!.send('read the note');
+      await settle(agent);
+      assert.equal(request?.messages[0]?.content, systemPrompt(root, mode));
+      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
+      if (saved) assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {permission_mode: saved});
+      else assert.equal(fs.existsSync(file), false);
+    } finally {
+      unmount();
+    }
+  }
+  loadSettings([]);
 });
 
 function permissionAgent(): {agent: Ref; unmount: () => void} {
@@ -1245,7 +1277,7 @@ function permissionAgent(): {agent: Ref; unmount: () => void} {
 
 test('/permission opens the picker, and a pick moves the whole session', async () => {
   const {agent, unmount} = permissionAgent();
-  assert.equal(agent.current!.mode, 'auto-edits');
+  assert.equal(agent.current!.mode, 'auto');
 
   agent.current!.permission();
   await tick();
@@ -1281,9 +1313,9 @@ test('cancelling the picker changes neither the mode nor the file', async () => 
   await tick();
 
   assert.equal(agent.current!.phase.kind, 'idle');
-  assert.equal(agent.current!.mode, 'auto-edits');
+  assert.equal(agent.current!.mode, 'auto');
   assert.deepEqual(agent.current!.committed, before);
-  assert.equal(modeOf(), 'auto-edits');
+  assert.equal(modeOf(), 'auto');
   assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
 });
@@ -1315,7 +1347,7 @@ test('/permission while the agent is busy does nothing', async () => {
   assert.equal(agent.current!.phase.kind, 'busy');
   release();
   await settle(agent);
-  assert.equal(agent.current!.mode, 'auto-edits');
+  assert.equal(agent.current!.mode, 'auto');
   unmount();
 });
 

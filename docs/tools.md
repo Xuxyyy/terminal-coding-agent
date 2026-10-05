@@ -21,11 +21,12 @@ model sees them in.
 | `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
 | `agent` | `description`, `prompt`, `agent?` | Hands one self-contained job to a general or named sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
 
-That column is the `auto-edits` mode, which is the one a session starts in: an
-ordinary write inside the project runs silently, because it classifies as
-`recoverable` and git can undo it. `ask-edits` asks about it instead. No mode
-refuses a tool call on its own — only a rule, an escape, or a path outside the
-project does. `permissions.md` has the rule.
+That column describes `auto-edits`. The default is `auto`, which allows the same
+ordinary project writes but sends above-cut actions to a model judge before
+asking a human. `ask-edits` asks about ordinary writes instead. No mode refuses
+a tool call on its own; only a deny rule does. The `recoverable` classification
+does not guarantee that uncommitted content can be restored. `permissions.md`
+has the rule.
 
 **A write's answer depends on the path as well as the mode.** An `edit(...)` rule
 in `settings.json` matches the path `edit_file` or `write_file` was given, and its
@@ -45,9 +46,25 @@ and the chain.
 
 **The list comes from one place.** `toolsFor(mode)` in
 `src/core/tools/index.ts` is the single source of what is offered. Every mode
-gets all six today; the parameter is the seam a mode with its own list would
-use. It is the default argument of both `runAgent` and `contextStatus`, so what
+gets all six. In `auto`, it returns copies of the five file and shell tools with
+descriptions that strongly prefer Bash. Other modes retain the original descriptions.
+Schemas, handlers, order, and shared tool objects do not change. It is the default
+argument of both `runAgent` and `contextStatus`, so what
 the model is offered and what the context readout counts can never drift apart.
+
+The system prompt carries the same preference. Bash is the default for reading,
+searching, editing, creating files, and running commands, but file tools remain
+useful fallbacks for exact-match replacement, bounded output, simpler handling,
+or protecting existing work through available session backups. A child follows
+its effective permission mode and keeps its configured tool allowlist.
+
+Shell changes are not backed up for `/rewind`. Git cannot reliably recover
+overwritten uncommitted work. File-tool backups, when available, are a valid
+reason to use Edit or Write; this does not require file tools for every
+uncommitted file. Shell searches also do not inherit the Grep tool's sensitive-file
+exclusions. The auto guidance calls for narrow searches, targeted edits, and
+inspection of partial effects before retrying a failed command. Permission,
+sandbox, and backup behavior stay the same.
 
 `agent` is the one tool `toolsFor` creates inside the function rather than
 keeping in the exported `tools` array, and that is load-bearing. Each call to

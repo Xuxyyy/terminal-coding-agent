@@ -5,6 +5,9 @@ import * as path from 'node:path';
 import test from 'node:test';
 import type {ModelChoice} from '../../../core/client.js';
 import {runHeadless} from '../../../core/headless/run.js';
+import {systemPrompt} from '../../../core/prompt.js';
+import {loadSettings, settingsFiles} from '../../../core/settings.js';
+import {toolsFor, toolDefinitions} from '../../../core/tools/index.js';
 import type {HeadlessPolicy} from '../../../core/headless/host.js';
 import {
   fakeModel,
@@ -68,6 +71,36 @@ test('an answer with no tool call finishes and returns the deltas joined', async
   assert.equal(result.text, 'one two three');
   assert.deepEqual(result.prompts, []);
   assert.equal(result.error, undefined);
+});
+
+test('headless startup uses auto by default and preserves saved permission modes', async () => {
+  const previousHome = process.env.ACC_HOME;
+  try {
+    for (const saved of [undefined, 'ask-edits', 'auto-edits', 'auto'] as const) {
+      const root = tempDir();
+      const home = tempDir();
+      process.env.ACC_HOME = home;
+      if (saved) fs.writeFileSync(path.join(home, 'settings.json'), JSON.stringify({permission_mode: saved}));
+      loadSettings(settingsFiles(root));
+      let request: {messages: {content: string}[]; tools: unknown} | undefined;
+      const {choice} = fakeModel((_nth, body) => {
+        request = body as typeof request;
+        return textResponse(['done']);
+      });
+
+      const result = await headless({root, choice});
+
+      assert.equal(result.stopped, 'done');
+      const mode = saved ?? 'auto';
+      assert.equal(request?.messages[0]?.content, systemPrompt(root, mode));
+      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
+      assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.ACC_HOME;
+    else process.env.ACC_HOME = previousHome;
+    loadSettings([]);
+  }
 });
 
 test('a refused command stops the run as denied and is written down', async () => {

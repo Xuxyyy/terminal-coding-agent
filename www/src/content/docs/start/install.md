@@ -71,12 +71,14 @@ terminal; piping into it does not work.
 ```
 Agentic Coding CLI
 workspace: /Users/you/code/my-project
-permissions: auto-edits
+permissions: auto
 ──────────────────────────── Gemini 3.8 Flash ────────────────────────────
 ```
 
-The workspace, the permission mode the session starts in, and the model. Under
-that is an input box. Type a task in plain English and press enter:
+The workspace, the permission mode the session starts in, and the model. `auto`
+is the default when no mode is saved. It strongly prefers Bash for file work
+and commands, while keeping file tools as useful fallbacks. Under the header
+is an input box. Type a task in plain English and press enter:
 
 ```
 fix the failing test in src/parser.test.ts

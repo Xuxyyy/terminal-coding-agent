@@ -37,7 +37,7 @@ function rules(some: RuleText): Rules {
   };
 }
 
-function asked(request: Request, some?: RuleText, mode?: Mode): Outcome {
+function asked(request: Request, some?: RuleText, mode: Mode = 'auto-edits'): Outcome {
   return decide(request, project, some ? rules(some) : undefined, mode);
 }
 
@@ -384,12 +384,15 @@ test('clearing the conversation keeps the rules', () => {
   assert.equal(session.allowed.size, 0);
 });
 
-test('auto-edits decides exactly what the classifier alone decided', () => {
-  for (const text of [...QUIET, ...ADVERSARIAL]) {
-    assert.deepEqual(command(text, undefined, 'auto-edits'), command(text), text);
+test('auto-edits allows known reads and asks about adversarial commands', () => {
+  for (const text of QUIET) {
+    assert.equal(command(text, undefined, 'auto-edits').decision, 'allow', text);
   }
-  assert.deepEqual(write('src/a.ts', undefined, 'auto-edits'), write('src/a.ts'));
-  assert.deepEqual(read('src/a.ts', undefined, 'auto-edits'), read('src/a.ts'));
+  for (const text of ADVERSARIAL) {
+    assert.equal(command(text, undefined, 'auto-edits').decision, 'ask', text);
+  }
+  assert.equal(write('src/a.ts', undefined, 'auto-edits').decision, 'allow');
+  assert.equal(read('src/a.ts', undefined, 'auto-edits').decision, 'allow');
 });
 
 test('ask-edits asks about a write that auto-edits runs', () => {
@@ -514,8 +517,13 @@ test('a rule verdict is never judged in auto', () => {
   assert.equal(allowedWrite.decision, 'allow');
 });
 
-test('a new session starts in auto-edits', () => {
-  assert.equal(createSession(project, 'system', 100).mode, 'auto-edits');
+test('omitting the mode uses auto for permission decisions and new sessions', () => {
+  for (const text of [...QUIET, ...ADVERSARIAL]) {
+    assert.deepEqual(decide({kind: 'command', command: text}, project), command(text, undefined, 'auto'), text);
+  }
+  assert.deepEqual(decide({kind: 'write', path: '.git/config'}, project), write('.git/config', undefined, 'auto'));
+  assert.deepEqual(decide({kind: 'read', path: '../outside.txt'}, project), read('../outside.txt', undefined, 'auto'));
+  assert.equal(createSession(project, 'system', 100).mode, 'auto');
 });
 
 const alwaysApproves: Host = {
@@ -574,6 +582,7 @@ test('the gate follows a switch inside one session', async () => {
 
 test('an approval granted in auto-edits still holds in ask-edits', async () => {
   const session = createSession(project, 'system', 100);
+  setMode(session, 'auto-edits');
   const registry = [fakeBash];
   const args = JSON.stringify({command: 'rm build.log'});
   let confirms = 0;
