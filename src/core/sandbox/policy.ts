@@ -115,10 +115,8 @@ export function executable(name: string, envPath = process.env.PATH ?? ''): stri
 }
 
 // These roots contain tools and public runtime data, not the user's home or /etc as a whole.
-export function runtimeRoots(platform = process.platform): string[] {
-  const roots = platform === 'darwin'
-    ? ['/bin', '/sbin', '/usr', '/opt/homebrew', '/System/Library', '/Library/Developer', '/Library/Apple', '/private/var/db/dyld', '/private/var/db/timezone', '/private/etc/localtime', '/private/etc/ssl/openssl.cnf', '/private/etc/ssl/cert.pem']
-    : ['/bin', '/sbin', '/usr', '/lib', '/lib64', '/etc/ld.so.cache', '/etc/ld.so.conf', '/etc/ld.so.conf.d', '/etc/ssl/openssl.cnf', '/etc/ssl/certs', '/etc/pki/tls/certs', '/etc/passwd', '/etc/group', '/etc/nsswitch.conf'];
+export function runtimeRoots(): string[] {
+  const roots = ['/bin', '/sbin', '/usr', '/opt/homebrew', '/System/Library', '/Library/Developer', '/Library/Apple', '/private/var/db/dyld', '/private/var/db/timezone', '/private/etc/localtime', '/private/etc/ssl/openssl.cnf', '/private/etc/ssl/cert.pem'];
   roots.push(path.dirname(fs.realpathSync(process.execPath)));
   // Support a Node installation such as nvm, whose libraries live beside bin.
   const nodeDirectory = path.dirname(fs.realpathSync(process.execPath));
@@ -189,7 +187,7 @@ export function makePolicy(root: string, temporary: string, access: SandboxAcces
   const extraReads = granted.read_paths ?? [];
   const extraWrites = granted.write_paths ?? [];
   const runtimes = runtimeRoots();
-  const scanned = [base, ...extraReads, ...extraWrites, ...(process.platform === 'linux' ? runtimes : [])];
+  const scanned = [base, ...extraReads, ...extraWrites];
   const roots = scanned.filter((target, index) => !scanned.some((other, otherIndex) => otherIndex !== index && other !== target && insideRoot(target, other)));
   for (const target of new Set(roots)) scan(target, blocked, protectedWrites, files);
   // All aliases discovered before the credential itself must be denied too.

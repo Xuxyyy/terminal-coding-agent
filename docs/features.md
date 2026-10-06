@@ -391,5 +391,6 @@ status line shows the current mode during tasks and approvals. Press Esc and wai
 an active task to stop before switching. `--sandbox on|off` selects the launch mode in
 interactive or print mode. The choice lasts for this ACC process through clear, resume,
 and rewind; it is not saved. Permission checks and Shell cleanup run in both modes.
-Off removes OS file and network restrictions; cleanup is not full credential protection.
+On is supported only on macOS; Linux uses Off. Off removes OS file and network
+restrictions; cleanup is not full credential protection.
 See `sandbox.md` for enforcement, platform requirements, and Harbor verification.

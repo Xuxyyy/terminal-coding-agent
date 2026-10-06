@@ -9,8 +9,8 @@ carry a `request`, and so reach the gate at all)
 **Goal:** the agent runs a real task start to finish without a single prompt, and still stops
 before anything git cannot undo.
 
-The classification below governs action approval. With Sandbox On, OS isolation also enforces file,
-credential, and network boundaries: credential storage such as `.acc` is refused,
+The classification below governs action approval. On macOS, Sandbox On also enforces
+file, credential, and network boundaries: credential storage such as `.acc` is refused,
 and extra resource grants require explicit approval. See `sandbox.md`.
 
 ## The rule

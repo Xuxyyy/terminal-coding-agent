@@ -219,7 +219,8 @@ Runs `bash --noprofile --norc -c` in the workspace root. Sandbox defaults to Off
 directory with a clean environment. With On, network is off by default and `access`
 requests one-call grants for outside paths or network. Off ignores `access` and adds
 no OS file or network restrictions. Permission checks remain active in both modes.
-The file workers and backups use the same selected mode. See `sandbox.md`.
+The file workers and backups use the same selected mode. On is supported only on
+macOS; Linux uses Off. See `sandbox.md`.
 
 Output is always `[exit N]` on its own first line, then stdout and stderr
 **interleaved into one stream** — the order they actually happened in, which is

@@ -29,6 +29,9 @@ builds the project — there is no separate build step.
 tests, then `node --test` over the compiled `dist/`. Re-run a single file for
 full output with `node --test dist/tests/<path>.test.js`.
 
+Run the full suite on macOS with ripgrep installed. CI uses macOS because the
+sandbox protection tests explicitly enable Sandbox On, which is supported only there.
+
 The site is separate: verify anything under `www/` with
 `npm run build --prefix www`. `npm test` does not touch it.
 

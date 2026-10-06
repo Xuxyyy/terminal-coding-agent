@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import {once} from 'node:events';
 import test, {type TestContext} from 'node:test';
 import {cleanEnvironment, makePolicy, normalizeAccess, type SandboxAccess} from '../../core/sandbox/policy.js';
-import {linuxArguments, macProfile, runCommand, runSandboxed} from '../../core/sandbox/run.js';
+import {macProfile, runCommand, runSandboxed} from '../../core/sandbox/run.js';
 import {bash} from '../../core/tools/bash.js';
 import {readFile} from '../../core/tools/read.js';
 import {writeFile} from '../../core/tools/write.js';
@@ -18,8 +18,8 @@ import type {ConfirmRequest, ConfirmDecision} from '../../core/host.js';
 import {captureSnapshot} from '../../core/history.js';
 import {fileOperation} from '../../core/sandbox/files.js';
 
-const native = process.platform === 'darwin' || (process.platform === 'linux' && ['/usr/bin/bwrap', '/bin/bwrap'].some((target) => fs.existsSync(target)));
-const live = {skip: native ? false : 'OS sandbox backend is not installed; fail-closed behavior is tested separately'};
+const native = process.platform === 'darwin' && fs.existsSync('/usr/bin/sandbox-exec');
+const live = {skip: native ? false : 'Sandbox On requires macOS sandbox-exec; fail-closed behavior is tested separately'};
 const quote = (text: string) => `'${text.replaceAll("'", "'\"'\"'")}'`;
 const nodeCommand = (script: string) => `${quote(process.execPath)} -e ${quote(script)}`;
 
@@ -81,11 +81,7 @@ test('policy protects hard-link aliases and enclosing directory renames', (t) =>
   assert.ok(policy.blocked.includes(path.join(policy.root, 'alias')));
   const profile = macProfile(policy);
   assert.ok(profile.includes(`(literal ${JSON.stringify(path.join(policy.root, 'private'))})`));
-  const linux = linuxArguments(policy, '/bin/true', []);
-  assert.ok(linux.includes('--unshare-pid'));
-  assert.ok(linux.includes('--unshare-net'));
-  assert.ok(!linux.some((part, index) => part === '--ro-bind' && linux[index + 1] === '/'));
-  assert.ok(linux.includes(path.join(policy.root, 'alias')));
+  assert.ok(profile.includes(path.join(policy.root, 'alias')));
 });
 
 test('ordinary Shell builds and edits still work without granting network', live, async (t) => {
@@ -248,10 +244,11 @@ test('a network grant cannot connect to a host Unix socket exposed in the worksp
 test('failed sandbox setup never falls back to running the command', async (t) => {
   const {root} = fixture(t);
   const marker = path.join(root, 'should-not-exist');
-  // A private workspace is always rejected before launching, on every platform.
+  // A private workspace is rejected before launching on macOS; other platforms reject On.
   const privateRoot = path.join(root, '.acc');
   fs.mkdirSync(privateRoot);
-  await assert.rejects(runSandboxed({root: privateRoot, program: '/bin/bash', args: ['-c', `touch ${quote(marker)}`], signal: new AbortController().signal}), /sandbox requires a project/);
+  await assert.rejects(runSandboxed({root: privateRoot, program: '/bin/bash', args: ['-c', `touch ${quote(marker)}`], signal: new AbortController().signal}),
+    process.platform === 'darwin' ? /sandbox requires a project/ : /supported only on macOS/);
   assert.equal(fs.existsSync(marker), false);
   if (!native) {
     await assert.rejects(runSandboxed({root, program: '/bin/bash', args: ['-c', `touch ${quote(marker)}`], signal: new AbortController().signal}), /sandbox unavailable/);
@@ -261,9 +258,9 @@ test('failed sandbox setup never falls back to running the command', async (t) =
 
 test('command errors are not mistaken for sandbox initialization failures', live, async (t) => {
   const {root} = fixture(t);
-  const result = await runSandboxed({root, program: '/bin/bash', args: ['-c', 'touch changed; echo "bwrap: command error" >&2; exit 7'], signal: new AbortController().signal});
+  const result = await runSandboxed({root, program: '/bin/bash', args: ['-c', 'touch changed; echo "sandbox: command error" >&2; exit 7'], signal: new AbortController().signal});
   assert.equal(result.code, 7);
-  assert.equal(result.stderr, 'bwrap: command error\n');
+  assert.equal(result.stderr, 'sandbox: command error\n');
   assert.equal(fs.existsSync(path.join(root, 'changed')), true);
 });
 
@@ -350,7 +347,7 @@ for (const sandbox of ['off', 'on'] as const) {
     assert.equal(result.timedOut, true);
     assert.equal(result.code, 124);
     const pid = Number(fs.readFileSync(path.join(root, 'mode-child.pid'), 'utf8'));
-    if (process.platform === 'darwin' || sandbox === 'off') assert.throws(() => process.kill(pid, 0));
+    assert.throws(() => process.kill(pid, 0));
     const controller = new AbortController();
     const cancelled = runCommand({root, sandbox, program: '/bin/bash', args: ['-c', 'sleep 20'], signal: controller.signal});
     setTimeout(() => controller.abort(), 150);
@@ -367,11 +364,19 @@ test('Off skips OS policy and backend setup, accepts ignored access, and exposes
   assert.match((await shell(ctx, 'cat .env', {read_paths: ['/'], network: true})).text, /fake-file-secret/);
   assert.ok(asked.every((request) => !request.reason.includes('Extra sandbox access')));
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
-  Object.defineProperty(process, 'platform', {...platform, value: 'unsupported-test-platform'});
   try {
-    const options = {root, program: '/bin/bash', args: ['-c', 'echo ran'], signal: new AbortController().signal};
-    assert.equal((await runCommand(options)).stdout, 'ran\n');
-    await assert.rejects(runCommand({...options, sandbox: 'on'}), /sandbox unavailable/);
+    for (const name of ['linux', 'unsupported-test-platform']) {
+      Object.defineProperty(process, 'platform', {...platform, value: name});
+      const marker = path.join(root, 'unsupported-command');
+      const options = {root, program: '/bin/bash', args: ['-c', `touch ${quote(marker)}; echo ran`], signal: new AbortController().signal};
+      await assert.rejects(runCommand({...options, sandbox: 'on'}), /supported only on macOS/);
+      assert.equal(fs.existsSync(marker), false, 'unsupported On must not fall back to Off');
+      assert.equal((await runCommand(options)).stdout, 'ran\n');
+      assert.equal(fs.existsSync(marker), true);
+      fs.rmSync(marker);
+      assert.equal((await runCommand({...options, sandbox: 'off'})).stdout, 'ran\n');
+      fs.rmSync(marker);
+    }
   } finally {
     Object.defineProperty(process, 'platform', platform);
   }

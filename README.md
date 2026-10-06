@@ -132,8 +132,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 MIT — see [LICENSE](LICENSE).
 
 
-Sandbox defaults to **Off**. Use `/sandbox` while idle to choose On or Off, or launch
-with `acc --sandbox on` (also supported with `-p`). The status stays visible and the
+Sandbox defaults to **Off**. Sandbox On is supported only on macOS; Linux runs with
+Sandbox Off, including Harbor evaluation. Use `/sandbox` while idle to choose On or
+Off, or launch with `acc --sandbox on` (also supported with `-p`). The status stays visible and the
 choice lasts for this ACC process. Both modes keep permission checks and clean Shell
 environments. Off removes ACC's OS file and network restrictions; environment cleanup
 cannot stop commands from reading credential files. See [sandbox details](docs/sandbox.md).

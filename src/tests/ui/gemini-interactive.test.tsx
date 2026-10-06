@@ -84,7 +84,8 @@ test('interactive Gemini text appears progressively, runs a local tool, and stop
     <App workspaceRoot={root} choice={{
       client, model: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', contextWindow: 1_048_576,
     }} onCleanExit={() => {}} />,
-    {stdin, stdout, patchConsole: false, exitOnCtrlC: false},
+    // Capture live frames even when Ink detects CI.
+    {stdin, stdout, debug: true, patchConsole: false, exitOnCtrlC: false},
   );
   try {
     press('read note.txt');
@@ -102,6 +103,9 @@ test('interactive Gemini text appears progressively, runs a local tool, and stop
     await until(() => frames.some((frame) => frame.includes('stopped')), 'esc did not stop the turn');
     assert.equal(secondSignal?.aborted, true);
   } finally {
+    // Stop pending fake requests even when a screen assertion fails.
+    press(ESC);
+    releaseFirst();
     instance.unmount();
     if (oldHome === undefined) delete process.env.ACC_HOME;
     else process.env.ACC_HOME = oldHome;
@@ -127,7 +131,7 @@ test('interactive Gemini timeout shows an error and returns to the prompt', asyn
     <App workspaceRoot={root} choice={{
       client, model: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', contextWindow: 1_048_576,
     }} onCleanExit={() => {}} />,
-    {stdin, stdout, patchConsole: false, exitOnCtrlC: false},
+    {stdin, stdout, debug: true, patchConsole: false, exitOnCtrlC: false},
   );
   try {
     press('hello');

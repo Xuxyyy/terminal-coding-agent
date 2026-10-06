@@ -36,7 +36,7 @@ async function tick(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 60));
 }
 
-test('a locked session is labeled and cannot be opened', async () => {
+test('a locked session is labeled and cannot be opened', async (t) => {
   const rows: SessionRow[] = [
     {id: 'locked', title: 'fix the cart', age: '2h', locked: true},
     {id: 'free', title: 'add logs', age: '1d', locked: false},
@@ -57,8 +57,10 @@ test('a locked session is labeled and cannot be opened', async () => {
   const {stdin, press} = fakeStdin();
   const instance = render(
     <SessionPicker rows={rows} onPick={(id) => picked.push(id)} onCancel={() => {}} />,
-    {stdin, stdout, patchConsole: false, exitOnCtrlC: false},
+    // Capture live frames even when Ink detects CI.
+    {stdin, stdout, debug: true, patchConsole: false, exitOnCtrlC: false},
   );
+  t.after(() => instance.unmount());
 
   await tick();
   press(ENTER);
@@ -74,7 +76,5 @@ test('a locked session is labeled and cannot be opened', async () => {
   await tick();
   press(ENTER);
   await tick();
-  instance.unmount();
-
   assert.deepEqual(picked, ['free']);
 });

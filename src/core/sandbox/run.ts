@@ -74,63 +74,9 @@ export function macProfile(policy: SandboxPolicy): string {
   return rules.join('\n');
 }
 
-function covered(target: string, roots: string[]): boolean {
-  return roots.some((root) => insideRoot(target, root));
-}
-
-export function linuxArguments(policy: SandboxPolicy, program: string, args: string[]): string[] {
-  const result = ['--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--cap-drop', 'ALL', '--proc', '/proc', '--dev', '/dev'];
-  if (!policy.network) result.push('--unshare-net');
-  const reads = [...policy.reads];
-  if (policy.network) reads.push(...['/etc/resolv.conf', '/etc/hosts'].filter((target) => fs.existsSync(target)));
-  for (const target of reads.sort((a, b) => a.length - b.length)) {
-    if (!fs.existsSync(target)) continue;
-    result.push('--ro-bind', target, target);
-  }
-  for (const target of policy.writes.sort((a, b) => a.length - b.length)) {
-    // Never widen a single-file grant to include its parent directory.
-    if (fs.existsSync(target)) result.push('--bind', target, target);
-    else throw new Error('sandbox write grants on Linux require an existing file or directory; create the target first or grant its specific parent directory');
-  }
-  // Preserve distro symlinks such as /bin -> usr/bin, without mounting the host root.
-  for (const target of ['/bin', '/sbin', '/lib', '/lib64']) {
-    try {
-      if (fs.lstatSync(target).isSymbolicLink()) result.push('--symlink', fs.readlinkSync(target), target);
-    } catch {}
-  }
-  for (const target of policy.protectedWrites) {
-    if (fs.existsSync(target)) result.push('--ro-bind', target, target);
-  }
-  // Mount over credential storage last; even a broad explicit grant cannot uncover it.
-  const masked: string[] = [];
-  let maskDescriptor = 3;
-  for (const target of policy.blocked.sort((a, b) => a.length - b.length)) {
-    if (!covered(target, reads) || masked.some((parent) => insideRoot(target, parent))) continue;
-    try {
-      const stat = fs.statSync(target);
-      if (stat.isDirectory()) result.push('--perms', '000', '--tmpfs', target, '--remount-ro', target);
-      else result.push('--perms', '000', '--ro-bind-data', String(maskDescriptor++), target);
-      masked.push(target);
-    } catch {}
-  }
-  // Synthetic mount parents must not permit writes beside a granted file.
-  // This remount leaves the separately bound writable roots writable.
-  result.push('--remount-ro', '/', '--chdir', policy.root, '--', program, ...args);
-  return result;
-}
-
 function launch(policy: SandboxPolicy, program: string, args: string[]): {program: string; args: string[]} {
-  if (process.platform === 'darwin') {
-    if (!fs.existsSync('/usr/bin/sandbox-exec')) throw new Error('sandbox unavailable: macOS sandbox-exec is required; the command was not run');
-    return {program: '/usr/bin/sandbox-exec', args: ['-p', macProfile(policy), program, ...args]};
-  }
-  if (process.platform === 'linux') {
-    // Never run a repository-supplied PATH shim as the unsandboxed backend.
-    const bwrap = ['/usr/bin/bwrap', '/bin/bwrap'].find((target) => fs.existsSync(target));
-    if (!bwrap) throw new Error('sandbox unavailable: Linux requires bubblewrap (bwrap) and working user namespaces; the command was not run');
-    return {program: bwrap, args: linuxArguments(policy, program, args)};
-  }
-  throw new Error(`sandbox unavailable on ${process.platform}; the command was not run`);
+  if (!fs.existsSync('/usr/bin/sandbox-exec')) throw new Error('sandbox unavailable: macOS sandbox-exec is required; the command was not run');
+  return {program: '/usr/bin/sandbox-exec', args: ['-p', macProfile(policy), program, ...args]};
 }
 
 type RunOptions = {
@@ -150,10 +96,13 @@ export function runSandboxed(options: RunOptions): Promise<SandboxResult> {
 
 export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}): Promise<SandboxResult> {
   if (options.signal.aborted) return {code: 130, stdout: '', stderr: '', interrupted: true, timedOut: false};
+  const isolated = (options.sandbox ?? DEFAULT_SANDBOX) === 'on';
+  if (isolated && process.platform !== 'darwin') {
+    throw new Error(`sandbox unavailable on ${process.platform}: Sandbox On is supported only on macOS; the command was not run`);
+  }
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-sandbox-'));
   fs.chmodSync(temporary, 0o700);
   try {
-    const isolated = (options.sandbox ?? DEFAULT_SANDBOX) === 'on';
     const policy = isolated ? makePolicy(options.root, temporary, options.access) : null;
     // The trusted wrapper signals that OS setup succeeded before executing user code.
     // This distinguishes backend errors from a command that failed after changing files.
@@ -165,20 +114,12 @@ export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}):
       ? launch(policy, '/bin/bash', wrapper)
       : {program: options.program, args: options.args};
     return await new Promise<SandboxResult>((resolve, reject) => {
-      const masks = isolated && process.platform === 'linux'
-        ? command.args.filter((arg) => arg === '--ro-bind-data').map(() => fs.openSync('/dev/null', 'r'))
-        : [];
-      let child: ReturnType<typeof spawn>;
-      try {
-        child = spawn(command.program, command.args, {
-          cwd: policy?.root ?? options.root,
-          env: cleanEnvironment(temporary),
-          detached: true,
-          stdio: ['pipe', 'pipe', 'pipe', ...masks],
-        });
-      } finally {
-        for (const descriptor of masks) fs.closeSync(descriptor);
-      }
+      const child = spawn(command.program, command.args, {
+        cwd: policy?.root ?? options.root,
+        env: cleanEnvironment(temporary),
+        detached: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
       let stdout = '';
       let stderr = '';
       let size = 0;

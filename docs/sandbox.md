@@ -3,6 +3,7 @@
 ACC defaults to **Sandbox: Off**. Permission checks remain active in both modes.
 Bash, ripgrep, file-operation workers, and backup snapshots all use the selected mode.
 The model client and private session storage remain outside tool execution.
+Sandbox On is supported only on macOS. Linux, including Harbor, uses Sandbox Off.
 
 ## Controls
 
@@ -86,17 +87,10 @@ macOS uses the installed `/usr/bin/sandbox-exec` and a generated deny-by-default
 Seatbelt profile. No additional package is needed. The API is deprecated, so
 macOS upgrades need real enforcement checks.
 
-Linux requires Bubblewrap (`bwrap`) and working user/mount/PID namespaces.
-The runner starts with a separate filesystem view and PID namespace, drops
-capabilities, and isolates the network unless approved. Existing credential
-files are masked with unreadable mounts; hidden directories are empty and
-unreadable. It does not mount the host root or expose the parent's processes.
-Linux write grants require an existing file or directory. For a new outside
-file, request its specific existing parent directory explicitly; ACC does not
-silently expand a file grant into a directory grant.
-
-If the backend is missing, unsupported, or blocked by a container's namespace
-policy, operations in On mode fail. They never fall back to Off automatically. A container needs its own restrictions too: do not
+Linux and other platforms do not have an ACC sandbox backend. Operations in On mode
+return a clear unsupported-platform error before starting the command. If macOS's
+backend is missing or cannot initialize, operations also fail. They never fall back
+to Off automatically. A container needs its own restrictions too: do not
 expose host credentials, the host PID namespace, or a Docker socket.
 
 ## Harbor
@@ -104,20 +98,20 @@ expose host credentials, the host PID namespace, or a Docker socket.
 Keep the provider key on the host and keep using the existing host model relay.
 Shell does not inherit the task's relay URL; the trusted ACC model client uses it.
 The adapter explicitly launches ACC with `--sandbox off`. Use the reusable runtime
-artifact with Node, Bash, and ripgrep. Bubblewrap is not needed for Off.
+artifact with Node, Bash, and ripgrep.
 
 Keep Harbor's normal Docker protections and mounts. Do not add privileged mode,
 capabilities, unconfined security settings, host credential mounts, or a Docker socket.
 Unpaid install-only and scripted relay/tool checks verify compatibility before any
-separately approved paid evaluation. Making Bubblewrap work inside Docker is separate
-work and is not required for these checks.
+separately approved paid evaluation. Harbor evaluates the agent with Sandbox Off;
+macOS CI separately tests ACC's sandbox protections.
 
 ## Limits and verification
 
 When On, the sandbox protects access to known storage, not secrets copied into arbitrary
 otherwise-readable source files or configuration. Writable project files can
-still be damaged. The Linux file view masks credentials found at launch; it is
-not a general secret detector or a snapshot of concurrent host changes.
+still be damaged. The sandbox is not a general secret detector or a snapshot of
+concurrent host changes.
 
 When On, all children inherit the OS access policy. Timeout, cancellation, and normal
 completion kill the ordinary process group; deliberately detached daemons on

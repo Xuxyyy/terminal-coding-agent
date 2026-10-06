@@ -6,15 +6,38 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - run: brew install ripgrep
       - run: npm ci
+      - name: Verify macOS sandbox as the runner user
+        run: |
+          test -x /usr/bin/sandbox-exec
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import * as fs from 'node:fs';
+          import * as os from 'node:os';
+          import * as path from 'node:path';
+          import {runSandboxed} from './dist/core/sandbox/run.js';
+
+          assert.notEqual(process.getuid(), 0, 'Sandbox tests must run without root privileges');
+          const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-ci-sandbox-'));
+          try {
+            const result = await runSandboxed({
+              root, program: '/bin/bash', args: ['-c', 'printf sandbox-ready'],
+              signal: new AbortController().signal,
+            });
+            assert.equal(result.code, 0, result.stderr);
+            assert.equal(result.stdout, 'sandbox-ready');
+          } finally {
+            fs.rmSync(root, {recursive: true, force: true});
+          }
+          JS
       - run: npm test
 
   site:

@@ -50,7 +50,8 @@ test('the real TUI selects and cancels sandbox mode and shows it during tasks an
     },
   } : streamOf(textChunk('done'), finishChunk('stop')));
   const instance = render(<App workspaceRoot={root} choice={choice} sandbox="on" onCleanExit={() => {}} />,
-    {stdin, stdout, patchConsole: false, exitOnCtrlC: false});
+    // Capture live frames even when Ink detects CI.
+    {stdin, stdout, debug: true, patchConsole: false, exitOnCtrlC: false});
   t.after(() => instance.unmount());
   const screen = () => frames.filter((frame) => frame.includes('Sandbox:')).at(-1) ?? '';
   const press = async (key: string) => { queue.push(key); stdin.emit('readable'); await tick(); };
