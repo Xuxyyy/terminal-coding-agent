@@ -2,25 +2,25 @@
 
 Status: built.
 Covers: `src/core/headless/host.ts`, `src/core/headless/run.ts`,
-`src/core/headless/output.ts`, `src/ui/args.ts`, `src/cli.tsx`,
+`src/core/headless/output.ts`, `src/core/step-policy.ts`, `src/ui/args.ts`, `src/cli.tsx`,
 `acc -p "<task>"`
 Read when: changing what an unattended run is allowed to do, what it prints, or
 what it exits with
-See also: `agent-loop.md` (the loop it drives, unchanged), `permissions.md`
+See also: `agent-loop.md` (the loop it drives), `permissions.md`
 (the gate it still goes through), `sessions.md` (the store it deliberately
 skips), `evals.md` (its other caller)
 
 Key names, so a search finds this file: `createHeadlessHost`, `HeadlessPolicy`,
 `RecordedPrompt`, `runHeadless`, `HeadlessResult`, `StopReason`, `plainLines`,
-`jsonLines`, `exitCode`, `--print`, `--json`, `--yes`, `--max-seconds`.
+`jsonLines`, `exitCode`, `--print`, `--json`, `--yes`, `--max-seconds`, `--max-steps`.
 
 ## What it is
 
 `acc -p "list the files you can see"` runs one turn and exits. No Ink, no
 keyboard, no TTY.
 
-It is a second **implementation** of `Host` (`src/core/host.ts:46`), never a
-change to what the loop does with one. The terminal `Host` is built inside a
+It is a second **implementation** of `Host` (`src/core/host.ts:46`), with an
+explicit headless model-turn budget. The terminal `Host` is built inside a
 React component (`src/ui/agent.ts`) and its `confirm` only resolves when a human
 presses a key. The headless one answers from a policy instead. Everything below
 that seam — the loop, the tools, the permission gate — is the same code running
@@ -57,10 +57,23 @@ down, so the arrow points one way only.
 
 An unattended run has nobody watching it, so it is bounded on **both** axes.
 
-**Steps.** Normal turns receive a model-only completion audit after 20 completed
-steps and ask for permission to keep going after 30. Print mode always denies the
-gate, under `--yes` too, so 30 is a real ceiling. The audit is not printed or
-included in the result transcript.
+**Model turns.** `--max-steps N` sets a positive integer budget, default 60.
+`runHeadless` also accepts `maxSteps` directly. This includes the final answer;
+a model turn may contain several tool calls. Headless runs use this ceiling
+instead of the interactive continuation checkpoint. A budget above 60 can pass
+turn 60 under either permission policy. Tool permission checks remain active.
+
+The system prompt states the budget. Progress reviews every 10 completed turns
+show the completed count, remaining turns, and boundary. Another review is sent
+with ten turns left (or after the first turn
+for budgets of ten or fewer). These reminders are model-only. Exhaustion returns
+`stopped: 'step_limit'`, emits an error and accumulated usage, and exits 1.
+Interactive runs use the same review schedule and a 60-turn checkpoint, where
+the user can approve another segment. Both defaults come from `step-policy.ts`.
+
+```sh
+acc -p "complete the task and verify it" --max-steps 60 --max-seconds 900
+```
 
 **Wall clock.** `--max-seconds`, default 300, is a timer that aborts the
 controller. The same signal reaches the model request, `bash`, the permission
@@ -69,8 +82,8 @@ that is already in flight. Work that completed before the abort is not undone.
 A `maxSeconds` of zero or less aborts before the first model call, rather than
 racing a timer.
 
-Either cap alone leaves a hole: 30 steps can still take an hour, and a wall
-clock alone lets a fast model loop hundreds of times inside it.
+Either cap alone leaves a hole: a fixed number of turns can still take an hour,
+and a wall clock alone lets a fast model loop hundreds of times inside it.
 
 ## Deny is the default, and silence is forbidden
 
@@ -163,10 +176,10 @@ A non-zero exit means **the run did not complete**, which is a different claim
 from *the answer was bad*. Nothing here judges the answer.
 
 `stopped` is decided in one place, inside `runHeadless`, so the CLI and any
-harness read the same field: `'timeout'` when the timer fired, `'denied'` when
-any confirm was refused, `'error'` when an error event arrived, else `'done'`.
-Denial outranks error because a denied checkpoint emits both, and the denial is
-the fact worth reporting.
+harness read the same field: `'timeout'` when the timer fired, `'step_limit'`
+when the model-turn budget was exhausted, `'denied'` when any tool confirmation
+was refused, `'error'` when an error event arrived, else `'done'`. Budget
+exhaustion is distinct from permission denial, even if a tool was refused earlier.
 
 ## The TTY guard cuts one way only
 
@@ -179,7 +192,8 @@ refuse.
 ## Where the flags live
 
 Flag parsing stays in `src/ui/args.ts`, the CLI's existing front door.
-`--json`, `--yes` and `--max-seconds` all throw without `-p`, naming print mode.
+`--json`, `--yes`, `--max-seconds` and `--max-steps` all throw without `-p`,
+naming print mode.
 Silently ignoring a flag is how someone comes to believe a run was approved when
 it was not.
 

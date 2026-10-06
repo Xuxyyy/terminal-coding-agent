@@ -24,19 +24,16 @@ import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveTarget} from './tools/paths.js';
 import type {Judge, Tool} from './tools/registry.js';
 import {askJudge, judgeMessages} from './permission/judge.js';
+import {NORMAL_STEP_POLICY} from './step-policy.js';
 
-export const NORMAL_STEP_POLICY = {
-  softAuditAfter: 20,
-  hardGateEvery: 30,
-} as const;
+export {NORMAL_STEP_POLICY};
 
 export const COMPLETION_AUDIT =
-  'This turn has involved substantial tool work. Reassess the original request and the evidence already collected. ' +
-  'If the request is satisfied, stop using tools and answer the user now. If essential work remains, continue with ' +
-  'the specific missing requirement. Avoid repeating inspections that are unlikely to change the result. Do not ' +
-  'claim completion without evidence.';
-
-const COMPLETION_AUDIT_SUFFIX = `\n\n${COMPLETION_AUDIT}`;
+  'Reassess the original request and the evidence collected. ' +
+  'If all required work is complete and verified, stop using tools and answer. ' +
+  'Otherwise, identify the essential work still missing and take the next useful action. ' +
+  'Prioritize required behavior and necessary verification before optional improvements. ' +
+  'Avoid repeating checks unless new evidence makes them useful. Do not claim completion without evidence.';
 
 export {INTERRUPTED, INTERRUPTED_TURN};
 
@@ -51,20 +48,33 @@ function aborted(error: unknown, host: Host): boolean {
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
 
 function shouldAudit(step: number): boolean {
-  return (
-    step > 0 &&
-    step % NORMAL_STEP_POLICY.hardGateEvery === NORMAL_STEP_POLICY.softAuditAfter
-  );
+  return step > 0 && step % NORMAL_STEP_POLICY.softAuditEvery === 0;
 }
 
-function messagesForStep(session: Session, step: number): Session['messages'] {
-  if (!shouldAudit(step)) return session.messages;
+function messagesForStep(
+  session: Session,
+  step: number,
+  maxSteps?: number,
+): Session['messages'] {
+  const budgetWarning = maxSteps !== undefined &&
+    step === Math.max(1, maxSteps - NORMAL_STEP_POLICY.softAuditEvery);
+  if (!shouldAudit(step) && !budgetWarning) return session.messages;
   const messages = [...session.messages];
   const first = messages[0];
   if (first?.role !== 'system' || typeof first.content !== 'string') {
     return session.messages;
   }
-  messages[0] = {...first, content: first.content + COMPLETION_AUDIT_SUFFIX};
+  const boundary = maxSteps ??
+    (Math.floor(step / NORMAL_STEP_POLICY.hardGateEvery) + 1) * NORMAL_STEP_POLICY.hardGateEvery;
+  const remaining = boundary - step;
+  const boundaryName = maxSteps === undefined ? 'continuation checkpoint' : 'step limit';
+  const progress = `Progress review: ${step} model turns completed. ` +
+    `${remaining} model turns remain before the next ${boundaryName}, at turn ${boundary}.`;
+  const closing = remaining <= NORMAL_STEP_POLICY.softAuditEvery
+    ? '\n\nPlan the remaining implementation and verification work within this budget segment. ' +
+      'If completion is not possible, clearly report what remains unfinished.'
+    : '';
+  messages[0] = {...first, content: `${first.content}\n\n${progress}\n\n${COMPLETION_AUDIT}${closing}`};
   return messages;
 }
 
@@ -106,7 +116,9 @@ export async function runAgent(
   host: Host,
   registry: Tool[] = toolsFor(session.mode),
   store?: SessionStore,
-): Promise<void> {
+  options: {maxSteps?: number} = {},
+): Promise<'step_limit' | void> {
+  const {maxSteps} = options;
   const definitions = toolDefinitions(registry);
   const judge = judgeFor(session, host, choice.model);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
@@ -148,7 +160,18 @@ export async function runAgent(
         markInterrupted();
         return;
       }
-      if (step > 0 && step % NORMAL_STEP_POLICY.hardGateEvery === 0) {
+      if (maxSteps !== undefined && step >= maxSteps) {
+        host.onEvent({
+          type: 'error',
+          message: `stopped after ${step} model turns: step budget exhausted`,
+        });
+        host.onEvent({type: 'turn_end', usage: total});
+        return 'step_limit';
+      }
+      if (
+        maxSteps === undefined &&
+        step > 0 && step % NORMAL_STEP_POLICY.hardGateEvery === 0
+      ) {
         const answer = await host.confirm({
           command: 'continue',
           reason:
@@ -205,9 +228,14 @@ export async function runAgent(
         addUsage(session.usage, result.usage);
       }
 
-      const requestMessages = messagesForStep(session, step);
-      const auditTokens =
-        requestMessages === session.messages ? 0 : estimateTokens(COMPLETION_AUDIT_SUFFIX);
+      const requestMessages = messagesForStep(session, step, maxSteps);
+      const auditTokens = requestMessages === session.messages
+        ? 0
+        : estimateTokens(
+            (requestMessages[0]!.content as string).slice(
+              (session.messages[0]!.content as string).length,
+            ),
+          );
       if (
         projectedTokens(session, registry) + auditTokens + MAX_OUTPUT_TOKENS >
         session.contextWindow

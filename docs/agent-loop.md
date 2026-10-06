@@ -69,12 +69,25 @@ them against the parent's context would show a bar climbing toward a compaction
 that nothing in the conversation justifies. The money is real and is counted; the
 context is not and is not.
 
-`NORMAL_STEP_POLICY` keeps ordinary prompts bounded without rushing healthy work. After 20
-completed steps in each segment, the next model request temporarily appends a completion audit
-to the system prompt. The audit is model-only and is never stored in session history. After 30
-completed steps, the loop asks the user before starting another 30-step segment. The gate cannot
-be suppressed for the rest of the turn. `'deny'` stops with a message. Esc there is neither: it
-is a stop, so the loop returns silently and the UI's own `stopped` notice says what happened.
+`NORMAL_STEP_POLICY` in `step-policy.ts` shares defaults between interactive and
+headless runs: a soft review every 10 completed model turns and a hard boundary
+at 60. A model turn may contain several tool calls. The next model request
+receives a temporary system-prompt review with the completed count, remaining
+turns, and next boundary. It asks the model to finish when required work is
+verified, otherwise prioritize essential work over optional improvements.
+Reviews are model-only and are never stored in session history.
+
+Interactive runs ask the user after each 60-turn segment. Approval grants another
+60 turns; the next review uses the new boundary. The gate cannot be suppressed
+for the rest of the turn. `'deny'` stops with a message. Esc returns silently;
+the UI reports the stop.
+
+Headless runs pass an explicit `maxSteps` budget, defaulting to the shared hard
+boundary. They stop at that budget and return `step_limit`, without interactive
+continuation checkpoints. A final answer on the last permitted turn completes
+normally. Reviews recur every 10 turns and also warn with ten turns left for a
+custom budget. Near the boundary they ask the model to plan required implementation
+and verification, and report any unfinished work clearly.
 
 ### Streaming tool calls
 

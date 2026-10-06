@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {DEFAULT_SANDBOX, isSandboxMode, type SandboxMode} from '../core/sandbox/mode.js';
+import {DEFAULT_MAX_STEPS, validateMaxSteps} from '../core/headless/budget.js';
 
 export type CliOptions = {
   workspaceRoot: string;
@@ -9,6 +10,7 @@ export type CliOptions = {
   json: boolean;
   yes: boolean;
   maxSeconds: number;
+  maxSteps: number;
   version: boolean;
   sandbox: SandboxMode;
 };
@@ -40,6 +42,8 @@ export function parseArgs(
   let yes = false;
   let maxSeconds = DEFAULT_MAX_SECONDS;
   let maxSecondsGiven = false;
+  let maxSteps = DEFAULT_MAX_STEPS;
+  let maxStepsGiven = false;
   let version = false;
   let sandbox: SandboxMode = DEFAULT_SANDBOX;
   let sandboxGiven = false;
@@ -71,6 +75,11 @@ export function parseArgs(
       yes = true;
       continue;
     }
+    if (arg === '--max-steps') {
+      maxSteps = validateMaxSteps(Number(valueFor(args, ++i, arg)));
+      maxStepsGiven = true;
+      continue;
+    }
     if (arg === '--max-seconds') {
       i += 1;
       const raw = valueFor(args, i, arg);
@@ -96,6 +105,7 @@ export function parseArgs(
       json ? '--json' : null,
       yes ? '--yes' : null,
       maxSecondsGiven ? '--max-seconds' : null,
+      maxStepsGiven ? '--max-steps' : null,
       sandboxGiven ? '--sandbox' : null,
     ].filter((flag): flag is string => flag !== null);
     if (combined.length > 0) {
@@ -107,6 +117,7 @@ export function parseArgs(
       json,
       yes,
       maxSeconds,
+      maxSteps,
       version,
       sandbox,
     };
@@ -117,6 +128,7 @@ export function parseArgs(
       json ? '--json' : null,
       yes ? '--yes' : null,
       maxSecondsGiven ? '--max-seconds' : null,
+      maxStepsGiven ? '--max-steps' : null,
     ].filter((flag): flag is string => flag !== null);
     if (stray.length > 0) {
       throw new Error(
@@ -134,5 +146,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot, print, json, yes, maxSeconds, version, sandbox};
+  return {workspaceRoot, print, json, yes, maxSeconds, maxSteps, version, sandbox};
 }

@@ -199,5 +199,12 @@ test('only a finished run exits zero', () => {
   assert.equal(exitCode(headlessResult({stopped: 'done'})), 0);
   assert.equal(exitCode(headlessResult({stopped: 'denied'})), 1);
   assert.equal(exitCode(headlessResult({stopped: 'timeout'})), 1);
+  assert.equal(exitCode(headlessResult({stopped: 'step_limit'})), 1);
   assert.equal(exitCode(headlessResult({stopped: 'error'})), 1);
+});
+
+test('step exhaustion is distinct from permission denial in plain and JSON output', () => {
+  const result = headlessResult({stopped: 'step_limit', error: 'step budget exhausted'});
+  assert.deepEqual(plainLines(result).err, ['stopped: step_limit: step budget exhausted']);
+  assert.equal(JSON.parse(jsonLines(result).at(-1)!).stopped, 'step_limit');
 });

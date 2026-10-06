@@ -117,7 +117,7 @@ test('the agent asks to keep going instead of giving up', async () => {
 
   assert.equal(asked.length, 2);
   assert.equal(asked[0]!.command, 'continue');
-  assert.match(asked[0]!.reason, /30 steps/);
+  assert.match(asked[0]!.reason, /60 steps/);
   assert.equal(asked[0]!.suppressible, false);
   assert.equal(calls(), NORMAL_STEP_POLICY.hardGateEvery * 2);
 });
@@ -128,14 +128,14 @@ test('a short turn receives neither a completion audit nor a gate', async () => 
     sent.push([
       ...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? []),
     ]);
-    return nth < NORMAL_STEP_POLICY.softAuditAfter ? toolResponse(nth) : finalResponse();
+    return nth < NORMAL_STEP_POLICY.softAuditEvery ? toolResponse(nth) : finalResponse();
   });
   const {host, asked} = fakeHost();
 
   await runAgent(session(), choice, host, [noop]);
 
   assert.equal(asked.length, 0);
-  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditAfter);
+  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditEvery);
   assert.ok(
     sent.every((messages) =>
       messages.every(
@@ -146,13 +146,13 @@ test('a short turn receives neither a completion audit nor a gate', async () => 
   );
 });
 
-test('the request after twenty completed steps receives a model-only completion audit', async () => {
+test('the request after ten completed turns receives a model-only completion audit', async () => {
   const sent: OpenAI.ChatCompletionMessageParam[][] = [];
   const {choice} = fakeModel((nth, body) => {
     sent.push([
       ...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? []),
     ]);
-    return nth <= NORMAL_STEP_POLICY.softAuditAfter ? toolResponse(nth) : finalResponse();
+    return nth <= NORMAL_STEP_POLICY.softAuditEvery ? toolResponse(nth) : finalResponse();
   });
   const {host, asked, events} = fakeHost();
   const work = tempDir('acc-work-');
@@ -163,8 +163,8 @@ test('the request after twenty completed steps receives a model-only completion 
   await runAgent(active, choice, host, [noop], store);
 
   assert.equal(asked.length, 0);
-  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditAfter + 1);
-  const auditedSystem = sent[NORMAL_STEP_POLICY.softAuditAfter]![0];
+  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditEvery + 1);
+  const auditedSystem = sent[NORMAL_STEP_POLICY.softAuditEvery]![0];
   assert.equal(auditedSystem?.role, 'system');
   assert.equal(typeof auditedSystem?.content, 'string');
   assert.match(auditedSystem!.content as string, new RegExp(COMPLETION_AUDIT));
@@ -240,17 +240,18 @@ test('escaping at the checkpoint stops without reporting a refusal', async () =>
 });
 
 test('a session answer cannot suppress later step gates', async () => {
-  const {choice, calls} = finishesAt(65);
+  const {choice, calls} = finishesAt(125);
   const {host, asked} = fakeHost(() => 'session');
 
   await runAgent(session(), choice, host, [noop]);
 
   assert.equal(asked.length, 2);
-  assert.equal(calls(), 65);
+  assert.equal(calls(), 125);
 });
 
 test('an approved segment receives another audit and another gate', async () => {
   const auditedRequests: number[] = [];
+  const auditedPrompts: string[] = [];
   const {choice, calls} = fakeModel((nth, body) => {
     const messages =
       ((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? [];
@@ -261,6 +262,7 @@ test('an approved segment receives another audit and another gate', async () => 
       )
     ) {
       auditedRequests.push(nth);
+      auditedPrompts.push(messages[0]!.content as string);
     }
     return toolResponse(nth);
   });
@@ -268,9 +270,14 @@ test('an approved segment receives another audit and another gate', async () => 
 
   await runAgent(session(), choice, host, [noop]);
 
-  assert.deepEqual(auditedRequests, [21, 51]);
+  assert.deepEqual(auditedRequests, [11, 21, 31, 41, 51, 61, 71, 81, 91, 101, 111]);
+  assert.match(auditedPrompts[0]!, /10 model turns completed.*50 model turns remain.*turn 60/);
+  assert.match(auditedPrompts[4]!, /50 model turns completed.*10 model turns remain/);
+  assert.match(auditedPrompts[4]!, /clearly report what remains unfinished/);
+  assert.match(auditedPrompts[5]!, /60 model turns completed.*60 model turns remain.*turn 120/);
+  assert.doesNotMatch(auditedPrompts[5]!, /clearly report what remains unfinished/);
   assert.equal(asked.length, 2);
-  assert.equal(calls(), 60);
+  assert.equal(calls(), 120);
 });
 
 test('a session is written after every step', async () => {

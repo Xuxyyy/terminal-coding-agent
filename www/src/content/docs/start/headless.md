@@ -78,15 +78,17 @@ which is rarely the intent behind `edit(**)`.
 
 Two caps, and both are on:
 
-- **30 steps.** After 20 completed steps the model receives a private completion
-  audit. At 30 the loop asks permission to continue. A print run always denies
-  that, `--yes` included, so 30 is a real ceiling.
+- **60 model turns by default**, changed with `--max-steps`. The final answer
+  counts as a turn; one turn may contain multiple tool calls. A larger budget
+  allows the run to continue beyond turn 60. The model is told the budget and
+  receives private progress reviews every 10 turns, with updated counts and
+  a reminder to prioritize required work and verification. Exhaustion reports `step_limit`.
+  Tool permission checks remain active.
 - **300 seconds**, changed with `--max-seconds`. The timer aborts the run, and
-  the abort is honoured between steps — a single very long tool call can overrun
-  it and stop at the next step boundary.
+  its signal reaches model requests and shell tools to stop in-flight work.
 
 ```sh
-acc -p "run the tests and tell me what failed" --yes --max-seconds 900
+acc -p "run the tests and tell me what failed" --yes --max-steps 60 --max-seconds 900
 ```
 
 ## The exit code
@@ -124,7 +126,7 @@ line carries a `kind` instead, so the two never blur together.
 | Field on the `result` line | What it says |
 |---|---|
 | `schemaVersion` | Version of the public result record. |
-| `stopped` | `done`, `denied`, `timeout`, or `error` — why the run ended. |
+| `stopped` | `done`, `denied`, `timeout`, `step_limit`, or `error` — why the run ended. |
 | `message` | The authoritative final assistant text. |
 | `usage` | Prompt, completion and total tokens for the whole run. |
 | `tokenUsage` | Provider-reported token use for each numbered model request and accumulated totals, including cache hits and misses. |
@@ -138,13 +140,14 @@ line carries a `kind` instead, so the two never blur together.
 | `-p`, `--print <task>` | Runs `<task>` as one turn and exits. Everything else here needs it. |
 | `--json` | Puts the event stream on stdout instead of the answer. |
 | `--yes` | Approves each permission prompt once. Never remembers one. |
+| `--max-steps <n>` | Model-turn cap, including the final answer. Default 60. Must be a positive safe integer. |
 | `--max-seconds <n>` | Wall-clock cap. Default 300. Must be a positive number. |
 
 `acc --version` prints the installed ACC package version. It works outside a
 project and cannot be combined with run options.
 
-`--json`, `--yes` and `--max-seconds` all fail without `-p`, naming print mode —
-a flag that was silently ignored is how you come to believe a run was approved
+`--json`, `--yes`, `--max-seconds` and `--max-steps` all fail without `-p`,
+naming print mode — a flag that was silently ignored is how you come to believe a run was approved
 when it was not.
 
 The workspace is the current directory, exactly as in

@@ -63,6 +63,7 @@ test('parseArgs reads the task after -p into print', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
+    maxSteps: 60,
     version: false,
     sandbox: 'off',
   });
@@ -137,6 +138,7 @@ test('parseArgs defaults every print field when no flags are given', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
+    maxSteps: 60,
     version: false,
     sandbox: 'off',
   });
@@ -158,6 +160,7 @@ test('parseArgs takes -p, --json and --yes together', () => {
     json: true,
     yes: true,
     maxSeconds: 300,
+    maxSteps: 60,
     version: false,
     sandbox: 'off',
   });
@@ -170,6 +173,7 @@ test('parseArgs accepts --version without a project workspace', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
+    maxSteps: 60,
     version: true,
     sandbox: 'off',
   });
@@ -196,4 +200,22 @@ test('sandbox rejects missing and invalid values and version combinations', () =
     assert.throws(() => parseArgs(['--sandbox', value]), /needs on or off/);
   }
   assert.throws(() => parseArgs(['--version', '--sandbox', 'off']), /cannot be combined with --sandbox/);
+});
+
+
+test('parseArgs accepts a headless step budget and defaults to sixty', () => {
+  assert.equal(parseArgs(['-p', 'hi']).maxSteps, 60);
+  assert.equal(parseArgs(['--max-steps', '90', '-p', 'hi']).maxSteps, 90);
+});
+
+test('parseArgs rejects invalid step budgets', () => {
+  assert.throws(() => parseArgs(['-p', 'hi', '--max-steps']), /needs a value/);
+  for (const value of ['0', '-1', '1.5', 'abc', 'Infinity', '', '9007199254740992']) {
+    assert.throws(() => parseArgs(['-p', 'hi', '--max-steps', value]), /positive safe integer/);
+  }
+});
+
+test('step budgets require print mode and cannot be combined with version', () => {
+  assert.throws(() => parseArgs(['--max-steps', '60']), /--max-steps only applies to print mode/);
+  assert.throws(() => parseArgs(['--version', '--max-steps', '60']), /cannot be combined with --max-steps/);
 });

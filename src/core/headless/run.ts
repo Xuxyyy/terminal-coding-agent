@@ -5,6 +5,7 @@ import {runAgent} from '../loop.js';
 import {systemPrompt} from '../prompt.js';
 import {addTask, createSession} from '../session.js';
 import {modeOf} from '../settings.js';
+import {DEFAULT_MAX_STEPS, validateMaxSteps} from './budget.js';
 import {
   createHeadlessHost,
   type HeadlessTokenUsage,
@@ -12,7 +13,7 @@ import {
   type RecordedPrompt,
 } from './host.js';
 
-export type StopReason = 'done' | 'denied' | 'timeout' | 'error';
+export type StopReason = 'done' | 'denied' | 'timeout' | 'step_limit' | 'error';
 
 export type HeadlessResult = {
   text: string;
@@ -30,11 +31,15 @@ export async function runHeadless(options: {
   choice: ModelChoice;
   policy: HeadlessPolicy;
   maxSeconds: number;
+  maxSteps?: number;
   sandbox?: SandboxMode;
 }): Promise<HeadlessResult> {
+  const maxSteps = validateMaxSteps(options.maxSteps ?? DEFAULT_MAX_STEPS);
   const session = createSession(
     options.root,
-    systemPrompt(options.root, modeOf(), options.sandbox),
+    systemPrompt(options.root, modeOf(), options.sandbox) +
+      `\n\nHeadless run budget: at most ${maxSteps} model turns, including the final answer. ` +
+      'Execution stops when this budget or the time limit is reached.',
     options.choice.contextWindow,
     options.sandbox,
   );
@@ -58,8 +63,11 @@ export async function runHeadless(options: {
     }, options.maxSeconds * 1000);
   }
 
+  let outcome: 'step_limit' | void;
   try {
-    await runAgent(session, options.choice, host, undefined, undefined);
+    outcome = await runAgent(
+      session, options.choice, host, undefined, undefined, {maxSteps},
+    );
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -76,11 +84,13 @@ export async function runHeadless(options: {
   const denied = prompts.some((prompt) => prompt.decision === 'deny');
   const stopped: StopReason = timedOut
     ? 'timeout'
-    : denied
-      ? 'denied'
-      : error !== undefined
-        ? 'error'
-        : 'done';
+    : outcome === 'step_limit'
+      ? 'step_limit'
+      : denied
+        ? 'denied'
+        : error !== undefined
+          ? 'error'
+          : 'done';
 
   return {
     text,

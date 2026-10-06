@@ -52,6 +52,7 @@ function headless(options: {
   choice: ModelChoice;
   policy?: HeadlessPolicy;
   maxSeconds?: number;
+  maxSteps?: number;
 }) {
   return runHeadless({
     root: options.root,
@@ -59,6 +60,7 @@ function headless(options: {
     choice: options.choice,
     policy: options.policy ?? 'deny',
     maxSeconds: options.maxSeconds ?? 30,
+    maxSteps: options.maxSteps,
   });
 }
 
@@ -92,7 +94,8 @@ test('headless startup uses auto by default and preserves saved permission modes
 
       assert.equal(result.stopped, 'done');
       const mode = saved ?? 'auto';
-      assert.equal(request?.messages[0]?.content, systemPrompt(root, mode));
+      assert.ok(request?.messages[0]?.content.startsWith(systemPrompt(root, mode)));
+      assert.match(request!.messages[0]!.content, /at most 60 model turns, including the final answer/);
       assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
       assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
     }
@@ -212,21 +215,125 @@ test('every event of the run is kept in the order it was emitted', async () => {
   assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
 });
 
-test('print mode stops at the thirty-step gate even under yes', async () => {
+test('print mode defaults to sixty turns and reports budget exhaustion', async () => {
   const {choice, calls} = fakeModel((nth) => callResponse('read_file', {path: 'note.txt'}));
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
 
   const result = await headless({root: work, choice, policy: 'yes'});
 
-  assert.equal(calls(), 30);
+  assert.equal(calls(), 60);
+  assert.equal(result.stopped, 'step_limit');
+  assert.deepEqual(result.prompts, []);
+  assert.match(result.error!, /step budget exhausted/);
+});
+
+test('a larger headless budget finishes beyond sixty turns under either policy', async () => {
+  for (const policy of ['deny', 'yes'] as const) {
+    const work = tempDir();
+    fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+    const sent: string[] = [];
+    const {choice, calls} = fakeModel((nth, body) => {
+      sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
+      return nth < 82 ? callResponse('read_file', {path: 'note.txt'}) : textResponse(['finished']);
+    });
+
+    const result = await headless({root: work, choice, policy, maxSteps: 90});
+
+    assert.equal(calls(), 82);
+    assert.equal(result.stopped, 'done');
+    assert.equal(result.text, 'finished');
+    assert.deepEqual(result.prompts, []);
+    assert.match(sent[0]!, /at most 90 model turns/);
+    assert.match(sent[80]!, /10 model turns remain/);
+  }
+});
+
+test('a custom budget stops exactly at its limit and preserves usage', async () => {
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const sent: string[] = [];
+  const {choice, calls} = fakeModel((_nth, body) => {
+    sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
+    return callResponse('read_file', {path: 'note.txt'});
+  });
+
+  const result = await headless({root: work, choice, maxSteps: 37});
+
+  assert.equal(calls(), 37);
+  assert.match(sent[10]!, /10 model turns completed.*27 model turns remain.*turn 37/);
+  assert.match(sent[27]!, /27 model turns completed.*10 model turns remain.*turn 37/);
+  assert.match(sent[30]!, /30 model turns completed.*7 model turns remain.*turn 37/);
+  assert.equal(result.stopped, 'step_limit');
+  assert.deepEqual(result.prompts, []);
+  assert.deepEqual(result.usage, {prompt: 370, completion: 74, total: 444});
+});
+
+test('the final answer can use the last permitted turn', async () => {
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const {choice, calls} = fakeModel((nth) => nth < 3
+    ? callResponse('read_file', {path: 'note.txt'}) : textResponse(['done']));
+
+  const result = await headless({root: work, choice, maxSteps: 3});
+
+  assert.equal(calls(), 3);
+  assert.equal(result.stopped, 'done');
+});
+
+test('the budget counts model turns rather than individual tool calls', async () => {
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const {choice, calls} = fakeModel(() => streamOf(
+    toolCallChunk('first', 'read_file', JSON.stringify({path: 'note.txt'}), 0),
+    toolCallChunk('second', 'read_file', JSON.stringify({path: 'note.txt'}), 1),
+    finishChunk('tool_calls'), usageChunk(10, 2),
+  ));
+
+  const result = await headless({root: work, choice, maxSteps: 2});
+
+  assert.equal(calls(), 2);
+  assert.equal(result.stopped, 'step_limit');
+  assert.equal(result.events.filter((event) => event.type === 'tool_start').length, 4);
+});
+
+test('invalid programmatic budgets are rejected before model calls', async () => {
+  const {choice, calls} = fakeModel(() => textResponse(['never sent']));
+  for (const maxSteps of [0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(headless({root: tempDir(), choice, maxSteps}), /positive safe integer/);
+  }
+  assert.equal(calls(), 0);
+});
+
+test('tool permissions still apply after passing turn sixty', async () => {
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'keep me\n');
+  const {choice} = fakeModel((nth) => {
+    if (nth <= 60) return callResponse('read_file', {path: 'note.txt'});
+    if (nth === 61) return callResponse('bash', {command: 'rm -rf note.txt'});
+    return textResponse(['could not delete it']);
+  });
+
+  const result = await headless({root: work, choice, maxSteps: 90, policy: 'deny'});
+
   assert.equal(result.stopped, 'denied');
-  assert.deepEqual(
-    result.prompts.map((prompt) => [
-      prompt.request.command,
-      prompt.request.suppressible,
-      prompt.decision,
-    ]),
-    [['continue', false, 'deny']],
-  );
+  assert.deepEqual(result.prompts.map((prompt) => [prompt.request.command, prompt.decision]),
+    [['rm -rf note.txt', 'deny']]);
+  assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'keep me\n');
+});
+
+test('the selected step budget does not override the time limit', async () => {
+  const {choice, calls} = fakeModel(() => ({
+    async *[Symbol.asyncIterator]() {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      yield textChunk('late answer');
+      yield finishChunk('stop');
+      yield usageChunk(10, 2);
+    },
+  }));
+
+  const result = await headless({root: tempDir(), choice, maxSteps: 60, maxSeconds: 0.01});
+
+  assert.equal(calls(), 1);
+  assert.equal(result.stopped, 'timeout');
 });

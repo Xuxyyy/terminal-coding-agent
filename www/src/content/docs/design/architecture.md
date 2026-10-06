@@ -91,9 +91,11 @@ shared client preserves it on assistant messages for later tool-enabled
 requests, sessions, compaction, and model switches, but never sends it through
 the UI event stream. The core loop has no provider-name branches.
 
-`NORMAL_STEP_POLICY` gives the model a private completion audit after 20 completed
-steps, then asks the user whether to keep going after 30. Approval grants another
-bounded 30-step segment.
+`NORMAL_STEP_POLICY` shares defaults between interactive and headless runs:
+a private progress review every 10 completed model turns and a 60-turn boundary.
+Reviews show completed and remaining turns and focus on essential work and
+verification. Interactive approval grants another bounded 60-turn segment;
+headless runs stop at their selected budget, which defaults to 60.
 
 ### When the window fills
 

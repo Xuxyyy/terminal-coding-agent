@@ -25,6 +25,7 @@ try {
       choice,
       policy: options.yes ? 'yes' : 'deny',
       maxSeconds: options.maxSeconds,
+      maxSteps: options.maxSteps,
       sandbox: options.sandbox,
     });
     if (options.json) {
