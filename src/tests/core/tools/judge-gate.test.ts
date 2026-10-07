@@ -280,3 +280,69 @@ test('the judge input is rebuilt from the session on every call', async () => {
   assert.ok(built[1]!.includes('tidy the build output'));
   assert.ok(built[1]!.includes('and now delete the logs too'));
 });
+
+test('observation commands execute without judge or human approval', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('deny');
+  const judge = judgeThatSays('ask');
+  for (const command of [
+    'node --version', 'npm -v', 'command -v sudo', 'command -v git diff', 'which -a node',
+    'stat package.json', 'file --mime-type package.json', 'uname -s',
+    'rg -e ../pattern src', 'node --version | grep version', 'command -v missing || true',
+  ]) {
+    const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), context(root, {host, judge}));
+    assert.match(output.text, /ran/, command);
+  }
+  assert.equal(judge.seen.length, 0);
+  assert.equal(asked.length, 0);
+});
+
+test('rules still deny or ask about newly recognized observations', async () => {
+  const root = workspace();
+  for (const command of ['node --version', 'command -v node']) {
+    for (const verdict of ['deny', 'ask'] as const) {
+      const {host, asked} = hostThatAnswers('once');
+      const judge = judgeThatSays('allow');
+      const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), context(root, {host, judge, rules: rules({[verdict]: ['node*'], allow: ['*']})}));
+      assert.equal(judge.seen.length, 0);
+      assert.equal(asked.length, verdict === 'ask' ? 1 : 0);
+      assert.match(output.text, verdict === 'deny' ? /denied by a rule/ : /ran/);
+    }
+  }
+});
+
+test('unclear scripts and outside actions still reach the judge', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('deny');
+  const judge = judgeThatSays('ask');
+  for (const command of [
+    'node --version && python3 build.py', 'command python3 -v build.py',
+    'rg --file=/tmp/pattern src', 'sort -o../out.txt in.txt', 'file -z archive.gz',
+  ]) {
+    const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), context(root, {host, judge}));
+    assert.match(output.text, /user refused/, command);
+  }
+  assert.equal(judge.seen.length, 5);
+  assert.equal(asked.length, 5);
+});
+
+test('sandbox grants for observations still require one-call human approval', async () => {
+  const root = workspace();
+  const tool: Tool = {
+    ...fakeBash,
+    schema: z.object({command: z.string(), access: z.object({network: z.boolean()})}),
+    access(args) { return (args as {access: {network: boolean}}).access; },
+  };
+  const {host, asked} = hostThatAnswers('session');
+  const judge = judgeThatSays('allow');
+  const ctx = {...context(root, {host, judge, rules: rules({allow: ['*']})}), sandbox: 'on' as const};
+  const args = JSON.stringify({command: 'node --version', access: {network: true}});
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const output = await runTool([tool], 'bash', args, ctx);
+    assert.match(output.text, /ran/);
+  }
+  assert.equal(judge.seen.length, 0);
+  assert.equal(asked.length, 2);
+  assert.ok(asked.every((request) => request.suppressible === false));
+  assert.equal(ctx.allowed.size, 0);
+});

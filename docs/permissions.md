@@ -574,10 +574,10 @@ state.
 
 For one `bash` command:
 
-0. **Mode and rules** — a level above the mode's cut in a deny-mode ends it here, before any
-   `allow` or `ask` rule. A level above the cut becomes `judge` rather than `ask` in `auto`;
-   the routing is decided here and executed later, by `permitted()`. Otherwise the hardened command is matched against all three lists at
-   once and the most specific pattern decides (`rules.ts`). A `deny` verdict ends it here. An
+0. **Rules** — match the hardened command against the saved rules using the existing
+   stage normalization (`rules.ts`): `deny` beats `ask`, which beats `allow`, and every
+   stage must match an allow rule for the whole command to have an allow verdict.
+   A `deny` verdict ends it here. An
    `ask` or `allow` verdict is held, not applied: the classifier still runs, and an `escape`
    overrides it. Steps 1-9 below are the classifier, reached whenever no rule decided.
 1. **Fork bomb** — matched against the whole command before anything is split.
@@ -598,11 +598,32 @@ For one `bash` command:
    `escape`. Otherwise resolve each against the root: outside → `escape`; the root itself with
    a destructive command → `escape`; protected → `protected`; a delete → `destroy`; else
    `recoverable`.
-6. **Read-only stage** — executable in `{cat cd diff echo find grep head ls od pwd rg sort
-   tail test wc}`, or `git` with `{diff log ls-files show status}`; no substitution, no
-   redirect, no unsafe option (`git --ext-diff`, `git --textconv`, `rg --pre`, `sort -o`,
-   `find -exec/-delete`). Then check what it reads: any path outside the root → `escape`, else
-   `observe`.
+6. **Observation stage** — `observe.ts` matches understood forms of `{cat cd diff echo
+   find grep head ls od pwd rg sort tail test wc}`, Git's `{diff log ls-files show status}`,
+   and `{stat file uname printf true false}`. It also recognizes exact version-only
+   queries for Node, npm, pnpm, Yarn, Bun, Deno, Python, Bash, Zsh, Git, TypeScript,
+   Rust and Cargo, plus `go version`, and lookups with `which`, `type`, or `command -v/-V`.
+   A lookup describes names without executing them: `command -v sudo` only observes.
+   Its saved-rule normalization and approval key still use the existing shared parser.
+   Commands named by paths, unknown programs with `--version`, and version flags mixed
+   with scripts or other execution arguments remain unclassified.
+
+   Options are parsed per command, including short option groups, attached values,
+   `--option=value`, quotes, and `--`. Patterns and format strings are not file paths:
+   `rg -e "../pattern" src` observes, while `rg --file=/tmp/pattern src` escapes.
+   File inputs passed through options receive the same root and symlink checks as
+   positional paths. Attached writes such as `sort -o../out.txt in.txt` escape too.
+   Unknown options, filename lists read from another file, path expansions, unsafe
+   wrappers, and external-program modes do not receive `observe`. Known legacy write
+   and destructive cases retain their classifications. Substitutions, real redirects,
+   Git external diff/text conversion options, and `printf -v` are not observations.
+
+   A simple successful `cd dir && ...` checks later paths from `dir`, against the same
+   project boundary. If a failed or skipped `cd`, a pipeline, or a later branch makes
+   the directory uncertain, relative file targets remain checked. Symlinked directory
+   changes also keep later relative targets checked. Directory tracking can add
+   write protections but cannot remove an existing write guardrail. Above the mode's
+   cut, classification still routes to `judge` in `auto` and `ask` in the other modes.
 7. **Project runner** — `npm`, `pnpm` or `yarn` with `test` or `run`, and no substitution →
    `recoverable`. These stay inside the project and are the commands a real task runs most.
 8. otherwise → unclassified.
@@ -736,5 +757,6 @@ outside targets or protected writes. With On, known credential storage is always
 grants and validation but keeps these action permission checks.
 See `sandbox.md` for platform requirements, examples, and limits.
 
-If `classify.ts` grows past ~200 lines, stop: the extra cases belong in the rules file, where
-the user writes them, not in code.
+Keep `classify.ts` focused on levels, project boundaries and stage aggregation.
+Command-specific observation forms belong in `observe.ts`; unusual scripts can use
+the existing saved rules rather than broader automatic matching.

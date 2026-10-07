@@ -1,9 +1,9 @@
 import * as path from 'node:path';
+import {observationText, observeStage} from './observe.js';
 import {expandUser, insideRoot, isProtectedPath, realPath} from './protected.js';
 import {
   basename,
   commandParts,
-  discardNoiseRedirects,
   maskQuotedRedirects,
   splitStages,
   unquoteTarget,
@@ -23,13 +23,7 @@ export const RANK: Record<Level, number> = {
   escape: 4,
 };
 
-const READ_ONLY_COMMANDS = new Set([
-  'cat', 'cd', 'diff', 'echo', 'find', 'grep', 'head', 'ls',
-  'od', 'pwd', 'rg', 'sort', 'tail', 'test', 'wc',
-]);
-const READ_ONLY_GIT_COMMANDS = new Set(['diff', 'log', 'ls-files', 'show', 'status']);
 const READ_ONLY_EXTERNAL_OPTIONS: Record<string, readonly string[]> = {
-  git: ['--ext-diff', '--textconv'],
   rg: ['--pre'],
   sort: ['-o', '--output'],
   find: ['-delete', '-exec', '-execdir', '-fls', '-fprint', '-fprintf', '-ok', '-okdir'],
@@ -48,14 +42,24 @@ const PROJECT_RUNNERS: Record<string, readonly string[]> = {
 };
 
 const SUBSTITUTION_PATTERN = /[`$()]/;
-const REDIRECT_PATTERN = /[<>]/;
-const REDIRECT_TARGET_PATTERN = /(?:\d*|&)>>?\s*([^\s;|&<>]+)/g;
+const REDIRECT_TARGET_PATTERN = /(?:\d*|&)>>?\s*/g;
 const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{.*\|.*&\s*\}/;
 
 const UNKNOWN: Classification = {level: null, reason: ''};
 
 function executableOf(parts: string[]): string {
   return parts.length ? basename(parts[0]) : '';
+}
+
+function uncertainTraversal(target: string, cwd: string): boolean {
+  const expanded = expandUser(target);
+  let prefix = path.isAbsolute(expanded) ? path.parse(expanded).root : cwd;
+  for (const part of expanded.split(path.sep)) {
+    // Normalizing before resolving a symlink can hide the directory '..' visits.
+    if (part === '..' && realPath(prefix) !== path.resolve(prefix)) return true;
+    prefix = path.join(prefix, part);
+  }
+  return false;
 }
 
 function hasOption(parts: string[], options: readonly string[] | undefined): boolean {
@@ -79,14 +83,14 @@ function escapingExecutable(parts: string[]): string | null {
 function targetClassification(
   target: string,
   root: string,
-  options: {reading?: boolean; destructive?: boolean; destroys?: boolean} = {},
+  options: {reading?: boolean; destructive?: boolean; destroys?: boolean; cwd?: string} = {},
 ): Classification {
-  const {reading = false, destructive = false, destroys = false} = options;
+  const {reading = false, destructive = false, destroys = false, cwd = root} = options;
   const outside = reading
     ? `reads '${target}' outside the project`
     : `'${target}' is outside the project`;
   const expanded = expandUser(target);
-  const candidate = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
+  const candidate = path.isAbsolute(expanded) ? expanded : path.join(cwd, expanded);
   if (!insideRoot(candidate, root)) return {level: 'escape', reason: outside};
   if (destructive && realPath(candidate) === realPath(root)) {
     return {level: 'escape', reason: `'${target}' is the project root itself`};
@@ -113,36 +117,28 @@ function worst(items: Classification[]): Classification {
 }
 
 function stageTargets(stage: string, parts: string[]): string[] {
-  const cleaned = discardNoiseRedirects(maskQuotedRedirects(stage));
-  const targets = [...cleaned.matchAll(REDIRECT_TARGET_PATTERN)].map((match) =>
-    unquoteTarget(match[1]),
-  );
+  const cleaned = observationText(maskQuotedRedirects(stage), true);
+  const targets: string[] = [];
+  for (const match of cleaned.matchAll(REDIRECT_TARGET_PATTERN)) {
+    const start = match.index + match[0].length;
+    let end = start;
+    let quote = '';
+    while (end < stage.length) {
+      const character = stage[end];
+      if (!quote && /[\s;|&<>]/.test(character)) break;
+      if (character === '\\' && quote !== "'" && end + 1 < stage.length) { end += 2; continue; }
+      if (!quote && (character === "'" || character === '"')) quote = character;
+      else if (character === quote) quote = '';
+      end += 1;
+    }
+    if (end > start) targets.push(unquoteTarget(stage.slice(start, end)));
+  }
   const executable = executableOf(parts);
-  const unsafeRead =
-    READ_ONLY_COMMANDS.has(executable) &&
-    hasOption(parts, READ_ONLY_EXTERNAL_OPTIONS[executable]);
+  const unsafeRead = hasOption(parts, READ_ONLY_EXTERNAL_OPTIONS[executable]);
   if (WRITE_COMMANDS.has(executable) || unsafeRead) {
     targets.push(...parts.slice(1).filter((part) => !part.startsWith('-')));
   }
   return targets;
-}
-
-function isReadOnlyStage(stage: string, parts: string[]): boolean {
-  if (SUBSTITUTION_PATTERN.test(stage)) return false;
-  if (REDIRECT_PATTERN.test(discardNoiseRedirects(maskQuotedRedirects(stage)))) {
-    return false;
-  }
-  if (!parts.length) return false;
-  const executable = executableOf(parts);
-  if (parts[0] !== executable) return false;
-  if (hasOption(parts, READ_ONLY_EXTERNAL_OPTIONS[executable])) return false;
-  if (READ_ONLY_COMMANDS.has(executable)) return true;
-  return (
-    executable === 'git' &&
-    parts.length > 1 &&
-    READ_ONLY_GIT_COMMANDS.has(parts[1]) &&
-    !parts.slice(2).some((part) => part.startsWith('--output'))
-  );
 }
 
 function isProjectRunner(stage: string, parts: string[]): boolean {
@@ -151,13 +147,18 @@ function isProjectRunner(stage: string, parts: string[]): boolean {
   return Boolean(subcommands && parts.length > 1 && subcommands.includes(parts[1]));
 }
 
-function classifyStage(stage: string, root: string): Classification {
-  const parts = commandParts(stage);
-  if (parts === null) return UNKNOWN;
+function classifyStage(stage: string, root: string, cwd: string | null): Classification {
+  const normalized = commandParts(stage);
+  if (normalized === null) return UNKNOWN;
+  const observation = observeStage(stage);
+  const parts = observation?.lookup && observation.known ? observation.parts : normalized;
   const escaping = escapingExecutable(parts);
   if (escaping !== null) return {level: 'escape', reason: escaping};
 
-  const targets = stageTargets(stage, parts);
+  const reads = observation?.reads ?? [];
+  const outside = worst(reads.map((read) => targetClassification(read, root, {reading: true, cwd: cwd ?? root})));
+  if (outside.level === 'escape') return outside;
+  const targets = [...stageTargets(stage, parts), ...(observation?.writes ?? [])];
   if (targets.length) {
     if (SUBSTITUTION_PATTERN.test(stage)) {
       return {level: 'escape', reason: 'writes to a target that cannot be determined'};
@@ -165,15 +166,20 @@ function classifyStage(stage: string, root: string): Classification {
     const executable = executableOf(parts);
     const destructive = DESTRUCTIVE_COMMANDS.has(executable);
     const destroys = destructive || hasOption(parts, DESTRUCTIVE_OPTIONS[executable]);
-    return worst(
-      targets.map((target) => targetClassification(target, root, {destructive, destroys})),
-    );
+    // Directory tracking must not weaken the existing write guardrails.
+    const classification = worst(targets.flatMap((target) => [
+      targetClassification(target, root, {destructive, destroys}),
+      targetClassification(target, root, {destructive, destroys, cwd: cwd ?? root}),
+    ]));
+    if (cwd === null && classification.level !== 'escape' && targets.some((target) => !path.isAbsolute(expandUser(target)))) return UNKNOWN;
+    if (classification.level !== 'escape' && targets.some((target) => uncertainTraversal(target, cwd ?? root))) return UNKNOWN;
+    if (classification.level === 'recoverable' && targets.some((target) => /[*?{}\[\]]/.test(target))) return UNKNOWN;
+    return classification;
   }
 
-  if (isReadOnlyStage(stage, parts)) {
-    const reads = parts.slice(1).filter((part) => !part.startsWith('-'));
-    const outside = worst(reads.map((read) => targetClassification(read, root, {reading: true})));
-    if (outside.level === 'escape') return outside;
+  if (observation?.known) {
+    if (cwd === null && reads.some((read) => !path.isAbsolute(expandUser(read)))) return UNKNOWN;
+    if (reads.some((read) => uncertainTraversal(read, cwd ?? root))) return UNKNOWN;
     return {level: 'observe', reason: ''};
   }
 
@@ -191,9 +197,29 @@ export function classifyCommand(command: string, root: string): Classification {
   if (FORK_BOMB_PATTERN.test(command)) return {level: 'escape', reason: 'fork bomb'};
   const stages = splitStages(command);
   if (stages === null) return UNKNOWN;
-  const texts = stages.map((stage) => stage.text).filter((text) => text.trim());
-  if (!texts.length) return UNKNOWN;
-  return worst(texts.map((text) => classifyStage(text, root)));
+  const classifications: Classification[] = [];
+  let cwd: string | null = realPath(root);
+  let changedDirectory = false;
+  let previousSeparator = '';
+  for (const {text, separator} of stages) {
+    if (!text.trim()) continue;
+    const classification = classifyStage(text, root, cwd);
+    classifications.push(classification);
+    const observation = observeStage(text);
+    if (observation?.directory !== undefined || executableOf(commandParts(text) ?? []) === 'cd') {
+      changedDirectory = true;
+      const target = observation?.directory === undefined ? null : expandUser(observation.directory);
+      cwd = target !== null && classification.level === 'observe' && (cwd !== null || path.isAbsolute(target))
+        ? path.resolve(cwd ?? root, target) : null;
+      // Shell cd and file reads handle '..' through symlinks differently.
+      if (cwd !== null && realPath(cwd) !== cwd) cwd = null;
+      if (['||', '|', '|&'].includes(previousSeparator)) cwd = null;
+    }
+    // A failed cd can skip an && branch. Later branches may run in either directory.
+    if (changedDirectory && separator && separator !== '&&') cwd = null;
+    previousSeparator = separator;
+  }
+  return classifications.length ? worst(classifications) : UNKNOWN;
 }
 
 export function classifyWrite(target: string, root: string): Classification {

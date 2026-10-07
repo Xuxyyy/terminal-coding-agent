@@ -212,3 +212,148 @@ test('the root is compared by its real path, not the name it was given', () => {
     'recoverable',
   );
 });
+
+test('exact version queries for known tools only observe', () => {
+  for (const command of [
+    'node --version', 'node -v', 'npm --version', 'npm -v', 'pnpm --version', 'pnpm -v',
+    'yarn --version', 'yarn -v', 'bun --version', 'bun -v', 'deno --version', 'deno -V',
+    'python --version', 'python -V', 'python3 --version', 'python3 -V', 'python3 -VV',
+    'bash --version', 'zsh --version', 'git --version', 'git -v', 'tsc --version', 'tsc -v',
+    'rustc --version', 'rustc -V', 'cargo --version', 'cargo -V', 'go version',
+    'node "--version" 2>/dev/null', 'command node --version',
+  ]) assert.equal(level(command), 'observe', command);
+});
+
+test('a version flag does not approve unknown programs or extra execution arguments', () => {
+  for (const command of [
+    'custom --version', './scripts/node --version', '/usr/bin/node --version',
+    'node --version script.js', 'node -v -e "1"', 'python3 -V build.py',
+    'bash --version -c "ls"', 'npm --version install', 'go version ./program',
+    'command python3 -v build.py', 'command -p python3 -v build.py',
+  ]) assert.equal(level(command), null, command);
+});
+
+test('lookups observe names without treating them as executed commands', () => {
+  for (const command of [
+    'which node npm', 'which -a node', 'which -s node', 'type node', 'type -ap node',
+    'type -t sudo', 'type -P rm', 'command -v node npm', 'command -V sudo',
+    'command -pv rm node', 'command -p -v sudo', 'command -v -- sudo',
+    'command -v git diff', 'command -v sudo --literal-name',
+    'builtin command -v sudo', 'builtin type -a node', 'command which -a node',
+  ]) assert.equal(level(command), 'observe', command);
+  assert.equal(level('command -v sudo && sudo ls'), 'escape');
+  assert.equal(level('command -v node && python3 build.py'), null);
+  assert.equal(level('command -v --unexpected sudo'), 'escape');
+  assert.equal(level('which --unknown node'), null);
+  assert.equal(level('command -v /tmp/outside-tool'), 'escape');
+});
+
+test('metadata queries and plain output only observe', () => {
+  for (const command of [
+    'stat package.json', 'stat -L package.json', 'file package.json', 'file -bI package.json',
+    'file --mime-type package.json', 'file -F "/separator" package.json', 'uname -as',
+    'uname --machine', "printf '%s\\n' /tmp/literal", 'printf -- "-v"',
+    'echo /etc/literal', 'true', 'false', 'test -f package.json',
+    'test "../literal" = "../literal"',
+    process.platform === 'darwin' ? "stat -f '%N/%z' package.json" : "stat --format='%n/%s' package.json",
+  ]) assert.equal(level(command), 'observe', command);
+});
+
+test('formats and patterns are separate from file inputs', () => {
+  for (const command of [
+    'rg -e "../pattern" src', 'rg -ne../pattern src', 'rg --regexp=../pattern src',
+    'rg -e "-f" src', 'rg -- ../pattern src', 'grep -rn ../pattern src',
+    'grep -e../pattern src', 'grep --regexp ../pattern src', 'rg -f patterns.txt src',
+    'grep -nfpatterns.txt src', 'find . -name "../pattern"', 'find . -path "*/../*"',
+    'sort -t / package.json', 'diff -I ../pattern a.txt b.txt',
+    'head -n3 package.json', 'tail --lines=3 package.json', 'rg --files -g "*.ts" src',
+  ]) assert.equal(level(command), 'observe', command);
+});
+
+test('file inputs in separate, attached, and long options cannot leave the root', () => {
+  for (const command of [
+    'rg -f ../patterns src', 'rg -nf../patterns src', 'rg --file=/tmp/pattern src',
+    'grep --file="../patterns" src', 'rg --ignore-file=../ignore TODO src',
+    'grep --exclude-from=../ignore TODO src', 'diff --from-file=../a b',
+    'find . -newer ../reference', 'sort --random-source=../random package.json',
+    'file -m ../magic package.json', 'file --magic-file=local:/tmp/magic package.json',
+    'stat ../outside', 'file ../outside', 'cat -- ../outside', 'test -f ../outside',
+    'diff --context ../a b', 'diff --unified ../a b', 'ls -T ../outside', 'ls -w ../outside',
+    process.platform === 'darwin' ? 'ls -I ../outside' : 'ls -w80 ../outside',
+    'rg --pre=../hook TODO src',
+  ]) assert.equal(level(command), 'escape', command);
+  assert.equal(level('rg --file=link/pattern src'), 'escape');
+  assert.equal(level('file --magic-file=link/magic package.json'), 'escape');
+});
+
+test('attached output options retain write and outside protections', () => {
+  for (const option of ['-oout.txt', '-roout.txt', '--output=out.txt']) {
+    assert.equal(level(`sort ${option} in.txt`), 'recoverable', option);
+  }
+  for (const option of ['-o../out.txt', '-ro../out.txt', '--output=../out.txt', '-T../tmp']) {
+    assert.equal(level(`sort ${option} in.txt`), 'escape', option);
+  }
+  assert.equal(level('sort -o.git/config in.txt'), 'protected');
+  assert.equal(level('node --version > .git/config'), 'protected');
+  assert.equal(level('command -v node > ../out.txt'), 'escape');
+  assert.equal(level('node --version > /dev/null.extra'), 'escape');
+  assert.equal(level('file package.json 2>/dev/stderr-extra'), 'escape');
+  assert.equal(level(`node --version > "${outside}/out with spaces.txt"`), 'escape');
+  assert.equal(level('node --version > "out with spaces.txt"'), 'recoverable');
+  assert.equal(level('node --version > out*.txt'), null);
+  fs.symlinkSync(outside, path.join(project, 'outside alias'));
+  assert.equal(level('node --version > "outside alias/out.txt"'), 'escape');
+});
+
+test('unsafe, indirect, and uncertain forms stay unclassified', () => {
+  for (const command of [
+    'file -C -m magic', 'file --compile --magic-file=magic', 'file -z archive.gz',
+    'file --no-sandbox package.json', 'file --files-from=list.txt',
+    'sort --files0-from=list.txt', 'wc --files0-from=list.txt',
+    'sort --compress-program=./hook in.txt', 'git diff --textconv',
+    'rg --search-zip TODO', 'rg --unknown TODO src', 'stat --unknown package.json',
+    'printf -v RESULT text', "printf '%n' PATH", 'command -v "$(evil)"',
+    'echo "$(evil)"', 'printf "%s" "$(evil)"', 'cat src/*.txt',
+    'nohup node --version', 'time -o ../log node --version',
+    'env --chdir=/tmp node --version', 'PATH=./scripts node --version',
+    'xargs node --version', 'cd', 'cd -',
+    'stat ~another-user/file',
+    'rg --file=link/../patterns src', 'file -m link/../magic package.json',
+    'sort -olink/../out.txt in.txt',
+  ]) assert.equal(level(command), null, command);
+});
+
+test('combined observation stages keep the worst classification', () => {
+  for (const command of [
+    'node --version && command -v npm', 'command -v missing || true',
+    'node --version | grep -e ../pattern', 'node --version |& wc -l',
+    'which node; uname -s', 'which node\nstat package.json', 'true & node --version',
+    "printf '%s\\n' 'a && b' | head -n1",
+  ]) assert.equal(level(command), 'observe', command);
+  assert.equal(level('node --version && python3 build.py'), null);
+  assert.equal(level('node --version; rm build.log'), 'destroy');
+  assert.equal(level('node --version && cat ../outside'), 'escape');
+});
+
+test('reads follow a known cd and uncertain later branches remain checked', () => {
+  fs.mkdirSync(path.join(project, 'observed-dir'));
+  fs.symlinkSync(outside, path.join(project, 'observed-dir', 'outside-link'));
+  fs.symlinkSync('observed-dir', path.join(project, 'observed-alias'));
+  assert.equal(level('cd observed-dir && stat local.txt'), 'observe');
+  assert.equal(level('cd observed-dir && stat outside-link/file'), 'escape');
+  assert.equal(level('cd observed-dir && cat ../package.json'), 'observe');
+  assert.equal(level('cd observed-dir; stat local.txt'), null);
+  assert.equal(level('cd observed-dir && false || stat local.txt'), null);
+  assert.equal(level('cd observed-dir | stat local.txt'), null);
+  assert.equal(level('true || cd observed-dir && stat local.txt'), null);
+  assert.equal(level('true | cd observed-dir && stat local.txt'), null);
+  assert.equal(level('true |& cd observed-dir && stat local.txt'), null);
+  assert.equal(level('true || cd observed-dir && stat link/file'), 'escape');
+  assert.equal(level('true | cd observed-dir && stat link/file'), 'escape');
+  assert.equal(level('cd observed-dir; node --version'), 'observe');
+  assert.equal(level('cd observed-alias && stat local.txt'), null);
+  assert.equal(level('cd -P observed-alias/.. && stat local.txt'), null);
+  assert.equal(level('cd observed-dir && rm .'), 'escape');
+  assert.equal(level('cd observed-dir && rm ..'), 'escape');
+  assert.equal(level('cd observed-dir && touch ../file'), 'escape');
+});

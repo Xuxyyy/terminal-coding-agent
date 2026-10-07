@@ -412,6 +412,21 @@ test('ask-edits runs a read without a prompt', () => {
   assert.equal(read('src/a.ts', undefined, 'ask-edits').decision, 'allow');
 });
 
+test('new observations run in every mode while rules keep their priority', () => {
+  for (const mode of MODES) {
+    for (const text of ['node --version', 'command -v sudo', 'type -a node', 'stat package.json', 'file package.json', 'uname -s', 'rg -e ../pattern src']) {
+      assert.equal(command(text, undefined, mode).decision, 'allow', `${mode} ${text}`);
+    }
+    assert.equal(command('node --version', {deny: ['node *'], allow: ['*']}, mode).decision, 'deny');
+    assert.equal(command('node --version', {ask: ['node *'], allow: ['*']}, mode).decision, 'ask');
+    // Saved rules and approval keys retain their existing wrapper normalization.
+    assert.equal(command('command -v sudo', {deny: ['sudo']}, mode).decision, 'deny');
+    assert.equal(command('command -v sudo', {ask: ['sudo']}, mode).decision, 'ask');
+    assert.equal(command('sort -o../out.txt in.txt', {allow: ['*']}, mode).suppressible, false);
+  }
+  assert.equal(approvalKey({kind: 'command', command: 'command -v node'}), 'node');
+});
+
 test('an escape is never remembered in any mode', () => {
   for (const text of ['sudo ls', 'git push', 'dd of=/dev/disk0', 'cat ~/.ssh/id_rsa']) {
     assert.equal(command(text, undefined, 'auto-edits').decision, 'ask', text);
