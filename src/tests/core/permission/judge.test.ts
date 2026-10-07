@@ -10,11 +10,13 @@ import {
   askJudge,
   CALLS_CLOSE,
   CALLS_OPEN,
+  HISTORY_OMITTED,
   JUDGE_MAX_TOKENS,
   JUDGE_RUBRIC,
   judgeMessages,
   judgeVerdict,
   MAX_CALLS,
+  MAX_HISTORY_CHARS,
   summarizeCall,
 } from '../../../core/permission/judge.js';
 
@@ -217,6 +219,61 @@ test('only the last thirty tool calls reach the judge, in order', () => {
   for (let nth = 0; nth < 10; nth += 1) {
     assert.equal(lines.includes(`bash step-${nth}`), false, `step-${nth}`);
   }
+});
+
+test('large history keeps complete recent commands within the total character budget', () => {
+  const older = `python3 -c "${'a'.repeat(4000)}"`;
+  const newer = `python3 -c "\n${'b'.repeat(4000)}\n" && rm stale.log`;
+  const output = built([assistant(null, ['bash', {command: older}], ['bash', {command: newer}])]);
+  const block = String(output[output.length - 2]!.content);
+
+  assert.equal(block, [CALLS_OPEN, HISTORY_OMITTED, `bash ${newer}`, CALLS_CLOSE].join('\n'));
+  assert.ok(block.length <= MAX_HISTORY_CHARS);
+  assert.equal(block.includes(older), false);
+});
+
+test('a history block exactly at the budget is retained without an omission marker', () => {
+  const overhead = CALLS_OPEN.length + CALLS_CLOSE.length + 'bash '.length + 2;
+  const command = 'x'.repeat(MAX_HISTORY_CHARS - overhead);
+  const output = built([assistant(null, ['bash', {command}])]);
+  const block = String(output[output.length - 2]!.content);
+
+  assert.equal(block.length, MAX_HISTORY_CHARS);
+  assert.deepEqual(callLines(output), [`bash ${command}`]);
+});
+
+test('an oversized history call drops the older prefix without clipping it or filling gaps', () => {
+  const oversized = 'x'.repeat(MAX_HISTORY_CHARS);
+  const output = built([
+    assistant(null, ['bash', {command: 'old-small-call'}]),
+    assistant(null, ['bash', {command: oversized}]),
+    assistant(null, ['bash', {command: 'new-small-call'}]),
+  ]);
+
+  assert.deepEqual(callLines(output), [HISTORY_OMITTED, 'bash new-small-call']);
+});
+
+test('an oversized newest call is omitted from history while authorization and the current action stay complete', () => {
+  const command = `python3 -c "${'x'.repeat(MAX_HISTORY_CHARS * 2)}"`;
+  const asked = [`inspect ${'a'.repeat(MAX_HISTORY_CHARS)}`, `do not delete ${'b'.repeat(MAX_HISTORY_CHARS)}`];
+  const denied = `rm ${'c'.repeat(MAX_HISTORY_CHARS)}`;
+  const output = judgeMessages({
+    asked,
+    messages: [assistant(null, ['bash', {command: 'older call'}], ['bash', {command}])],
+    root: ROOT,
+    request: {kind: 'command', command: 'original unhardened command'},
+    command,
+    reason: FLAGGED,
+    denied: [denied],
+  });
+
+  assert.deepEqual(callLines(output), [HISTORY_OMITTED]);
+  assert.ok(String(output[output.length - 2]!.content).length <= MAX_HISTORY_CHARS);
+  assert.deepEqual(output.slice(1, 3), asked.map((content) => ({role: 'user', content})));
+  assert.equal(lastOf(output),
+    `The project root is: ${ROOT}\nThe action to judge — run: ${command}\n` +
+    `Why it is not automatic: ${FLAGGED}\n\nthe user has already refused:\n- ${denied}`,
+  );
 });
 
 test('a compacted conversation still carries what the user asked for', () => {

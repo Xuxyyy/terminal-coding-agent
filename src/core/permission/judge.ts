@@ -40,6 +40,8 @@ export const JUDGE_RUBRIC = [
 export const CALLS_OPEN = '<untrusted-agent-tool-calls>';
 export const CALLS_CLOSE = '</untrusted-agent-tool-calls>';
 export const MAX_CALLS = 30;
+export const MAX_HISTORY_CHARS = 6_000;
+export const HISTORY_OMITTED = '[Earlier tool calls omitted because the history size limit was reached.]';
 export const ARG_LIMIT = 200;
 
 export function summarizeCall(name: string, args: string): string {
@@ -84,7 +86,22 @@ function recentCalls(messages: OpenAI.ChatCompletionMessageParam[]): string[] {
       lines.push(summarizeCall(call.function.name, call.function.arguments));
     }
   }
-  return lines.slice(-MAX_CALLS);
+  const recent = lines.slice(-MAX_CALLS);
+  const frameChars = CALLS_OPEN.length + CALLS_CLOSE.length + 1;
+  const fullChars = recent.reduce((total, line) => total + line.length + 1, frameChars);
+  if (fullChars <= MAX_HISTORY_CHARS) return recent;
+
+  // Keep a contiguous suffix of complete summaries. Never cut a command in half
+  // or skip a large recent call to make an older call appear more recent.
+  let chars = frameChars + HISTORY_OMITTED.length + 1;
+  let start = recent.length;
+  while (start > 0) {
+    const nextChars = recent[start - 1].length + 1;
+    if (chars + nextChars > MAX_HISTORY_CHARS) break;
+    chars += nextChars;
+    start -= 1;
+  }
+  return [HISTORY_OMITTED, ...recent.slice(start)];
 }
 
 function pending(

@@ -238,8 +238,9 @@ Its whole input is rebuilt by `judgeMessages` (`judge.ts`) on every call, from f
 1. `JUDGE_RUBRIC`, as the system message.
 2. one user message per entry of `session.asked` — every user message of the conversation,
    verbatim and in order.
-3. one user message holding the last **30** tool calls, one summarized line each, wrapped in a
-   block the rubric names as untrusted.
+3. one user message holding up to the last **30** tool calls, wrapped in a block the rubric
+   names as untrusted. The whole block has a **6,000-character** budget, including its wrappers
+   and omission marker.
 4. one user message holding the project root, the pending action, the classifier's reason, and
    — only when `session.denied` is non-empty — the refusals.
 
@@ -273,6 +274,15 @@ reason is not size, though an `edit_file` call carrying a whole file would swamp
 every judged action. It is that a file body is **a channel from the agent into its own audit**:
 a file whose text contains the word `ALLOW` is the agent supplying the answer to the question
 being asked about it. Summarizing closes that channel; truncating alone would not.
+
+**The history budget keeps complete summaries, newest first when selecting.** If the last 30
+calls exceed the budget, `recentCalls` keeps the newest contiguous suffix that fits and
+adds a marker explaining that earlier calls were omitted. It never clips a bash command or
+skips a large call to include older smaller ones. A call larger than the budget is omitted
+from history, along with everything before it; if it is the newest call, only the marker
+remains. The pending action is still included in full in the final message. User messages,
+refusals, and the rubric are also unchanged, so this is a history-size limit, not a cap on the
+entire judge prompt. It can remove useful older context; the marker makes that loss explicit.
 
 The order is fixed rubric first, varying part last. That is the shape prompt caching wants, and
 it is already right for it — the two providers cache differently, so turning it on is a
