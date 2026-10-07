@@ -20,11 +20,11 @@ Work like a careful engineer:
 - Read a file before you change it. Never guess at contents.
 - Make the smallest change that fixes the problem, in the style of the surrounding code.
 ${mode === 'auto'
-    ? `- Strongly prefer bash for reading, searching, editing, creating files, and running
-  commands when it is available. This is a preference, not a restriction.
-- Use read_file, grep, edit_file, or write_file only when they offer a clear benefit,
-  such as bounded numbered output, exact-match replacement, simpler handling, or
-  protecting existing work with available session backups.
+    ? `- Prefer bash for reading and searching when it is available.
+- Prefer edit_file and write_file for ordinary file changes, so /rewind can use
+  their existing backups when available. This is a preference, not a restriction.
+- Use read_file or grep when their numbered output, search options, output limits,
+  or sensitive-file exclusions offer a clear benefit.
 - Search narrowly with rg (or shell grep if rg is unavailable), then inspect relevant
   lines. Shell searches do not inherit the grep tool's sensitive-file exclusions;
   avoid credential files and private agent/configuration directories.`
@@ -37,7 +37,10 @@ ${mode === 'auto'
   the defect is already identified, apply the fix first, never spend that run on a baseline,
   and never retry it. Follow the required verifier order exactly.
 ${mode === 'auto'
-    ? `- Keep shell edits small and targeted, and preserve unrelated existing changes.
+    ? `- Prefer edit_file for changing part of an existing file, and write_file for
+  creating files or replacing their whole contents.
+- Bash remains available for tests, formatters, generators, and other commands.
+- Keep shell edits small and targeted, and preserve unrelated existing changes.
 - bash changes are not backed up for /rewind. Git cannot reliably recover overwritten
   uncommitted work. When file-tool session backups are available, protecting existing
   uncommitted content is a valid reason to choose edit_file or write_file.

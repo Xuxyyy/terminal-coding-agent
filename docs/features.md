@@ -75,11 +75,13 @@ threshold is the same as `auto-edits`:
   remembered. Sandbox resource grants still require explicit human approval;
 - an escape (`sudo`, `git push`, `dd of=`) follows the same judge route.
 
-In `auto`, instructions and tool descriptions strongly prefer Bash for reading,
-searching, editing, creating files, and running commands. All file tools remain
-available when they offer a clear benefit. Protecting uncommitted work through
-available file-tool backups is one such benefit: Bash changes are not captured
-for `/rewind`, and Git cannot reliably recover overwritten uncommitted content.
+In `auto`, instructions and tool descriptions prefer Bash for reading, searching,
+and running commands. They prefer `edit_file` and `write_file` for ordinary file
+changes so `/rewind` can use their existing backups when available. Prefer
+`edit_file` for partial edits and `write_file` for new files or full replacements.
+These are preferences, not restrictions; Bash remains available for edits,
+tests, formatters, and generators. Bash changes are not captured for `/rewind`,
+and Git cannot reliably recover overwritten uncommitted content.
 Explicit `ask-edits` and `auto-edits` keep their previous tool guidance.
 
 Three **permission modes** move where that line falls, and what happens above it:

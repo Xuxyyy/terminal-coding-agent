@@ -47,22 +47,25 @@ and the chain.
 **The list comes from one place.** `toolsFor(mode)` in
 `src/core/tools/index.ts` is the single source of what is offered. Every mode
 gets all six. In `auto`, it returns copies of the five file and shell tools with
-descriptions that strongly prefer Bash. Other modes retain the original descriptions.
+descriptions that prefer Bash for reads and searches, and Edit or Write for
+ordinary file changes. Other modes retain the original descriptions.
 Schemas, handlers, order, and shared tool objects do not change. It is the default
 argument of both `runAgent` and `contextStatus`, so what
 the model is offered and what the context readout counts can never drift apart.
 
-The system prompt carries the same preference. Bash is the default for reading,
-searching, editing, creating files, and running commands, but file tools remain
-useful fallbacks for exact-match replacement, bounded output, simpler handling,
-or protecting existing work through available session backups. A child follows
-its effective permission mode and keeps its configured tool allowlist.
+The system prompt carries the same preferences. Prefer Bash for reading,
+searching, and running commands. Prefer `edit_file` and `write_file` for ordinary
+file changes so `/rewind` can use their existing backups when available:
+`edit_file` for partial edits, `write_file` for new files or full replacements.
+These are preferences, not restrictions; Bash remains available for edits,
+tests, formatters, and generators. Read and Grep remain useful for bounded
+output, search options, and sensitive-file exclusions. A child follows its
+effective permission mode and keeps its configured tool allowlist.
 
 Shell changes are not backed up for `/rewind`. Git cannot reliably recover
-overwritten uncommitted work. File-tool backups, when available, are a valid
-reason to use Edit or Write; this does not require file tools for every
-uncommitted file. Shell searches also do not inherit the Grep tool's sensitive-file
-exclusions. The auto guidance calls for narrow searches, targeted edits, and
+overwritten uncommitted work. Existing file-tool backups are why auto prefers
+Edit or Write for ordinary changes. Shell searches do not inherit the Grep tool's
+sensitive-file exclusions. The auto guidance calls for narrow searches, targeted edits, and
 inspection of partial effects before retrying a failed command. Permission,
 sandbox, and backup behavior stay the same.
 

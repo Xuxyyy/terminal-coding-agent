@@ -284,7 +284,8 @@ test('switching into and out of auto updates guidance without changing session s
     assert.equal(session.mode, mode);
     assert.equal(session.systemPrompt, systemPrompt('/tmp/work', mode, sandbox));
     assert.equal(session.messages[0]!.content, session.systemPrompt);
-    assert.equal(session.systemPrompt.includes('Strongly prefer bash'), mode === 'auto');
+    assert.equal(session.systemPrompt.includes('Prefer bash for reading and searching'), mode === 'auto');
+    assert.equal(session.systemPrompt.includes('Prefer edit_file and write_file for ordinary file changes'), mode === 'auto');
     assert.deepEqual(session.messages.slice(1), tail);
     assert.deepEqual([...session.allowed], ['write src/cart.ts']);
     assert.equal(session.rules, rules);

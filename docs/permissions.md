@@ -193,9 +193,10 @@ The mode lives on `Session`, beside `rules`, rather than in a module-level const
 what makes `/permission` a switch rather than a restart. `setMode(session, mode)` in
 `session.ts` does the whole job — the field, `session.systemPrompt`, and `messages[0]` — and
 `src/ui` calls only that. Splitting it would let a session run under one mode with a first
-message written for another. The auto prompt now strongly prefers Bash, while
-the two edit modes retain their existing file-tool guidance. Keeping the three
-moves together prevents stale tool preferences.
+message written for another. The auto prompt prefers Bash for reads and searches,
+and Edit or Write for ordinary file changes so `/rewind` can use their existing
+backups when available. The two edit modes retain their existing file-tool guidance.
+Keeping the three moves together prevents stale tool preferences.
 
 **A switch keeps the conversation.** Only `messages[0]` is replaced; every later message
 stays, the same surgery `restoreMessages` does. The tool list and the `/context` readout need
@@ -211,12 +212,13 @@ or out of `auto` changes nothing here either: a judge `allow` is never written t
 `session.allowed`, so `auto` never puts a key there that another mode would inherit.
 
 `toolsFor(mode)` in `tools/index.ts` keeps all tools available in every mode.
-For `auto`, it copies the file and Bash tools with descriptions that prefer Bash;
+For `auto`, it copies the file and Bash tools with descriptions that prefer Bash
+for reads and searches, and Edit or Write for ordinary file changes;
 `systemPrompt(root, mode)` supplies matching guidance. The two edit modes keep
 their existing wording. Mode changes update the prompt and the next turn's tool
 descriptions, and subagents use their effective mode. This changes tool choice
-guidance, not the gate, sandbox, or backup policy. The prompt does not tell the
-agent how to obtain a favorable judge verdict.
+guidance, not the gate, sandbox, or backup policy. Bash edits remain allowed.
+The prompt does not tell the agent how to obtain a favorable judge verdict.
 
 ## The judge
 

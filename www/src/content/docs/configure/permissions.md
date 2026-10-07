@@ -59,16 +59,19 @@ project's `.acc/settings.json` is a startup error.
 When the key or settings file is absent, `auto` is used. An explicitly saved
 `ask-edits` or `auto-edits` remains your choice; it is not rewritten.
 
-In `auto`, Bash is strongly preferred for reading, searching, editing, creating
-files, and running commands. Read, Grep, Edit, and Write remain available when
-they offer a clear benefit, such as exact-match replacement, bounded output,
-simpler handling, or protecting existing work through available session backups.
+In `auto`, prefer Bash for reading, searching, and running commands. Prefer
+`edit_file` and `write_file` for ordinary file changes so `/rewind` can use their
+existing backups when available. Use Edit for partial changes and Write for
+new files or full replacements. These are preferences, not restrictions;
+Bash remains available for edits, tests, formatters, and generators. Read and
+Grep remain useful for bounded output, search options, and sensitive-file
+exclusions.
 The two edit modes keep their previous tool guidance.
 
 Shell changes are not backed up for `/rewind`. Git cannot reliably recover
-overwritten uncommitted work. Protecting those changes with available file-tool
-backups is a valid reason to choose Edit or Write. Shell searches also do not
-inherit Grep's sensitive-file exclusions. The auto guidance calls for narrow
+overwritten uncommitted work. Existing file-tool backups are why auto prefers
+Edit or Write for ordinary changes. Shell searches do not inherit Grep's
+sensitive-file exclusions. The auto guidance calls for narrow
 searches, targeted edits, and checking partial effects before retrying failures.
 
 In [print mode](/start/headless) there is nobody at the keyboard, so confirms

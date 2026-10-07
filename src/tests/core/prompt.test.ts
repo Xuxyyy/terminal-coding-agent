@@ -23,21 +23,25 @@ test('the prompt describes only the selected sandbox mode', () => {
   assert.match(on, /never falls back to Off/);
 });
 
-test('auto strongly prefers bash but explains file-tool fallbacks and recovery limits', () => {
+test('auto prefers bash for reads and file tools for ordinary changes without restricting shell edits', () => {
   const prompt = systemPrompt(process.cwd(), 'auto');
 
   assert.equal(systemPrompt(process.cwd()), prompt);
-  assert.match(prompt, /Strongly prefer bash for reading, searching, editing, creating files, and running/);
+  assert.match(prompt, /Prefer bash for reading and searching when it is available/);
+  assert.match(prompt, /Prefer edit_file and write_file for ordinary file changes, so \/rewind can use\s+their existing backups when available/);
   assert.match(prompt, /preference, not a restriction/);
-  assert.match(prompt, /only when they offer a clear benefit/);
-  assert.match(prompt, /exact-match replacement/);
+  assert.match(prompt, /Use read_file or grep when their numbered output, search options, output limits/);
+  assert.match(prompt, /Prefer edit_file for changing part of an existing file, and write_file for\s+creating files or replacing their whole contents/);
+  assert.match(prompt, /Bash remains available for tests, formatters, generators, and other commands/);
+  assert.match(prompt, /old_string must appear exactly once/);
   assert.match(prompt, /bash changes are not backed up for \/rewind/);
   assert.match(prompt, /Git cannot reliably recover overwritten\s+uncommitted work/);
   assert.match(prompt, /When file-tool session backups are available/);
   assert.match(prompt, /Shell searches do not inherit the grep tool's sensitive-file exclusions/);
   assert.match(prompt, /inspect its effects before retrying/);
   assert.doesNotMatch(prompt, /Use grep to find where something lives/);
-  assert.doesNotMatch(prompt, /Prefer edit_file over write_file/);
+  assert.doesNotMatch(prompt, /Strongly prefer bash/);
+  assert.doesNotMatch(prompt, /Use read_file, grep, edit_file, or write_file only when/);
 });
 
 test('the explicit edit modes keep their existing tool guidance', () => {
@@ -47,7 +51,8 @@ test('the explicit edit modes keep their existing tool guidance', () => {
   assert.equal(asking, editing);
   assert.match(asking, /Use grep to find where something lives, then read_file to see it/);
   assert.match(asking, /Prefer edit_file over write_file for a file that already exists/);
-  assert.doesNotMatch(asking, /Strongly prefer bash/);
+  assert.doesNotMatch(asking, /Prefer bash for reading and searching/);
+  assert.doesNotMatch(asking, /Prefer edit_file and write_file for ordinary file changes/);
 });
 
 test('tool preference does not change sandbox instructions in any mode', () => {

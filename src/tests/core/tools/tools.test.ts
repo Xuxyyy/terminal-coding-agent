@@ -668,10 +668,17 @@ test('every mode is offered every tool', () => {
   }
 });
 
-test('auto descriptions prefer bash without changing tool interfaces or shared tools', () => {
+test('auto descriptions separate reading and editing preferences without changing tool interfaces or shared tools', () => {
   const original = toolDefinitions(tools);
   const auto = toolsFor('auto').filter((tool) => tool.name !== 'agent');
   const definitions = toolDefinitions(auto);
+  const preferences: Record<string, RegExp> = {
+    bash: /Prefer this tool for reading, searching, and running commands/,
+    read_file: /Prefer bash for reading/,
+    grep: /Prefer bash for searching/,
+    edit_file: /Prefer this tool for changing part of an existing file/,
+    write_file: /Prefer this tool for creating files or replacing their whole contents/,
+  };
 
   for (const [index, tool] of auto.entries()) {
     const base = tools[index]!;
@@ -682,15 +689,24 @@ test('auto descriptions prefer bash without changing tool interfaces or shared t
     assert.equal(tool.request, base.request);
     assert.equal(tool.access, base.access);
     assert.deepEqual(definitions[index]!.function.parameters, original[index]!.function.parameters);
-    assert.match(tool.description, tool.name === 'bash' ? /Strongly prefer this tool/ : /Prefer bash by default/);
+    assert.match(tool.description, preferences[tool.name]!);
+    assert.doesNotMatch(tool.description, /Strongly prefer this tool|Prefer bash by default/);
     assert.doesNotMatch(tool.description, /To search file contents use the grep tool instead/);
   }
 
   const shell = auto.find((tool) => tool.name === 'bash')!;
+  assert.match(shell.description, /tests, formatters, and generators/);
+  assert.match(shell.description, /Prefer edit_file and write_file for ordinary file changes/);
+  assert.match(shell.description, /preference, not a restriction; shell edits remain allowed/);
   assert.match(shell.description, /Shell changes are not backed up for \/rewind/);
   assert.match(shell.description, /Clean environment and private HOME\/temp files/);
   assert.match(shell.description, /When Sandbox is On, network is off/);
   assert.match(shell.description, /Do not blindly retry blocked commands/);
+  for (const tool of auto.filter((tool) => tool.name === 'edit_file' || tool.name === 'write_file')) {
+    assert.match(tool.description, /so \/rewind can use its existing backups when available/);
+    assert.doesNotMatch(tool.description, /Prefer bash|fallback/);
+  }
+  assert.match(auto.find((tool) => tool.name === 'write_file')!.description, /Prefer edit_file for changing part of an existing file/);
   for (const mode of ['ask-edits', 'auto-edits'] as const) {
     assert.deepEqual(toolDefinitions(toolsFor(mode).filter((tool) => tool.name !== 'agent')), original);
   }

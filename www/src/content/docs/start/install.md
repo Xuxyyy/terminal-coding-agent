@@ -76,9 +76,11 @@ permissions: auto
 ```
 
 The workspace, the permission mode the session starts in, and the model. `auto`
-is the default when no mode is saved. It strongly prefers Bash for file work
-and commands, while keeping file tools as useful fallbacks. Under the header
-is an input box. Type a task in plain English and press enter:
+is the default when no mode is saved. It prefers Bash for reading, searching,
+and commands, and Edit or Write for ordinary file changes so `/rewind` can use
+their existing backups when available. These are preferences, not restrictions;
+Bash edits remain allowed. Under the header is an input box. Type a task in
+plain English and press enter:
 
 ```
 fix the failing test in src/parser.test.ts
