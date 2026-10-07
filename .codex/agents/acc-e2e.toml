@@ -1,6 +1,6 @@
 name = "acc-e2e"
 description = "Drives the real `acc` binary in a tmux terminal and judges the screen and session files. Use for a regression run before a release, after changing the TUI, turn loop, permission gate, or session store, or for a feature run after something is built. Paid scenarios spend real API tokens and require the user's approval of the drafted scenarios before any run. Return a concise user-facing report with a verdict, scenario table, decisive evidence, usage, and cleanup."
-model = "gpt-5.6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
