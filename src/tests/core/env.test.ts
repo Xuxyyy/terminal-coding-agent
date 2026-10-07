@@ -7,9 +7,9 @@ import {chooseModel, DEFAULT_MODEL} from '../../core/client.js';
 import {loadEnvFiles, parseEnv} from '../../core/env.js';
 import {MODEL_IDS, PROVIDERS} from '../../core/models.js';
 
-test('Gemini is the only provider with two model choices', () => {
+test('Gemini is the only provider with three model choices', () => {
   assert.deepEqual(Object.keys(PROVIDERS), ['gemini']);
-  assert.deepEqual(MODEL_IDS, ['gemini-3.8-flash', 'gemini-3.1-pro-preview']);
+  assert.deepEqual(MODEL_IDS, ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite']);
 });
 
 test('parseEnv reads plain, quoted, and exported lines', () => {

@@ -17,10 +17,15 @@ export const MODELS: Record<string, ModelInfo> = {
     label: 'Gemini 3.1 Pro Preview',
     contextWindow: 1_048_576,
   },
+  'gemini-3.5-flash-lite': {
+    provider: 'gemini',
+    label: 'Gemini 3.5 Flash-Lite',
+    contextWindow: 1_048_576,
+  },
 };
 
 export const JUDGE_MODELS: Record<string, string> = {
-  gemini: 'gemini-3.8-flash',
+  gemini: 'gemini-3.5-flash-lite',
 };
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';

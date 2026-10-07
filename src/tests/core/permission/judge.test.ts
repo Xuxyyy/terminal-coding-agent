@@ -376,9 +376,10 @@ test('anything else the judge says is a question for the user', () => {
   }
 });
 
-test('both Gemini models use Flash for permission judging', () => {
-  assert.equal(judgeModelFor('gemini-3.1-pro-preview'), 'gemini-3.8-flash');
-  assert.equal(judgeModelFor('gemini-3.8-flash'), 'gemini-3.8-flash');
+test('all Gemini models use Flash-Lite for permission judging', () => {
+  assert.equal(judgeModelFor('gemini-3.1-pro-preview'), 'gemini-3.5-flash-lite');
+  assert.equal(judgeModelFor('gemini-3.8-flash'), 'gemini-3.5-flash-lite');
+  assert.equal(judgeModelFor('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
 });
 
 test('an unknown model id is judged by itself', () => {

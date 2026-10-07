@@ -279,7 +279,7 @@ which is exactly the case you were already in. It is also never asked about
 anything a rule already settled, because rules are read earlier in
 [the order](#decision-order).
 
-It costs your provider's cheaper model, one attempt, a 20-second timeout — no
+It uses Gemini 3.5 Flash-Lite, one attempt, a 20-second timeout — no
 extra API key and no extra setting. A slow or broken model must reach you fast,
 so there is no retry. A verdict is never remembered, not for the session and not
 on disk: the whole value is that it reads the conversation *as it is now*, and

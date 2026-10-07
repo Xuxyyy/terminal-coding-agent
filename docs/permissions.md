@@ -299,11 +299,10 @@ Deliberately not a latch, so the mode behaves the same at the end of a turn as a
 
 ### The model
 
-**The session provider's lower tier**, via `judgeModelFor` in `client.ts`:
-`deepseek-v4-pro`/`deepseek-v4-flash` → `deepseek-v4-flash`, `kimi-k3`/`kimi-k2.7-code` →
-`kimi-k2.7-code`. No new API key, no new settings
-key, and it works whichever provider the user has. A session already on the lower tier judges
-with the same model. One attempt, no retry, a 20-second timeout: a judge that is slow or broken
+**Gemini 3.5 Flash-Lite**, via `judgeModelFor` in `client.ts`, judges every supported Gemini
+session. The main agent's selected model is unchanged; its default remains Gemini 3.8 Flash.
+The judge uses the same Gemini API key and needs no separate setting. A session already on
+Flash-Lite judges with the same model. One attempt, no retry, a 20-second timeout: a judge that is slow or broken
 must reach the human fast, and a retry only delays that. If `createClient` throws for that
 provider, the judge is one that always answers `ask` — everything degrades to a prompt and
 nothing crashes a turn.

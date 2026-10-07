@@ -13,8 +13,11 @@ Google-hosted agent. File and shell tools still run on your computer.
 |---|---|---:|
 | `gemini-3.8-flash` | Default | 1,048,576 tokens |
 | `gemini-3.1-pro-preview` | Optional | 1,048,576 tokens |
+| `gemini-3.5-flash-lite` | Permission judge; also selectable | 1,048,576 tokens |
 
 Every reply is capped at 32,000 output tokens.
+Permission checks in `auto` mode use Gemini 3.5 Flash-Lite regardless of the main
+agent's selected model, with the same API key and no separate setting.
 
 ## API key
 

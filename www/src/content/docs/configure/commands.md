@@ -214,12 +214,13 @@ it worked, and reopening `/permission` shows the new mode marked `(current)`.
 
 *Switch the model.*
 
-Opens a picker of both Gemini models, on the one you are using:
+Opens a picker of the three Gemini models, on the one you are using:
 
 ```
 Choose a model
 ❯ Gemini 3.8 Flash (current) — gemini-3.8-flash
   Gemini 3.1 Pro Preview — gemini-3.1-pro-preview
+  Gemini 3.5 Flash-Lite — gemini-3.5-flash-lite
 ↑↓ to move · enter to choose · esc to cancel
 ```
 

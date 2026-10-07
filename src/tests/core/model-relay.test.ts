@@ -6,7 +6,8 @@ import test from 'node:test';
 import {startModelRelay} from '../../core/model-relay.js';
 import {relayInvoke} from '../../core/model-relay-client.js';
 import {geminiClient, interactionRequest} from '../../core/gemini.js';
-import {streamStep} from '../../core/client.js';
+import {judgeModelFor, streamStep} from '../../core/client.js';
+import {askJudge} from '../../core/permission/judge.js';
 import {fakeHost, streamOf} from '../fakes.js';
 
 const model = 'gemini-3.8-flash';
@@ -68,6 +69,29 @@ test('streamed tool calls and token usage survive the relay', async () => {
   } finally { await relay.close(); }
 });
 
+test('the relay uses Flash-Lite for permission judging and keeps the main model', async () => {
+  const seen: unknown[] = [];
+  const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
+    invoke: async (body) => {
+      seen.push(body.model);
+      return body.model === model ? answer : {
+        status: 'completed', steps: [{type: 'model_output', content: [{type: 'text', text: 'ALLOW'}]}],
+      };
+    }});
+  try {
+    const client = geminiClient('', relayInvoke(endpoint(relay)));
+    const response = await client.chat.completions.create({
+      model, messages: [{role: 'user', content: 'Hi'}], stream: false,
+    });
+    const verdict = await askJudge({client, model: judgeModelFor(model), label: 'judge', contextWindow: 1_048_576},
+      [{role: 'user', content: 'Run the project tests'}], new AbortController().signal);
+
+    assert.equal(response.choices[0]?.message.content, 'Hello');
+    assert.equal(verdict, 'allow');
+    assert.deepEqual(seen, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+  } finally { await relay.close(); }
+});
+
 test('the relay rejects unknown routes, other models, built-in tools and excessive token limits', async () => {
   let invoked = 0;
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
@@ -76,6 +100,7 @@ test('the relay rejects unknown routes, other models, built-in tools and excessi
     assert.equal((await fetch(`http://127.0.0.1:${relay.port}/key`)).status, 404);
     for (const body of [
       {...request(), model: 'another-model'},
+      {...request(), model: 'gemini-3.1-pro-preview'},
       {...request(), tools: [{type: 'google_search'}]},
       {...request(), generation_config: {max_output_tokens: 100_000}},
       {...request(), url: 'https://another-host.example'},
