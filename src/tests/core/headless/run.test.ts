@@ -97,6 +97,10 @@ test('headless startup uses auto by default and preserves saved permission modes
       assert.ok(request?.messages[0]?.content.startsWith(systemPrompt(root, mode)));
       assert.match(request!.messages[0]!.content, /at most 60 model turns, including the final answer/);
       assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
+      const offered = request!.tools as {function: {name: string}}[];
+      assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
+        ? ['edit_file', 'write_file', 'bash', 'agent']
+        : ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent']);
       assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
     }
   } finally {
@@ -104,6 +108,28 @@ test('headless startup uses auto by default and preserves saved permission modes
     else process.env.ACC_HOME = previousHome;
     loadSettings([]);
   }
+});
+
+test('auto rejects dedicated reads and searches and can read through bash', async () => {
+  loadSettings([]);
+  const root = tempDir();
+  fs.writeFileSync(path.join(root, 'note.txt'), 'the note contents\n');
+  const {choice} = fakeModel((nth) => {
+    if (nth === 1) return callResponse('read_file', {path: 'note.txt'});
+    if (nth === 2) return callResponse('grep', {pattern: 'note', path: 'note.txt'});
+    if (nth === 3) return callResponse('bash', {command: 'cat note.txt'});
+    return textResponse(['done']);
+  });
+
+  const result = await headless({root, choice});
+
+  assert.equal(result.stopped, 'done');
+  assert.deepEqual(result.events.filter((event) => event.type === 'tool_end').map((event) => event.result), [
+    "Error: unknown tool 'read_file'",
+    "Error: unknown tool 'grep'",
+    '[exit 0]\nthe note contents\n',
+  ]);
+  assert.deepEqual(result.prompts, []);
 });
 
 test('a refused command stops the run as denied and is written down', async () => {
@@ -210,13 +236,45 @@ test('every event of the run is kept in the order it was emitted', async () => {
 
   assert.deepEqual(
     result.events.map((event) => event.type),
-    ['tool_start', 'tool_end', 'text_delta', 'text_delta', 'turn_end'],
+    ['model_request_start', 'tool_start', 'tool_end', 'model_request_start', 'text_delta', 'text_delta', 'turn_end'],
   );
   assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
 });
 
+test('request boundaries group multiple tools and separate tool-only responses', async () => {
+  const work = tempDir();
+  fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
+  const {choice, calls} = fakeModel((nth) => {
+    if (nth === 1) {
+      return streamOf(
+        toolCallChunk('read-one', 'bash', JSON.stringify({command: 'cat note.txt'}), 0),
+        toolCallChunk('read-two', 'bash', JSON.stringify({command: 'cat note.txt'}), 1),
+        finishChunk('tool_calls'),
+        usageChunk(10, 2),
+      );
+    }
+    return nth === 2
+      ? callResponse('bash', {command: 'cat note.txt'})
+      : textResponse(['done']);
+  });
+
+  const result = await headless({root: work, choice});
+
+  assert.equal(calls(), 3);
+  assert.deepEqual(result.events.filter((event) => event.type === 'model_request_start'), [
+    {type: 'model_request_start', request: 1},
+    {type: 'model_request_start', request: 2},
+    {type: 'model_request_start', request: 3},
+  ]);
+  assert.deepEqual(result.events.map((event) => event.type), [
+    'model_request_start', 'tool_start', 'tool_end', 'tool_start', 'tool_end',
+    'model_request_start', 'tool_start', 'tool_end',
+    'model_request_start', 'text_delta', 'turn_end',
+  ]);
+});
+
 test('print mode defaults to sixty turns and reports budget exhaustion', async () => {
-  const {choice, calls} = fakeModel((nth) => callResponse('read_file', {path: 'note.txt'}));
+  const {choice, calls} = fakeModel((nth) => callResponse('bash', {command: 'cat note.txt'}));
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
 
@@ -235,7 +293,7 @@ test('a larger headless budget finishes beyond sixty turns under either policy',
     const sent: string[] = [];
     const {choice, calls} = fakeModel((nth, body) => {
       sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
-      return nth < 82 ? callResponse('read_file', {path: 'note.txt'}) : textResponse(['finished']);
+      return nth < 82 ? callResponse('bash', {command: 'cat note.txt'}) : textResponse(['finished']);
     });
 
     const result = await headless({root: work, choice, policy, maxSteps: 90});
@@ -255,7 +313,7 @@ test('a custom budget stops exactly at its limit and preserves usage', async () 
   const sent: string[] = [];
   const {choice, calls} = fakeModel((_nth, body) => {
     sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
-    return callResponse('read_file', {path: 'note.txt'});
+    return callResponse('bash', {command: 'cat note.txt'});
   });
 
   const result = await headless({root: work, choice, maxSteps: 37});
@@ -273,7 +331,7 @@ test('the final answer can use the last permitted turn', async () => {
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
   const {choice, calls} = fakeModel((nth) => nth < 3
-    ? callResponse('read_file', {path: 'note.txt'}) : textResponse(['done']));
+    ? callResponse('bash', {command: 'cat note.txt'}) : textResponse(['done']));
 
   const result = await headless({root: work, choice, maxSteps: 3});
 
@@ -285,8 +343,8 @@ test('the budget counts model turns rather than individual tool calls', async ()
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
   const {choice, calls} = fakeModel(() => streamOf(
-    toolCallChunk('first', 'read_file', JSON.stringify({path: 'note.txt'}), 0),
-    toolCallChunk('second', 'read_file', JSON.stringify({path: 'note.txt'}), 1),
+    toolCallChunk('first', 'bash', JSON.stringify({command: 'cat note.txt'}), 0),
+    toolCallChunk('second', 'bash', JSON.stringify({command: 'cat note.txt'}), 1),
     finishChunk('tool_calls'), usageChunk(10, 2),
   ));
 
@@ -309,7 +367,7 @@ test('tool permissions still apply after passing turn sixty', async () => {
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'keep me\n');
   const {choice} = fakeModel((nth) => {
-    if (nth <= 60) return callResponse('read_file', {path: 'note.txt'});
+    if (nth <= 60) return callResponse('bash', {command: 'cat note.txt'});
     if (nth === 61) return callResponse('bash', {command: 'rm -rf note.txt'});
     return textResponse(['could not delete it']);
   });

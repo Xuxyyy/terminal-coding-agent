@@ -53,14 +53,16 @@ test('interactive Gemini text appears progressively, runs a local tool, and stop
   const firstHeld = new Promise<void>((resolve) => { releaseFirst = resolve; });
   let secondSignal: AbortSignal | undefined;
   let calls = 0;
-  const client = geminiClient('test-key', async (_request, signal) => {
+  const client = geminiClient('test-key', async (request, signal) => {
+    const offered = request.tools as {name: string}[];
+    assert.deepEqual(offered.map((tool) => tool.name), ['edit_file', 'write_file', 'bash', 'agent']);
     calls += 1;
     if (calls === 1) return (async function* () {
       yield {event_type: 'step.start', index: 0, step: {type: 'model_output'}};
       yield {event_type: 'step.delta', index: 0, delta: {type: 'text', text: 'Reading'}};
       await firstHeld;
       yield {event_type: 'step.start', index: 1, step: {
-        type: 'function_call', id: 'read-1', name: 'read_file', arguments: {path: 'note.txt'},
+        type: 'function_call', id: 'read-1', name: 'bash', arguments: {command: 'cat note.txt'},
       }};
       yield {event_type: 'interaction.completed', interaction: {
         status: 'requires_action', usage: {total_input_tokens: 5, total_output_tokens: 3},

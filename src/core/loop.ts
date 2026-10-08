@@ -248,6 +248,7 @@ export async function runAgent(
         return;
       }
 
+      host.onEvent({type: 'model_request_start', request: step + 1});
       const result = await streamStep(choice, requestMessages, definitions, host);
       addUsage(total, result.usage);
       session.messages.push(

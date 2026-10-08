@@ -271,7 +271,7 @@ test('setMode rewrites the first message and nothing after it', () => {
   assert.deepEqual(session.messages.slice(1), tail);
 });
 
-test('switching into and out of auto updates guidance without changing session state', () => {
+test('switching into and out of auto preserves the base prompt and session state', () => {
   const session = createSession('/tmp/work', systemPrompt('/tmp/work'), 100_000);
   addTask(session, 'fix the cart');
   session.allowed.add('write src/cart.ts');
@@ -284,8 +284,7 @@ test('switching into and out of auto updates guidance without changing session s
     assert.equal(session.mode, mode);
     assert.equal(session.systemPrompt, systemPrompt('/tmp/work', mode, sandbox));
     assert.equal(session.messages[0]!.content, session.systemPrompt);
-    assert.equal(session.systemPrompt.includes('Prefer bash for reading and searching'), mode === 'auto');
-    assert.equal(session.systemPrompt.includes('Prefer edit_file and write_file for ordinary file changes'), mode === 'auto');
+    assert.equal(session.systemPrompt, systemPrompt('/tmp/work', 'auto', sandbox));
     assert.deepEqual(session.messages.slice(1), tail);
     assert.deepEqual([...session.allowed], ['write src/cart.ts']);
     assert.equal(session.rules, rules);

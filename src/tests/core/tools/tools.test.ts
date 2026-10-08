@@ -660,12 +660,13 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
   assert.equal(definitions[1]?.function.name, 'bash');
 });
 
-test('every mode is offered every tool', () => {
+test('auto offers shell reading while other modes keep dedicated read and search tools', () => {
   const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'];
 
-  for (const mode of ['auto-edits', 'ask-edits', 'auto'] as const) {
+  for (const mode of ['auto-edits', 'ask-edits'] as const) {
     assert.deepEqual(toolsFor(mode).map((tool) => tool.name), full);
   }
+  assert.deepEqual(toolsFor('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash', 'agent']);
 });
 
 test('auto descriptions separate reading and editing preferences without changing tool interfaces or shared tools', () => {
@@ -673,22 +674,20 @@ test('auto descriptions separate reading and editing preferences without changin
   const auto = toolsFor('auto').filter((tool) => tool.name !== 'agent');
   const definitions = toolDefinitions(auto);
   const preferences: Record<string, RegExp> = {
-    bash: /Prefer this tool for reading, searching, and running commands/,
-    read_file: /Prefer bash for reading/,
-    grep: /Prefer bash for searching/,
+    bash: /Use this tool for ordinary file reads, searches, and running commands/,
     edit_file: /Prefer this tool for changing part of an existing file/,
     write_file: /Prefer this tool for creating files or replacing their whole contents/,
   };
 
   for (const [index, tool] of auto.entries()) {
-    const base = tools[index]!;
+    const base = tools.find((candidate) => candidate.name === tool.name)!;
     assert.notEqual(tool, base);
     assert.equal(tool.name, base.name);
     assert.equal(tool.schema, base.schema);
     assert.equal(tool.run, base.run);
     assert.equal(tool.request, base.request);
     assert.equal(tool.access, base.access);
-    assert.deepEqual(definitions[index]!.function.parameters, original[index]!.function.parameters);
+    assert.deepEqual(definitions[index]!.function.parameters, original.find((definition) => definition.function.name === tool.name)!.function.parameters);
     assert.match(tool.description, preferences[tool.name]!);
     assert.doesNotMatch(tool.description, /Strongly prefer this tool|Prefer bash by default/);
     assert.doesNotMatch(tool.description, /To search file contents use the grep tool instead/);

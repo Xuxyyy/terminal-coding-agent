@@ -23,6 +23,7 @@ export type ModelTokenUsage = {
 };
 
 export type AgentEvent =
+  | {type: 'model_request_start'; request: number}
   | {type: 'text_delta'; text: string}
   | {type: 'model_retry'; attempt: number; total: number}
   | {type: 'tool_start'; id: string; name: string; args: unknown}

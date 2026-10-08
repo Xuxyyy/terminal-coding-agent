@@ -168,10 +168,10 @@ test('an allow list narrows the child to those tools alone', () => {
   );
 });
 
-test('auto child allowlists keep tool preferences without adding bash or recursive agents', () => {
+test('auto child allowlists cannot restore read or search tools or add recursive agents', () => {
   const offered = childTools('auto', ['grep', 'read_file']);
-  assert.deepEqual(offered.map((tool) => tool.name), ['grep', 'read_file']);
-  assert.ok(offered.every((tool) => tool.description.includes(`Prefer bash for ${tool.name === 'grep' ? 'searching' : 'reading'}`)));
+  assert.deepEqual(offered, []);
+  assert.deepEqual(childTools('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash']);
   const editing = childTools('auto', ['edit_file', 'write_file']);
   assert.deepEqual(editing.map((tool) => tool.name), ['edit_file', 'write_file']);
   assert.ok(editing.every((tool) => tool.description.includes('Prefer this tool')));
@@ -193,12 +193,13 @@ test('children use the parent auto preference unless configured with a stricter 
     const body = child.bodies[0]!;
     const messages = body.messages as {content: string}[];
     assert.equal(messages[0]!.content, subagentPrompt(root, mode, 'Report exact paths.'));
-    assert.equal(messages[0]!.content.includes('Prefer bash for reading and searching'), mode === 'auto');
-    assert.equal(messages[0]!.content.includes('Prefer edit_file and write_file for ordinary file changes'), mode === 'auto');
+    assert.doesNotMatch(messages[0]!.content, /Prefer bash|Prefer edit_file/);
     const offered = body.tools as {function: {name: string; description: string}}[];
-    assert.deepEqual(offered.map((tool) => tool.function.name), ['read_file', 'grep', 'edit_file', 'write_file', 'bash']);
+    assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
+      ? ['edit_file', 'write_file', 'bash']
+      : ['read_file', 'grep', 'edit_file', 'write_file', 'bash']);
     const shell = offered.find((tool) => tool.function.name === 'bash')!;
-    assert.equal(shell.function.description.includes('Prefer this tool for reading, searching, and running commands'), mode === 'auto');
+    assert.equal(shell.function.description.includes('Use this tool for ordinary file reads, searches, and running commands'), mode === 'auto');
     for (const tool of offered.filter((tool) => tool.function.name === 'edit_file' || tool.function.name === 'write_file')) {
       assert.equal(tool.function.description.includes('Prefer this tool'), mode === 'auto');
       assert.equal(tool.function.description.includes('/rewind can use its existing backups when available'), mode === 'auto');

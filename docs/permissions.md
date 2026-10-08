@@ -224,13 +224,13 @@ have wanted to re-ask. Clearing them would only punish the user for switching. S
 or out of `auto` changes nothing here either: a judge `allow` is never written to
 `session.allowed`, so `auto` never puts a key there that another mode would inherit.
 
-`toolsFor(mode)` in `tools/index.ts` keeps all tools available in every mode.
-For `auto`, it copies the file and Bash tools with descriptions that prefer Bash
-for reads and searches, and Edit or Write for ordinary file changes;
-`systemPrompt(root, mode)` supplies matching guidance. The two edit modes keep
-their existing wording. Mode changes update the prompt and the next turn's tool
-descriptions, and subagents use their effective mode. This changes tool choice
-guidance, not the gate, sandbox, or backup policy. Bash edits remain allowed.
+`toolsFor(mode)` in `tools/index.ts` offers only `edit_file`, `write_file`, `bash`,
+and `agent` in `auto`. Reading and searching use Bash; `read_file` and `grep`
+are not available as fallbacks. The two edit modes keep all six tools and their
+existing descriptions. Auto descriptions prefer Edit or Write for ordinary file
+changes. The base system prompt is shared across permission modes. Mode changes
+update the next turn's tool list, and subagents use their effective mode. The
+permission gate, sandbox, and backup policy are unchanged. Bash edits remain allowed.
 The prompt does not tell the agent how to obtain a favorable judge verdict.
 
 ## The judge

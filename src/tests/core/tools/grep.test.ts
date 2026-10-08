@@ -214,7 +214,6 @@ test('nothing still teaches the model to search with grep -rn', () => {
   assert.doesNotMatch(bash.description, /grep -rn/);
 });
 
-test('both steering strings name the grep tool', () => {
-  assert.match(systemPrompt(process.cwd()), /\bgrep\b/);
+test('the default bash description names the grep tool', () => {
   assert.match(bash.description, /\bgrep\b/);
 });

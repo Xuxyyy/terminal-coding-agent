@@ -12,6 +12,10 @@ See also: `permissions.md` (the gate a tool passes on its way to the disk),
 In the order `src/core/tools/index.ts` registers them, which is the order the
 model sees them in.
 
+In `auto` mode, only `edit_file`, `write_file`, `bash`, and `agent` are offered.
+Reading and searching use Bash. `read_file` and `grep` remain available in
+`ask-edits` and `auto-edits`, but are not fallbacks in `auto`.
+
 | Tool | Arguments | What it does | When it asks |
 |---|---|---|---|
 | `read_file` | `path`, `offset?`, `limit?` | Reads a text file as numbered lines, so `edit_file` can quote it byte for byte. 400 lines by default. | only for a path outside the project, which can never be remembered |
