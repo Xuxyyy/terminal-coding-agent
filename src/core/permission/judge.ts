@@ -91,8 +91,6 @@ function recentCalls(messages: OpenAI.ChatCompletionMessageParam[]): string[] {
   const fullChars = recent.reduce((total, line) => total + line.length + 1, frameChars);
   if (fullChars <= MAX_HISTORY_CHARS) return recent;
 
-  // Keep a contiguous suffix of complete summaries. Never cut a command in half
-  // or skip a large recent call to make an older call appear more recent.
   let chars = frameChars + HISTORY_OMITTED.length + 1;
   let start = recent.length;
   while (start > 0) {

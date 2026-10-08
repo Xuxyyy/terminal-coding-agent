@@ -105,7 +105,6 @@ async function permitted(
   if (ctx.sandbox === 'on') {
     access = tool.access?.(args) ?? {};
     if (request.kind !== 'command') {
-      // Also validate in-project targets, so credential files cannot be exposed by another tool.
       const target = absoluteTarget(ctx.root, request.path);
       normalizeAccess(ctx.root, {read_paths: [request.path]});
       if (!insideRoot(target, ctx.root) || (request.kind === 'write' && isProtectedPath(target, ctx.root))) {
@@ -115,8 +114,6 @@ async function permitted(
     access = normalizeAccess(ctx.root, access);
   }
   if (hasAccess(access)) {
-    // Resource grants are explicit, one-call human approvals. Neither the model judge,
-    // an allow rule, nor a remembered command approval can grant host access.
     const decision = await ctx.host.confirm({
       command: outcome.command ?? `${tool.name} ${describe(request)}`,
       reason: `${outcome.reason ? `${outcome.reason}. ` : ''}${accessReason(access)}`,

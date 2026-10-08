@@ -3,7 +3,6 @@ import {maskQuotedRedirects, tokenize} from './stages.js';
 
 const NOISE_REDIRECTS = /\s*(?:\d*>&\d+(?=\s|$)|\d*>>?\s*\/dev\/(?:null|stdout|stderr)(?=\s|$)|<\s*\/dev\/null(?=\s|$))/g;
 
-// Keep saved-rule normalization unchanged; classification requires an exact noise target.
 export function observationText(stage: string, preservePositions = false): string {
   return stage.replace(NOISE_REDIRECTS, (match) => preservePositions ? ' '.repeat(match.length) : '');
 }
@@ -390,7 +389,6 @@ function commandLookup(parts: string[]): boolean {
   return lookup;
 }
 
-// This parser is deliberately separate from the normalization used by saved rules.
 function observationParts(stage: string): string[] | null {
   let parts = tokenize(observationText(stage));
   if (!parts) return null;

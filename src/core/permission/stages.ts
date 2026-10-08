@@ -257,7 +257,6 @@ export function commandParts(stage: string): string[] | null {
 
 export type Redirects = {text: string; reads: string[]; writes: WriteTarget[]; known: boolean};
 
-/** Remove only actual redirects, preserving the command's quotes and word boundaries. */
 export function parseRedirects(stage: string): Redirects {
   const result: Redirects = {text: stage, reads: [], writes: [], known: true};
   const text = stage.split('');
@@ -313,7 +312,6 @@ export function parseRedirects(stage: string): Redirects {
 export function supportedParts(text: string): string[] | null {
   let parts = tokenize(text);
   if (!parts) return null;
-  // Unlike saved-rule normalization, do not unwrap env, time, xargs, etc.
   while (parts[0] === 'command' || parts[0] === 'builtin') {
     const offset = parts[0] === 'command' && parts[1] === '-p' ? 2 : 1;
     if (parts[offset]?.startsWith('-') && parts[offset] !== '--') return null;

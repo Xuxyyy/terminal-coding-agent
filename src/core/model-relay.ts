@@ -29,8 +29,6 @@ export type ModelRelay = {
   close(): Promise<void>;
 };
 
-// A trial capability permits bounded model use, never retrieval of the key or
-// arbitrary forwarding to an address supplied by the task.
 export async function startModelRelay(options: {
   apiKey: string;
   model: string;
@@ -66,7 +64,6 @@ export async function startModelRelay(options: {
       response.writeHead(429).end();
       return;
     }
-    // Count attempts too, so malformed requests cannot bypass the trial quota.
     requests += 1;
     const controller = new AbortController();
     controllers.add(controller);
@@ -114,7 +111,6 @@ export async function startModelRelay(options: {
       if (!controller.signal.aborted) response.end('{"done":true}\n');
       else response.destroy();
     } catch {
-      // SDK errors may include request details. Never forward their text.
       if (!response.headersSent) response.writeHead(502).end();
       else if (!response.destroyed) response.end('{"error":true}\n');
     } finally {
@@ -146,8 +142,6 @@ export async function startModelRelay(options: {
 }
 
 async function main(): Promise<void> {
-  // Python adapters send initialization over stdin, never argv, files, or the
-  // environment of a container. EOF also closes the relay if the parent dies.
   const lines = createInterface({input: process.stdin});
   const iterator = lines[Symbol.asyncIterator]();
   const first = await iterator.next();

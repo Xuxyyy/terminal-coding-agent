@@ -6,8 +6,6 @@ import test from 'node:test';
 import {classifyCommand, type Tier, type CheckCause} from '../../../core/permission/classify.js';
 import {decide} from '../../../core/permission/decide.js';
 
-// Compatibility examples, not a claim that every current policy choice is ideal.
-// Read coverage and the policy for opaque scripts are separate behavior changes.
 const cases: [string, Tier | CheckCause][] = [
   ['pwd', 'observe'],
   ['ls -la', 'observe'],
@@ -89,7 +87,6 @@ test('frontend command findings and default routing survive the tier refactor', 
   fs.writeFileSync(path.join(project, 'package.json'), '{}');
   assert.equal(cases.length, 69);
   for (const [command, expected] of cases) {
-    // These strings are only analyzed. None of the example commands is executed.
     const classification = classifyCommand(command, project);
     const automatic = expected === 'observe' || expected === 'recoverable';
     assert.equal(classification.tier, automatic ? expected : 'needs-checking', command);

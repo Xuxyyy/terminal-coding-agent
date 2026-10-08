@@ -9,7 +9,6 @@ import {isProtectedPath, realPath} from '../../../core/permission/protected.js';
 const project = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-classify-'));
 const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-cli-outside-'));
 
-// Keep checking the specific cause as well as the new permission tier.
 function finding(command: string): Tier | CheckCause {
   const result = classifyCommand(command, project);
   assert.equal(result.tier === 'needs-checking', result.cause !== null, command);

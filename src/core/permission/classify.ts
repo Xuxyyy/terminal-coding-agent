@@ -16,7 +16,6 @@ export type Classification = {
   reason: string;
   cause: CheckCause | null;
   restrictions: {
-    // Explicit rules cannot bypass checking, and approvals cannot be remembered.
     mustCheck: boolean;
     onceOnly: boolean;
   };
@@ -52,11 +51,10 @@ function uncertainTraversal(target: string, cwd: string): boolean {
   const expanded = expandUser(target);
   let prefix = path.isAbsolute(expanded) ? path.parse(expanded).root : cwd;
   for (const part of expanded.split(path.sep)) {
-    // Normalizing before resolving a symlink can hide the directory '..' visits.
     if (part === '..') {
       if (realPath(prefix) !== path.resolve(prefix)) return true;
       try { if (fs.lstatSync(prefix).isSymbolicLink()) return true; }
-      catch { /* Missing ordinary paths retain their normal boundary check. */ }
+      catch {}
     }
     prefix = path.join(prefix, part);
   }
@@ -100,7 +98,6 @@ function targetClassification(
 }
 
 function worst(items: Classification[]): Classification {
-  // Restrictions survive an unknown stage and cannot be lost to reason selection.
   const restricted = items.find((item) => item.restrictions.mustCheck || item.restrictions.onceOnly);
   if (restricted) {
     return {...restricted, restrictions: {
@@ -113,8 +110,6 @@ function worst(items: Classification[]): Classification {
     if (TIER_RANK[right.tier] !== TIER_RANK[left.tier]) {
       return TIER_RANK[right.tier] > TIER_RANK[left.tier] ? right : left;
     }
-    // Keep the existing deletion explanation when both checks are required.
-    // This selects a reason, not a stricter permission tier.
     return right.cause === 'destroy' && left.cause === 'protected' ? right : left;
   }, automatic('observe'));
 }
@@ -129,7 +124,6 @@ function classifyStage(effects: StageAnalysis | null, root: string, cwd: string 
   }
   const outside = worst(reads.map((read) => targetClassification(read, root, {reading: true, cwd: cwd ?? root})));
   if (outside.restrictions.mustCheck) return outside;
-  // Directory tracking must not weaken the existing write guardrails.
   const classification = worst(targets.flatMap((target) => [
     targetClassification(target.path, root, target),
     targetClassification(target.path, root, {...target, cwd: cwd ?? root}),
@@ -145,7 +139,6 @@ function classifyStage(effects: StageAnalysis | null, root: string, cwd: string 
   if (paths.some((target) => uncertainTraversal(target, cwd ?? root))) return UNKNOWN;
   if (affected) return UNKNOWN;
 
-  // Preserve the existing runner policy without treating script effects as understood.
   const known = effects.known || effects.runnerSyntaxKnown;
   if (targets.length) {
     if (classification.tier === 'recoverable' && (!known || paths.some((target) => /[*?{}\[\]]/.test(target)))) return UNKNOWN;
@@ -178,11 +171,9 @@ export function classifyCommand(command: string, root: string): Classification {
       const target = effects.directory === undefined ? null : expandUser(effects.directory);
       cwd = target !== null && classification.tier === 'observe' && (cwd !== null || path.isAbsolute(target))
         ? path.resolve(cwd ?? root, target) : null;
-      // Shell cd and file reads handle '..' through symlinks differently.
       if (cwd !== null && realPath(cwd) !== cwd) cwd = null;
       if (['||', '|', '|&'].includes(previousSeparator)) cwd = null;
     }
-    // A failed cd can skip an && branch. Later branches may run in either directory.
     if (changedDirectory && separator && separator !== '&&') cwd = null;
     previousSeparator = separator;
   }

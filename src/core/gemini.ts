@@ -1,8 +1,6 @@
 import {GoogleGenAI} from '@google/genai';
 import type OpenAI from 'openai';
 
-// The loop still uses its small chat-completion shape. This adapter is the only
-// place that knows the Gemini Interactions wire format.
 export const GEMINI_STEPS_PREFIX = 'gemini-interaction-steps:';
 
 type Message = OpenAI.ChatCompletionMessageParam;
@@ -61,7 +59,6 @@ export function interactionRequest(body: Body): Record<string, unknown> {
       input.push({type: 'user_input', content: [textContent(messageText(message.content))]});
     } else if (message.role === 'assistant') {
       for (const call of message.tool_calls ?? []) names.set(call.id, call.function.name);
-      // A compacted summary is local context, not a previous model response.
       if (messageText(message.content).startsWith('Summary of the earlier conversation,')) {
         input.push({type: 'user_input', content: [textContent(messageText(message.content))]});
         continue;
@@ -226,8 +223,6 @@ export function geminiInvoke(apiKey: string): Invoke {
   return (request, signal) =>
     ai.interactions.create(request as never, {
       signal,
-      // The turn loop owns retries. SDK retries can hide connection failures
-      // for a long time before the CLI can report them or honor interruption.
       retries: {strategy: 'none'},
     });
 }

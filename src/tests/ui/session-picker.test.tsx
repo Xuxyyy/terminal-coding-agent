@@ -57,7 +57,6 @@ test('a locked session is labeled and cannot be opened', async (t) => {
   const {stdin, press} = fakeStdin();
   const instance = render(
     <SessionPicker rows={rows} onPick={(id) => picked.push(id)} onCancel={() => {}} />,
-    // Capture live frames even when Ink detects CI.
     {stdin, stdout, debug: true, patchConsole: false, exitOnCtrlC: false},
   );
   t.after(() => instance.unmount());

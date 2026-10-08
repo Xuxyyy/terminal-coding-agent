@@ -38,7 +38,6 @@ export function macProfile(policy: SandboxPolicy): string {
     '(allow process-exec process-fork)',
     '(allow process-info* signal mach-priv-task-port (target same-sandbox))',
     '(allow file-read-metadata)',
-    // dyld reads the root directory itself during startup; this does not grant its children.
     '(allow file-read* (literal "/"))',
     '(allow sysctl-read (sysctl-name-prefix "hw.") (sysctl-name-prefix "kern.os") (sysctl-name "kern.argmax") (sysctl-name "kern.maxfilesperproc") (sysctl-name "kern.hostname") (sysctl-name "kern.version") (sysctl-name "kern.tcsm_enable"))',
     '(allow sysctl-write (sysctl-name "kern.tcsm_enable"))',
@@ -60,15 +59,12 @@ export function macProfile(policy: SandboxPolicy): string {
       '(allow file-read* (literal "/private/etc/resolv.conf") (literal "/private/etc/hosts"))',
     );
   }
-  // Denies follow all allows. Private scratch files are created by the command itself,
-  // so tests can use fake .env files there without exposing host credential files.
   const publicCertificates = ['(subpath "/etc/ssl/certs")', '(subpath "/etc/pki/tls/certs")', '(literal "/private/etc/ssl/cert.pem")'];
   rules.push(`(deny file-read* file-write* (require-all (regex ${quote(PRIVATE_PATTERN)}) (require-not ${subpath(policy.temporary)}) ${publicCertificates.map((filter) => `(require-not ${filter})`).join(' ')}))`);
   const examples = ['.env.example', '.env.sample', '.env.template'].map((name) => `(regex ${quote(`/${name.replaceAll('.', '\\.')}$`)})`);
   rules.push(`(deny file-read* file-write* (require-all (regex ${quote(ENV_PATTERN)}) (require-not ${subpath(policy.temporary)}) ${examples.map((filter) => `(require-not ${filter})`).join(' ')}))`);
   if (policy.blocked.length) rules.push(`(deny file-read* file-write* ${policy.blocked.map(subpath).join(' ')})`);
   if (policy.protectedWrites.length) rules.push(`(deny file-write* ${policy.protectedWrites.map(subpath).join(' ')})`);
-  // Renaming a credential's enclosing directory must not remove its path protection.
   const frozen = new Set([policy.root, ...policy.blocked.flatMap((target) => ancestorsWithin(target, policy.writes)), ...policy.protectedWrites.flatMap((target) => ancestorsWithin(target, policy.writes))]);
   rules.push(`(deny file-write-unlink ${[...frozen].map((target) => `(literal ${quote(target)})`).join(' ')})`);
   return rules.join('\n');
@@ -89,7 +85,6 @@ type RunOptions = {
   timeoutMs?: number;
 };
 
-// Explicit isolation entry point for enforcement tests and callers requiring On.
 export function runSandboxed(options: RunOptions): Promise<SandboxResult> {
   return runCommand({...options, sandbox: 'on'});
 }
@@ -104,8 +99,6 @@ export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}):
   fs.chmodSync(temporary, 0o700);
   try {
     const policy = isolated ? makePolicy(options.root, temporary, options.access) : null;
-    // The trusted wrapper signals that OS setup succeeded before executing user code.
-    // This distinguishes backend errors from a command that failed after changing files.
     const wrapper = [
       '--noprofile', '--norc', '-c', `printf '%s' '${READY_MARKER}' >&2; exec "$@"`,
       'acc-sandbox', options.program, ...options.args,
@@ -148,7 +141,7 @@ export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}):
       };
       child.stdout!.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
       child.stderr!.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
-      child.stdin!.on('error', () => {}); // A denied launch can close stdin before the worker reads it.
+      child.stdin!.on('error', () => {});
       child.stdin!.end(options.input);
       const cleanup = () => {
         clearTimeout(timer);
@@ -156,7 +149,6 @@ export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}):
         kill();
       };
       child.on('error', (error) => { cleanup(); reject(new Error(`${isolated ? 'sandbox' : 'command'} could not start: ${error.message}; the command was not run`)); });
-      // Reap ordinary background children too, rather than leaving approved access alive.
       child.on('exit', () => kill());
       child.on('close', (code, signal) => {
         cleanup();

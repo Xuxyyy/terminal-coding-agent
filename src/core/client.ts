@@ -239,8 +239,6 @@ export async function streamStep(
     let onAbort: (() => void) | undefined;
     const deadline = new Promise<never>((_resolve, reject) => {
       onAbort = () => {
-        // Give the stream a moment to report any text it already yielded.
-        // The fallback still settles an SDK call that ignores cancellation.
         abortTimer = setTimeout(
           () => reject(new DOMException('The request was interrupted', 'AbortError')),
           50,

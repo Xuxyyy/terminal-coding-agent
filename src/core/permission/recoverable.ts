@@ -97,7 +97,6 @@ function uncertainPath(target: string): boolean {
   return target === '' || /[*?{}\[\]]/.test(target) || (target.startsWith('~') && target !== '~' && !target.startsWith('~/'));
 }
 
-/** Expand path effects, including dangling links that realpath cannot resolve. */
 function inspectPath(target: string, reading: boolean, result: CommandEffects, cwd: string, effect: WriteTarget = {path: target}): fs.Stats | null {
   if (reading) result.reads.push(target);
   else result.writes.push(effect);
@@ -161,7 +160,6 @@ function copyTree(source: string, destination: string, result: CommandEffects, r
   const destinationPath = absolute(destination, cwd);
   const sourceStat = inspectPath(source, !moving, result, cwd);
   inspectPath(destination, false, result, cwd);
-  // Record outside effects, but never walk a tree outside the project.
   if (!insideRoot(sourcePath, root) || !insideRoot(destinationPath, root)) return;
   if (!sourceStat) { result.known = false; return; }
   let link = false;
@@ -186,7 +184,6 @@ function copyTree(source: string, destination: string, result: CommandEffects, r
   }
 }
 
-/** Parse the supported write utilities; null means this is another command. */
 export function recoverableStage(text: string, root: string, cwd: string): CommandEffects | null {
   const parts = supportedParts(text);
   if (!parts?.length) return null;
@@ -209,7 +206,7 @@ export function recoverableStage(text: string, root: string, cwd: string): Comma
     let linkDirectory = Boolean(destinationStat?.isDirectory());
     if (command === 'ln' && has('-h', '-n', '--no-dereference')) {
       try { if (fs.lstatSync(absolute(destination, cwd)).isSymbolicLink()) linkDirectory = false; }
-      catch { /* Missing destinations are ordinary new links. */ }
+      catch {}
     }
     const directory = parsed.directory !== undefined || (!noDirectory && linkDirectory);
     if (sources.length > 1 && !directory) result.known = false;
@@ -238,7 +235,6 @@ export function recoverableStage(text: string, root: string, cwd: string): Comma
       inspectPath(target, false, result, cwd);
       if (command === 'ln') {
         if (symbolic) {
-          // Symbolic link text is relative to the new link, not the shell's directory.
           inspectPath(relativeLink(expandUser(source), path.dirname(absolute(target, cwd))), false, result, cwd);
         } else if (sourceLink && (has('-P', '--physical') || (process.platform !== 'darwin' && !has('-L', '--logical')))) {
           copyTree(source, target, result, root, cwd, 'none', true);
@@ -256,7 +252,6 @@ export function recoverableStage(text: string, root: string, cwd: string): Comma
       const destroys = command === 'rm' || command === 'rmdir';
       inspectPath(target, false, result, cwd, {path: target, destructive: destroys, destroys});
       if (command === 'rmdir' && has('-p', '--parents')) {
-        // Keep lexical ancestors: absolute forms can try to remove the root and beyond.
         let parent = path.dirname(target);
         while (parent !== '.' && parent !== path.dirname(parent)) {
           inspectPath(parent, false, result, cwd, {path: parent, destructive: true, destroys: true});
@@ -271,11 +266,8 @@ export function recoverableStage(text: string, root: string, cwd: string): Comma
   return result;
 }
 
-/** Earlier writes must not invalidate the filesystem facts used by a later stage. */
 export function affectedPaths(dependencies: string[], changes: string[]): boolean {
   if (!dependencies.length || !changes.length) return false;
-  // Recursive walks can produce thousands of paths. Keep only their shortest roots
-  // before comparing stages, rather than comparing every file with every other file.
   function roots(paths: string[]): string[] {
     const result = new Set<string>();
     for (const target of [...new Set(paths.map((value) => path.resolve(value)))].sort((a, b) => a.length - b.length)) {

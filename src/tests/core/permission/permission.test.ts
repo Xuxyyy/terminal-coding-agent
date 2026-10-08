@@ -465,7 +465,6 @@ test('new observations run in every mode while rules keep their priority', () =>
     }
     assert.equal(command('node --version', {deny: ['node *'], allow: ['*']}, mode).decision, 'deny');
     assert.equal(command('node --version', {ask: ['node *'], allow: ['*']}, mode).decision, 'ask');
-    // Saved rules and approval keys retain their existing wrapper normalization.
     assert.equal(command('command -v sudo', {deny: ['sudo']}, mode).decision, 'deny');
     assert.equal(command('command -v sudo', {ask: ['sudo']}, mode).decision, 'ask');
     assert.equal(command('sort -o../out.txt in.txt', {allow: ['*']}, mode).suppressible, false);

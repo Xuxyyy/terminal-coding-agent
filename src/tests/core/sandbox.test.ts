@@ -107,7 +107,7 @@ test('Shell and its children cannot recover the parent key, relay URL, or startu
   const output = await shell(ctx, nodeCommand(`require('node:child_process').execFileSync('/bin/bash', ['--noprofile', '--norc', '-c', 'env'], {stdio: 'inherit'});`));
   assert.match(output.text, /^\[exit 0\]/);
   assert.doesNotMatch(output.text, /FAKE_PARENT_PROVIDER_KEY|FAKE_RELAY_CAPABILITY|FAKE_STARTUP_INJECTION/);
-  assert.equal(process.env.GEMINI_API_KEY, injected.GEMINI_API_KEY); // The trusted model runtime retains its key.
+  assert.equal(process.env.GEMINI_API_KEY, injected.GEMINI_API_KEY);
 });
 
 test('all file tools refuse project credentials before prompting or backing up', live, async (t) => {
@@ -244,7 +244,6 @@ test('a network grant cannot connect to a host Unix socket exposed in the worksp
 test('failed sandbox setup never falls back to running the command', async (t) => {
   const {root} = fixture(t);
   const marker = path.join(root, 'should-not-exist');
-  // A private workspace is rejected before launching on macOS; other platforms reject On.
   const privateRoot = path.join(root, '.acc');
   fs.mkdirSync(privateRoot);
   await assert.rejects(runSandboxed({root: privateRoot, program: '/bin/bash', args: ['-c', `touch ${quote(marker)}`], signal: new AbortController().signal}),

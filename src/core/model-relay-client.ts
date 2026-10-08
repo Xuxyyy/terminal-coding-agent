@@ -14,7 +14,6 @@ export function relayInvoke(endpoint: string): Invoke {
       redirect: 'error',
     });
     if (!response.ok) {
-      // Do not reflect a remote response body into logs or model context.
       throw new Error(`model relay rejected the request (HTTP ${response.status})`);
     }
     if (!request.stream) return response.json();

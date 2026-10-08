@@ -114,11 +114,9 @@ export function executable(name: string, envPath = process.env.PATH ?? ''): stri
   return null;
 }
 
-// These roots contain tools and public runtime data, not the user's home or /etc as a whole.
 export function runtimeRoots(): string[] {
   const roots = ['/bin', '/sbin', '/usr', '/opt/homebrew', '/System/Library', '/Library/Developer', '/Library/Apple', '/private/var/db/dyld', '/private/var/db/timezone', '/private/etc/localtime', '/private/etc/ssl/openssl.cnf', '/private/etc/ssl/cert.pem'];
   roots.push(path.dirname(fs.realpathSync(process.execPath)));
-  // Support a Node installation such as nvm, whose libraries live beside bin.
   const nodeDirectory = path.dirname(fs.realpathSync(process.execPath));
   if (path.basename(nodeDirectory) === 'bin') roots.push(path.dirname(nodeDirectory));
   const rg = executable('rg');
@@ -132,7 +130,6 @@ function protectedWrite(target: string): boolean {
     PROTECTED_FILES.has(path.basename(target)) || /\/\.git\/(config|hooks)(\/|$)/.test(target);
 }
 
-// Inspect names and inode metadata only. Never read credential contents.
 function scan(root: string, blocked: Set<string>, protectedWrites: Set<string>, files: Map<string, string[]>): void {
   const visit = (target: string): void => {
     let stat: fs.Stats;
@@ -175,7 +172,6 @@ export function makePolicy(root: string, temporary: string, access: SandboxAcces
   const blocked = new Set<string>();
   const protectedWrites = new Set<string>();
   const files = new Map<string, string[]>();
-  // Loaded keys may have a hard-link alias in the project. Seed their inode identities first.
   for (const credential of [path.join(base, '.env'), path.join(os.homedir(), '.acc', '.env')]) {
     blocked.add(credential);
     blocked.add(realPath(credential));
@@ -190,7 +186,6 @@ export function makePolicy(root: string, temporary: string, access: SandboxAcces
   const scanned = [base, ...extraReads, ...extraWrites];
   const roots = scanned.filter((target, index) => !scanned.some((other, otherIndex) => otherIndex !== index && other !== target && insideRoot(target, other)));
   for (const target of new Set(roots)) scan(target, blocked, protectedWrites, files);
-  // All aliases discovered before the credential itself must be denied too.
   for (const aliases of files.values()) {
     if (aliases.some((alias) => blocked.has(alias))) for (const alias of aliases) blocked.add(alias);
   }

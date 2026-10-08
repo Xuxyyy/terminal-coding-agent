@@ -11,7 +11,6 @@ export type StageAnalysis = CommandEffects & {
   selfAffected: boolean;
   changesDirectory: boolean;
   directory?: string;
-  // Script effects are opaque. Classification owns the legacy runner allowance.
   projectRunner: string | null;
   runnerSyntaxKnown: boolean;
 };
@@ -58,13 +57,11 @@ function isProjectRunner(stage: string, parts: string[]): boolean {
   return Boolean(subcommands && parts.length > 1 && subcommands.includes(parts[1]));
 }
 
-/** Collect effects without assigning a permission tier or applying saved rules. */
 export function analyzeStage(stage: string, root: string, cwd: string): StageAnalysis | null {
   const normalized = commandParts(stage);
   if (normalized === null) return null;
   const redirects = parseRedirects(stage);
   const observation = observeStage(redirects.text);
-  // Directory tracking retains its stricter treatment of the original shell text.
   const directoryObservation = redirects.text === stage ? observation : observeStage(stage);
   const parts = observation?.lookup && observation.known ? observation.parts : normalized;
   const writer = recoverableStage(redirects.text, root, cwd);
@@ -80,7 +77,6 @@ export function analyzeStage(stage: string, root: string, cwd: string): StageAna
   const dependencies = [...(writer?.dependencies ?? []), ...(inspected?.dependencies ?? []),
     ...reads.map((target) => path.resolve(cwd, expandUser(target)))];
   const changes = [...(writer?.changes ?? []), ...(inspected?.changes ?? [])];
-  // An opaque script may change any project path used by a later command.
   if (runner) { dependencies.push(realPath(root)); changes.push(realPath(root)); }
   const knownDeletion = deletions.length > 0 && observeStage(redirects.text.replace(/(?:^|\s)-delete(?=\s|$)/g, ' '))?.known;
   const syntaxKnown = redirects.known && (inspected?.known ?? true);

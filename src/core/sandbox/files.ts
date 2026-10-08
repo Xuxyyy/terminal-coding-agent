@@ -7,9 +7,6 @@ type Operation =
   | {kind: 'write'; target: string; content: string}
   | {kind: 'edit'; target: string; old: string; replacement: string; display: string};
 
-// Keep filesystem operations in the worker, including the final open/write.
-// With Sandbox On, the worker enforces the OS boundary.
-// A host-side path check alone is vulnerable to symlinks changing after the check.
 const WORKER = `
 import * as fs from 'node:fs';
 import * as path from 'node:path';
