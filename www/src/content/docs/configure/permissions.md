@@ -97,6 +97,13 @@ A separate reason explains **why** checking is needed: `protected` for protected
 and `git push`, or `unknown` when effects cannot be established. These are not extra tiers.
 Unknown commands belong to `needs-checking`; they are not automatically denied.
 
+Recognized Git reads include `git log --graph --decorate`, `git branch -a`,
+`git branch --list`, `git branch --show-current`, `git reflog -n 20`,
+`git reflog show`, `git stash list`, and `git config --list --show-origin`
+or `git config list`. Only supported read options qualify. Git write operations
+such as `add`, `commit`, and `merge` still need checking, and `git push` retains
+its escape restrictions. Saved rules and redirect checks still apply.
+
 Escape findings also carry two restrictions: saved allow rules cannot bypass checking,
 and approvals cannot be remembered for the session. These restrictions survive when
 commands are combined. A deny rule still blocks the action.

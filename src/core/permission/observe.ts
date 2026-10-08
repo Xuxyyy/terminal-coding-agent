@@ -301,6 +301,55 @@ function parseArguments(parts: string[], spec: Options): Arguments {
   return result;
 }
 
+const GIT_LIST_OPTIONS: Options = {
+  numeric: true,
+  long: 'oneline no-color no-patch',
+  optional: 'color pretty decorate',
+  values: {'-n': 'text', '--max-count': 'text', '--format': 'text', '--since': 'text',
+    '--until': 'text', '--author': 'text', '--grep': 'text'},
+};
+
+function gitArguments(args: string[]): Arguments | null {
+  const [subcommand, ...options] = args;
+  if (['diff', 'log', 'ls-files', 'show', 'status'].includes(subcommand)) {
+    return parseArguments(options, {
+      flags: 'puwbz', numeric: true,
+      long: 'no-ext-diff no-textconv oneline stat shortstat numstat name-only name-status check quiet exit-code cached staged patch no-patch short branch porcelain ignored untracked no-color' +
+        (subcommand === 'log' ? ' graph no-decorate' : ''),
+      optional: 'color pretty porcelain untracked-files' + (subcommand === 'log' ? ' decorate' : ''),
+      values: {...GIT_LIST_OPTIONS.values, '--exclude-from': 'read'},
+    });
+  }
+  if (subcommand === 'branch') {
+    const parsed = parseArguments(options, {
+      flags: 'arlv', long: 'all remotes list show-current verbose no-color', optional: 'color',
+    });
+    const end = options.indexOf('--');
+    const flags = end < 0 ? options : options.slice(0, end);
+    const listing = flags.some((option) => option === '--list' || /^-[arlv]*l[arlv]*$/.test(option));
+    if (parsed.operands.length && !listing) parsed.known = false;
+    return parsed;
+  }
+  if (subcommand === 'reflog') {
+    if (options.length && options[0] !== 'show' && !options[0].startsWith('-')) return null;
+    return parseArguments(options[0] === 'show' ? options.slice(1) : options, GIT_LIST_OPTIONS);
+  }
+  if (subcommand === 'stash' && options[0] === 'list') {
+    return parseArguments(options.slice(1), GIT_LIST_OPTIONS);
+  }
+  if (subcommand === 'config') {
+    const modern = options[0] === 'list';
+    const flags = modern ? options.slice(1) : options;
+    const parsed = parseArguments(flags, {
+      flags: 'lz', long: 'list null show-origin show-scope local',
+    });
+    const listing = modern || flags.some((option) => option === '--list' || /^-[lz]*l[lz]*$/.test(option));
+    parsed.known &&= listing && parsed.operands.length === 0;
+    return parsed;
+  }
+  return null;
+}
+
 function findArguments(parts: string[]): Arguments {
   const result: Arguments = {operands: [], reads: [], writes: [], pattern: false, known: true};
   const text = new Set('name iname path ipath wholename iwholename regex iregex type xtype maxdepth mindepth mtime mmin atime amin ctime cmin size perm user group uid gid links inum regextype printf newermt'.split(' ').map((name) => `-${name}`));
@@ -385,8 +434,10 @@ export function observeStage(stage: string): Observation | null {
   }
   let parsed: Arguments;
   if (command === 'find') parsed = findArguments(args);
-  else if (command === 'git' && ['diff', 'log', 'ls-files', 'show', 'status'].includes(args[0])) {
-    parsed = parseArguments(args.slice(1), {flags: 'puwbz', numeric: true, long: 'no-ext-diff no-textconv oneline stat shortstat numstat name-only name-status check quiet exit-code cached staged patch no-patch short branch porcelain ignored untracked no-color', optional: 'color pretty porcelain untracked-files', values: {'-n': 'text', '--max-count': 'text', '--format': 'text', '--since': 'text', '--until': 'text', '--author': 'text', '--grep': 'text', '--exclude-from': 'read'}});
+  else if (command === 'git') {
+    const git = gitArguments(args);
+    if (!git) return null;
+    parsed = git;
   } else {
     const spec = READ_OPTIONS[command];
     if (!spec) return null;

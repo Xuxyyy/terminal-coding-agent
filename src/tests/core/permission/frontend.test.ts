@@ -59,7 +59,7 @@ const cases: [string, Tier | CheckCause][] = [
   ['git status --short', 'observe'],
   ['git diff --check', 'observe'],
   ['git log --oneline -5', 'observe'],
-  ['git branch --show-current', 'unknown'],
+  ['git branch --show-current', 'observe'],
   ['git add src/App.tsx', 'unknown'],
   ['git commit -m "update app"', 'unknown'],
   ['git push', 'escape'],

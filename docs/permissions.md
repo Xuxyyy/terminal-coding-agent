@@ -643,6 +643,17 @@ For one `bash` command:
    Commands named by paths, unknown programs with `--version`, and version flags mixed
    with scripts or other execution arguments remain unclassified.
 
+   Git reads also include `git log --graph --decorate`, branch listings such as
+   `git branch -a`, `git branch --list`, and `git branch --show-current`, default
+   reflog queries such as `git reflog -n 20` and explicit `git reflog show`,
+   `git stash list`, and configuration listings such as `git config --list --show-origin`
+   or `git config list`. Each accepts only its supported read options. A branch-name
+   operand requires an explicit `--list` or `-l` flag to qualify as observation.
+   Reflog and stash listings do not automatically allow patch or external-helper options.
+   Branch creation/deletion, reflog changes, stash changes, config writes, and unsupported
+   options remain `needs-checking`. Other Git writes such as `add`, `commit`, and `merge`
+   still fall back to `unknown`; `push` retains its explicit escape restrictions.
+
    Options are parsed per command, including short option groups, attached values,
    `--option=value`, quotes, and `--`. Patterns and format strings are not file paths:
    `rg -e "../pattern" src` observes, while `rg --file=/tmp/pattern src` escapes.
@@ -811,3 +822,5 @@ allowance remains a classifier policy exception, not evidence that the scripts s
 the project. Separating analysis and reducing the permission tiers does not change that policy, saved rules, or mode thresholds.
 `frontend.test.ts` records 69 command examples and their current default routing as
 compatibility checks, including known coverage gaps and the runner exception.
+`git-observation.test.ts` covers Git listings across all permission modes, write and
+unknown-option fallbacks, redirect boundaries, and saved ask/deny rules.
