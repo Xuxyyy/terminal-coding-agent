@@ -218,6 +218,52 @@ test('a write inside the project does not ask', () => {
   assert.equal(write('notes/deep/file.md').decision, 'allow');
 });
 
+test('understood Bash writes use the existing mode thresholds and saved rules', () => {
+  const writes = [
+    'cp .git/config copied-config', 'cp -vtsrc/dest src/a.ts',
+    'touch -r.git/config out.txt', 'mkdir -pm755 src/new',
+    'cat < .git/config > copied-config', 'sort -t / -o out.txt in.txt',
+  ];
+  for (const text of writes) {
+    for (const mode of MODES) {
+      assert.equal(command(text, undefined, mode).decision, mode === 'ask-edits' ? 'ask' : 'allow', `${mode}: ${text}`);
+      assert.equal(command(text, {deny: ['*'], allow: ['*']}, mode).decision, 'deny', `${mode}: ${text}`);
+      assert.equal(command(text, {ask: ['*'], allow: ['*']}, mode).decision, 'ask', `${mode}: ${text}`);
+      assert.equal(command(text, {allow: ['*']}, mode).decision, 'allow', `${mode}: ${text}`);
+    }
+  }
+});
+
+test('unknown options and scripts with project output remain above every automatic threshold', () => {
+  for (const text of [
+    'cp --unknown a b', 'mkdir --unknown out', 'touch -r',
+    'sort --files0-from=list -o out', 'python3 build.py > out',
+    'rg --pre hook TODO > out', 'xargs touch out',
+    'mkdir -p new-dir && cp input new-dir',
+  ]) {
+    for (const mode of MODES) {
+      assert.equal(command(text, undefined, mode).decision, mode === 'auto' ? 'judge' : 'ask', `${mode}: ${text}`);
+    }
+    assert.equal(command(text, {allow: ['*']}).decision, 'allow', text);
+  }
+});
+
+test('attached destinations and reference inputs retain escape and deny protections', () => {
+  for (const text of [
+    'cp -t../outside input', 'mv --target-directory=../outside input',
+    'touch --reference=../reference out', 'cat < ../input > out',
+  ]) {
+    for (const mode of MODES) {
+      const outcome = command(text, {allow: ['*']}, mode);
+      assert.equal(outcome.decision, mode === 'auto' ? 'judge' : 'ask', `${mode}: ${text}`);
+      assert.equal(outcome.suppressible, false, text);
+      const denied = command(text, {deny: ['*'], allow: ['*']}, mode);
+      assert.equal(denied.decision, 'deny');
+      assert.equal(denied.suppressible, false);
+    }
+  }
+});
+
 test('a delete inside the project asks and can be remembered', () => {
   const removing = command('rm build.log');
   assert.equal(removing.decision, 'ask');

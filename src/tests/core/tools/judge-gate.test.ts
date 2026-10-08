@@ -346,3 +346,100 @@ test('sandbox grants for observations still require one-call human approval', as
   assert.ok(asked.every((request) => request.suppressible === false));
   assert.equal(ctx.allowed.size, 0);
 });
+
+test('understood project writes skip the judge and preserve the ask-edits prompt', async () => {
+  const root = workspace();
+  fs.mkdirSync(path.join(root, 'recursive', 'nested'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'recursive', 'nested', 'file.txt'), 'text');
+  const commands = [
+    'cp .git/config copied-config', 'cp -vtoutput input.txt',
+    'touch -r.git/config out.txt', 'mkdir -pm755 new-dir',
+    'cat < .git/config > copied-config', 'sort -t / -o out.txt in.txt',
+    'cp -R recursive copied-tree',
+  ];
+  for (const mode of ['auto', 'auto-edits', 'ask-edits'] as const) {
+    const {host, asked} = hostThatAnswers('once');
+    const judge = judgeThatSays('ask');
+    const ctx = context(root, {host, judge, mode});
+    for (const command of commands) {
+      const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), ctx);
+      assert.match(output.text, /ran/, `${mode}: ${command}`);
+    }
+    assert.equal(judge.seen.length, 0, mode);
+    assert.equal(asked.length, mode === 'ask-edits' ? commands.length : 0, mode);
+    assert.equal(ctx.allowed.size, 0);
+  }
+});
+
+test('saved ask and deny rules still control newly understood writes', async () => {
+  const root = workspace();
+  for (const command of ['cp .git/config copied-config', 'touch -r.git/config out.txt']) {
+    for (const verdict of ['ask', 'deny'] as const) {
+      const {host, asked} = hostThatAnswers('once');
+      const judge = judgeThatSays('allow');
+      const ctx = context(root, {host, judge, rules: rules({[verdict]: ['*'], allow: ['*']})});
+      const before = ran.length;
+      const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), ctx);
+      assert.equal(judge.seen.length, 0);
+      assert.equal(asked.length, verdict === 'ask' ? 1 : 0);
+      assert.equal(ran.length - before, verdict === 'ask' ? 1 : 0);
+      assert.match(output.text, verdict === 'deny' ? /denied by a rule/ : /ran/);
+    }
+  }
+});
+
+test('uncertain writes, protected targets, deletes, and escaping paths reach review', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('deny');
+  const judge = judgeThatSays('ask');
+  const denied: string[] = [];
+  const commands = [
+    'cp --unknown a b', 'python3 build.py > out', 'rg --pre hook TODO > out',
+    'xargs touch out', 'sort --unknown -o out in', 'mkdir -p dir && cp input dir',
+    'touch .npmrc', 'rm out.txt', 'cp -t../outside input', 'touch -r../reference out',
+  ];
+  const ctx = context(root, {host, judge, denied});
+  const before = ran.length;
+  for (const command of commands) {
+    const output = await runTool([fakeBash], 'bash', JSON.stringify({command}), ctx);
+    assert.match(output.text, /user refused/, command);
+  }
+  assert.equal(ran.length, before);
+  assert.equal(judge.seen.length, commands.length);
+  assert.equal(asked.length, commands.length);
+  assert.deepEqual(denied, commands);
+  assert.equal(ctx.allowed.size, 0);
+});
+
+test('an allow rule cannot bypass an attached outside destination', async () => {
+  const root = workspace();
+  const {host, asked} = hostThatAnswers('deny');
+  const judge = judgeThatSays('ask');
+  const ctx = context(root, {host, judge, rules: rules({allow: ['*']})});
+  const output = await runTool([fakeBash], 'bash', JSON.stringify({command: 'cp -t../outside input'}), ctx);
+  assert.match(output.text, /user refused/);
+  assert.equal(judge.seen.length, 1);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0]?.suppressible, false);
+});
+
+test('recoverable writes cannot bypass one-call sandbox grants', async () => {
+  const root = workspace();
+  const tool: Tool = {
+    ...fakeBash,
+    schema: z.object({command: z.string(), access: z.object({network: z.boolean()})}),
+    access(args) { return (args as {access: {network: boolean}}).access; },
+  };
+  const {host, asked} = hostThatAnswers('session');
+  const judge = judgeThatSays('allow');
+  const ctx = {...context(root, {host, judge, rules: rules({allow: ['*']})}), sandbox: 'on' as const};
+  const args = JSON.stringify({command: 'touch -r.git/config out.txt', access: {network: true}});
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const output = await runTool([tool], 'bash', args, ctx);
+    assert.match(output.text, /ran/);
+  }
+  assert.equal(judge.seen.length, 0);
+  assert.equal(asked.length, 2);
+  assert.ok(asked.every((request) => request.suppressible === false));
+  assert.equal(ctx.allowed.size, 0);
+});

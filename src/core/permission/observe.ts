@@ -1,3 +1,4 @@
+import {emptyEffects, type CommandEffects} from './effects.js';
 import {maskQuotedRedirects, tokenize} from './stages.js';
 
 const NOISE_REDIRECTS = /\s*(?:\d*>&\d+(?=\s|$)|\d*>>?\s*\/dev\/(?:null|stdout|stderr)(?=\s|$)|<\s*\/dev\/null(?=\s|$))/g;
@@ -23,11 +24,8 @@ type Arguments = {
   pattern: boolean;
   known: boolean;
 };
-export type Observation = {
+export type Observation = CommandEffects & {
   parts: string[];
-  reads: string[];
-  writes: string[];
-  known: boolean;
   lookup?: boolean;
   directory?: string;
 };
@@ -366,7 +364,7 @@ export function observeStage(stage: string): Observation | null {
   if (!parts?.length) return null;
   const [command, ...args] = parts;
   const safe = !/[`$()]/.test(stage) && !/[<>]/.test(observationText(maskQuotedRedirects(stage)));
-  const observation: Observation = {parts, reads: [], writes: [], known: safe};
+  const observation: Observation = {...emptyEffects(safe), parts};
   if (args.length === 1 && VERSION_OPTIONS[command]?.includes(args[0])) return observation;
   if (command === 'go' && args.length === 1 && args[0] === 'version') return observation;
   if (command === 'true' || command === 'false' || command === 'echo') return observation;
@@ -404,7 +402,7 @@ export function observeStage(stage: string): Observation | null {
     observation.directory = parsed.operands[0];
   }
   if (['ls', 'find', 'rg', 'git'].includes(command) && !parsed.operands.length) parsed.operands.push('.');
-  observation.writes = parsed.writes;
+  observation.writes = parsed.writes.map((target) => ({path: target}));
   observation.known = safe && parsed.known;
   return withReads(observation, [...parsed.reads, ...parsed.operands]);
 }

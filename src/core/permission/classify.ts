@@ -1,51 +1,48 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {observationText, observeStage} from './observe.js';
+import {analyzeStage, type StageAnalysis} from './analyze.js';
+import {affectedPaths} from './recoverable.js';
 import {expandUser, insideRoot, isProtectedPath, realPath} from './protected.js';
 import {
   basename,
-  commandParts,
-  maskQuotedRedirects,
   splitStages,
-  unquoteTarget,
 } from './stages.js';
 
-export type Level = 'observe' | 'recoverable' | 'protected' | 'destroy' | 'escape';
+export type Tier = 'observe' | 'recoverable' | 'needs-checking';
+export type CheckCause = 'protected' | 'destroy' | 'escape' | 'unknown';
 
-export type Unclassified = null;
+export type Classification = {
+  tier: Tier;
+  reason: string;
+  cause: CheckCause | null;
+  restrictions: {
+    // Explicit rules cannot bypass checking, and approvals cannot be remembered.
+    mustCheck: boolean;
+    onceOnly: boolean;
+  };
+};
 
-export type Classification = {level: Level | Unclassified; reason: string};
-
-export const RANK: Record<Level, number> = {
+export const TIER_RANK: Record<Tier, number> = {
   observe: 0,
   recoverable: 1,
-  protected: 2,
-  destroy: 3,
-  escape: 4,
+  'needs-checking': 2,
 };
 
-const READ_ONLY_EXTERNAL_OPTIONS: Record<string, readonly string[]> = {
-  rg: ['--pre'],
-  sort: ['-o', '--output'],
-  find: ['-delete', '-exec', '-execdir', '-fls', '-fprint', '-fprintf', '-ok', '-okdir'],
-};
+function automatic(tier: 'observe' | 'recoverable', reason = ''): Classification {
+  return {tier, reason, cause: null, restrictions: {mustCheck: false, onceOnly: false}};
+}
 
-const WRITE_COMMANDS = new Set(['cp', 'ln', 'mkdir', 'mv', 'rm', 'rmdir', 'tee', 'touch']);
-const DESTRUCTIVE_COMMANDS = new Set(['rm', 'rmdir']);
-const DESTRUCTIVE_OPTIONS: Record<string, readonly string[]> = {
-  find: ['-delete', '-exec', '-execdir', '-ok', '-okdir'],
-};
+function needsChecking(cause: CheckCause, reason = ''): Classification {
+  const restricted = cause === 'escape';
+  return {
+    tier: 'needs-checking', reason, cause,
+    restrictions: {mustCheck: restricted, onceOnly: restricted},
+  };
+}
 
-const PROJECT_RUNNERS: Record<string, readonly string[]> = {
-  npm: ['test', 'run'],
-  pnpm: ['test', 'run'],
-  yarn: ['test', 'run'],
-};
-
-const SUBSTITUTION_PATTERN = /[`$()]/;
-const REDIRECT_TARGET_PATTERN = /(?:\d*|&)>>?\s*/g;
 const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{.*\|.*&\s*\}/;
 
-const UNKNOWN: Classification = {level: null, reason: ''};
+const UNKNOWN = needsChecking('unknown');
 
 function executableOf(parts: string[]): string {
   return parts.length ? basename(parts[0]) : '';
@@ -56,17 +53,14 @@ function uncertainTraversal(target: string, cwd: string): boolean {
   let prefix = path.isAbsolute(expanded) ? path.parse(expanded).root : cwd;
   for (const part of expanded.split(path.sep)) {
     // Normalizing before resolving a symlink can hide the directory '..' visits.
-    if (part === '..' && realPath(prefix) !== path.resolve(prefix)) return true;
+    if (part === '..') {
+      if (realPath(prefix) !== path.resolve(prefix)) return true;
+      try { if (fs.lstatSync(prefix).isSymbolicLink()) return true; }
+      catch { /* Missing ordinary paths retain their normal boundary check. */ }
+    }
     prefix = path.join(prefix, part);
   }
   return false;
-}
-
-function hasOption(parts: string[], options: readonly string[] | undefined): boolean {
-  if (!options) return false;
-  return parts.slice(1).some((part) =>
-    options.some((option) => part === option || part.startsWith(`${option}=`)),
-  );
 }
 
 function escapingExecutable(parts: string[]): string | null {
@@ -91,125 +85,98 @@ function targetClassification(
     : `'${target}' is outside the project`;
   const expanded = expandUser(target);
   const candidate = path.isAbsolute(expanded) ? expanded : path.join(cwd, expanded);
-  if (!insideRoot(candidate, root)) return {level: 'escape', reason: outside};
+  if (!insideRoot(candidate, root)) return needsChecking('escape', outside);
   if (destructive && realPath(candidate) === realPath(root)) {
-    return {level: 'escape', reason: `'${target}' is the project root itself`};
+    return needsChecking('escape', `'${target}' is the project root itself`);
   }
   const verb = destroys ? 'deletes' : 'changes';
   if (isProtectedPath(candidate, root)) {
-    return {level: 'protected', reason: `${verb} '${target}', a protected path`};
+    return needsChecking('protected', `${verb} '${target}', a protected path`);
   }
   if (destroys) {
-    return {level: 'destroy', reason: `deletes '${target}', which cannot be undone`};
+    return needsChecking('destroy', `deletes '${target}', which cannot be undone`);
   }
-  return {level: 'recoverable', reason: `changes '${target}', which git can undo`};
+  return automatic('recoverable', `changes '${target}', which git can undo`);
 }
 
 function worst(items: Classification[]): Classification {
-  const known = items.filter((item) => item.level !== null);
-  if (known.length !== items.length) {
-    return known.find((item) => item.level === 'escape') ?? UNKNOWN;
+  // Restrictions survive an unknown stage and cannot be lost to reason selection.
+  const restricted = items.find((item) => item.restrictions.mustCheck || item.restrictions.onceOnly);
+  if (restricted) {
+    return {...restricted, restrictions: {
+      mustCheck: items.some((item) => item.restrictions.mustCheck),
+      onceOnly: items.some((item) => item.restrictions.onceOnly),
+    }};
   }
-  if (!known.length) return {level: 'observe', reason: ''};
-  return known.reduce((left, right) =>
-    RANK[right.level as Level] > RANK[left.level as Level] ? right : left,
-  );
-}
-
-function stageTargets(stage: string, parts: string[]): string[] {
-  const cleaned = observationText(maskQuotedRedirects(stage), true);
-  const targets: string[] = [];
-  for (const match of cleaned.matchAll(REDIRECT_TARGET_PATTERN)) {
-    const start = match.index + match[0].length;
-    let end = start;
-    let quote = '';
-    while (end < stage.length) {
-      const character = stage[end];
-      if (!quote && /[\s;|&<>]/.test(character)) break;
-      if (character === '\\' && quote !== "'" && end + 1 < stage.length) { end += 2; continue; }
-      if (!quote && (character === "'" || character === '"')) quote = character;
-      else if (character === quote) quote = '';
-      end += 1;
+  if (items.some((item) => item.cause === 'unknown')) return UNKNOWN;
+  return items.reduce((left, right) => {
+    if (TIER_RANK[right.tier] !== TIER_RANK[left.tier]) {
+      return TIER_RANK[right.tier] > TIER_RANK[left.tier] ? right : left;
     }
-    if (end > start) targets.push(unquoteTarget(stage.slice(start, end)));
-  }
-  const executable = executableOf(parts);
-  const unsafeRead = hasOption(parts, READ_ONLY_EXTERNAL_OPTIONS[executable]);
-  if (WRITE_COMMANDS.has(executable) || unsafeRead) {
-    targets.push(...parts.slice(1).filter((part) => !part.startsWith('-')));
-  }
-  return targets;
+    // Keep the existing deletion explanation when both checks are required.
+    // This selects a reason, not a stricter permission tier.
+    return right.cause === 'destroy' && left.cause === 'protected' ? right : left;
+  }, automatic('observe'));
 }
 
-function isProjectRunner(stage: string, parts: string[]): boolean {
-  if (SUBSTITUTION_PATTERN.test(stage)) return false;
-  const subcommands = PROJECT_RUNNERS[executableOf(parts)];
-  return Boolean(subcommands && parts.length > 1 && subcommands.includes(parts[1]));
-}
-
-function classifyStage(stage: string, root: string, cwd: string | null): Classification {
-  const normalized = commandParts(stage);
-  if (normalized === null) return UNKNOWN;
-  const observation = observeStage(stage);
-  const parts = observation?.lookup && observation.known ? observation.parts : normalized;
-  const escaping = escapingExecutable(parts);
-  if (escaping !== null) return {level: 'escape', reason: escaping};
-
-  const reads = observation?.reads ?? [];
+function classifyStage(effects: StageAnalysis | null, root: string, cwd: string | null, priorChanges: string[], priorDependencies: string[], concurrent: boolean): Classification {
+  if (effects === null) return UNKNOWN;
+  const escaping = escapingExecutable(effects.parts);
+  if (escaping !== null) return needsChecking('escape', escaping);
+  const {reads, writes: targets, dependencies, changes: changed} = effects;
+  if (targets.length && effects.substitution) {
+    return needsChecking('escape', 'writes to a target that cannot be determined');
+  }
   const outside = worst(reads.map((read) => targetClassification(read, root, {reading: true, cwd: cwd ?? root})));
-  if (outside.level === 'escape') return outside;
-  const targets = [...stageTargets(stage, parts), ...(observation?.writes ?? [])];
+  if (outside.restrictions.mustCheck) return outside;
+  // Directory tracking must not weaken the existing write guardrails.
+  const classification = worst(targets.flatMap((target) => [
+    targetClassification(target.path, root, target),
+    targetClassification(target.path, root, {...target, cwd: cwd ?? root}),
+  ]));
+  if (classification.restrictions.mustCheck) return classification;
+
+  const paths = [...reads, ...targets.map((target) => target.path)];
+  const affected = affectedPaths(dependencies, priorChanges) ||
+    (concurrent && affectedPaths(priorDependencies, changed)) || effects.selfAffected;
+  priorChanges.push(...changed);
+  priorDependencies.push(...dependencies);
+  if (cwd === null && paths.some((target) => !path.isAbsolute(expandUser(target)))) return UNKNOWN;
+  if (paths.some((target) => uncertainTraversal(target, cwd ?? root))) return UNKNOWN;
+  if (affected) return UNKNOWN;
+
+  // Preserve the existing runner policy without treating script effects as understood.
+  const known = effects.known || effects.runnerSyntaxKnown;
   if (targets.length) {
-    if (SUBSTITUTION_PATTERN.test(stage)) {
-      return {level: 'escape', reason: 'writes to a target that cannot be determined'};
-    }
-    const executable = executableOf(parts);
-    const destructive = DESTRUCTIVE_COMMANDS.has(executable);
-    const destroys = destructive || hasOption(parts, DESTRUCTIVE_OPTIONS[executable]);
-    // Directory tracking must not weaken the existing write guardrails.
-    const classification = worst(targets.flatMap((target) => [
-      targetClassification(target, root, {destructive, destroys}),
-      targetClassification(target, root, {destructive, destroys, cwd: cwd ?? root}),
-    ]));
-    if (cwd === null && classification.level !== 'escape' && targets.some((target) => !path.isAbsolute(expandUser(target)))) return UNKNOWN;
-    if (classification.level !== 'escape' && targets.some((target) => uncertainTraversal(target, cwd ?? root))) return UNKNOWN;
-    if (classification.level === 'recoverable' && targets.some((target) => /[*?{}\[\]]/.test(target))) return UNKNOWN;
+    if (classification.tier === 'recoverable' && (!known || paths.some((target) => /[*?{}\[\]]/.test(target)))) return UNKNOWN;
     return classification;
   }
-
-  if (observation?.known) {
-    if (cwd === null && reads.some((read) => !path.isAbsolute(expandUser(read)))) return UNKNOWN;
-    if (reads.some((read) => uncertainTraversal(read, cwd ?? root))) return UNKNOWN;
-    return {level: 'observe', reason: ''};
+  if (known && effects.projectRunner) {
+    return automatic('recoverable', `runs '${effects.projectRunner}', which stays inside the project`);
   }
-
-  if (isProjectRunner(stage, parts)) {
-    return {
-      level: 'recoverable',
-      reason: `runs '${parts[0]} ${parts[1]}', which stays inside the project`,
-    };
-  }
-
-  return UNKNOWN;
+  return known ? automatic('observe', '') : UNKNOWN;
 }
 
 export function classifyCommand(command: string, root: string): Classification {
-  if (FORK_BOMB_PATTERN.test(command)) return {level: 'escape', reason: 'fork bomb'};
+  if (FORK_BOMB_PATTERN.test(command)) return needsChecking('escape', 'fork bomb');
   const stages = splitStages(command);
   if (stages === null) return UNKNOWN;
   const classifications: Classification[] = [];
   let cwd: string | null = realPath(root);
   let changedDirectory = false;
   let previousSeparator = '';
+  const changes: string[] = [];
+  const dependencies: string[] = [];
+  const concurrent = stages.some(({separator}) => ['|', '|&', '&'].includes(separator));
   for (const {text, separator} of stages) {
     if (!text.trim()) continue;
-    const classification = classifyStage(text, root, cwd);
+    const effects = analyzeStage(text, root, cwd ?? root);
+    const classification = classifyStage(effects, root, cwd, changes, dependencies, concurrent);
     classifications.push(classification);
-    const observation = observeStage(text);
-    if (observation?.directory !== undefined || executableOf(commandParts(text) ?? []) === 'cd') {
+    if (effects?.changesDirectory) {
       changedDirectory = true;
-      const target = observation?.directory === undefined ? null : expandUser(observation.directory);
-      cwd = target !== null && classification.level === 'observe' && (cwd !== null || path.isAbsolute(target))
+      const target = effects.directory === undefined ? null : expandUser(effects.directory);
+      cwd = target !== null && classification.tier === 'observe' && (cwd !== null || path.isAbsolute(target))
         ? path.resolve(cwd ?? root, target) : null;
       // Shell cd and file reads handle '..' through symlinks differently.
       if (cwd !== null && realPath(cwd) !== cwd) cwd = null;
@@ -228,6 +195,6 @@ export function classifyWrite(target: string, root: string): Classification {
 
 export function classifyRead(target: string, root: string): Classification {
   const classification = targetClassification(target, root, {reading: true});
-  if (classification.level === 'escape') return classification;
-  return {level: 'observe', reason: ''};
+  if (classification.restrictions.mustCheck) return classification;
+  return automatic('observe', '');
 }

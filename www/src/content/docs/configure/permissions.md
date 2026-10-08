@@ -1,6 +1,6 @@
 ---
 title: Permissions
-description: How acc decides whether a tool call runs, asks, or is refused — the modes, the risk levels, the rules you write, and what no setting can change.
+description: How acc decides whether a tool call runs, asks, or is refused — the modes, the permission tiers, the rules you write, and what no setting can change.
 sidebar:
   order: 2
 ---
@@ -12,8 +12,8 @@ answer.
 | Part | What it does | Who controls it |
 |---|---|---|
 | [Rules](#rules) | match a command or a path, and answer outright | you, in `settings.json` |
-| [Risk levels](#risk-levels) | rank how hard a call would be to undo | built in |
-| [Modes](#modes) | set where the line falls on that rank | you, with `/permission` |
+| [Permission tiers](#permission-tiers) | separate observations, ordinary changes, and actions needing checks | built in |
+| [Modes](#modes) | set which tiers run automatically | you, with `/permission` |
 
 Rules are read first, so what you wrote down always outranks what `acc` would
 have guessed. [Decision order](#decision-order) is the full sequence.
@@ -22,17 +22,17 @@ have guessed. [Decision order](#decision-order) is the full sequence.
 
 | Outcome | What happens | Where it comes from |
 |---|---|---|
-| `allow` | runs, nothing on screen | a rule, or the rank |
-| `ask` | stops, you answer | a rule, or the rank |
+| `allow` | runs, nothing on screen | a rule, or the tier |
+| `ask` | stops, you answer | a rule, or the tier |
 | `deny` | refused, no prompt | **a `deny` rule only** |
 
-`deny` has exactly one source. No mode denies and no rank denies. If `acc` must
+`deny` has exactly one source. No mode or tier denies on its own. If `acc` must
 be unable to do something, that is a rule you write — nothing else produces a
 refusal.
 
 ## Modes
 
-A mode is a line drawn across the [risk levels](#risk-levels), plus what happens
+A mode is a line drawn across the [permission tiers](#permission-tiers), plus what happens
 above the line:
 
 | Mode | Runs without asking | Above the line |
@@ -80,30 +80,36 @@ that reach the host are answered for you — refused by default, approved with
 confirm. The line itself does not move, which is why a print run still edits
 files that sit below it.
 
-## Risk levels
+## Permission tiers
 
-`acc` ranks every call by **how hard it would be to reverse**. It judges the
-call's text and nothing else — it never runs `git`, and never checks whether a
-file is tracked, committed, or backed up anywhere. The rank follows what the call
-does rather than which tool made it, so `echo "x" > src/a.ts` ranks with
-`edit_file`, and `write_file` on `~/.ssh/config` ranks with the things that stop.
+`acc` assigns each call one of three permission tiers. It analyzes supported command forms,
+file targets, and filesystem facts such as symbolic links. It does not check whether Git
+or a backup can restore the affected files.
 
-| Rank | What it is | Examples |
+| Tier | What it means | Examples |
 |---|---|---|
-| `observe` | reads | `read_file`, `grep`, `ls`, `git status` |
-| `recoverable` | writes inside the project | `edit_file`, `echo > src/a.ts`, `npm test` |
-| `protected` | writes to a path that changes what other commands do | `.git/config`, `.zshrc` |
-| `destroy` | deletes | `rm`, `rmdir`, `find -delete` |
-| `escape` | leaves the machine or the project | `sudo`, `git push`, `dd of=`, `mkfs` |
+| `observe` | understood actions that do not modify files | `read_file`, `ls`, `git status` |
+| `recoverable` | ordinary changes allowed by the current policy | `edit_file`, `echo > src/a.ts`, `npm test` |
+| `needs-checking` | an action needing further judgment | deletion, protected settings, outside access, unknown commands |
 
-A command with several stages takes its **worst** stage, so
-`npm test && rm -rf build` is `destroy`. A call whose text cannot be ranked at
-all is not a sixth level — it simply asks.
+A separate reason explains **why** checking is needed: `protected` for protected settings,
+`destroy` for deletion, `escape` for outside access or restricted operations such as `sudo`
+and `git push`, or `unknown` when effects cannot be established. These are not extra tiers.
+Unknown commands belong to `needs-checking`; they are not automatically denied.
 
-`recoverable` is a judgment about the kind of change, not a promise that a copy
-was kept. [`/rewind`](/configure/commands) restores writes made by `edit_file`
-and `write_file`; a file changed by a shell command is ranked the same but is
-**not** restored.
+Escape findings also carry two restrictions: saved allow rules cannot bypass checking,
+and approvals cannot be remembered for the session. These restrictions survive when
+commands are combined. A deny rule still blocks the action.
+
+For a command chain, the highest tier wins, with unknown effects taking explanation
+priority unless an escape restriction applies. For example, `git status && rm -rf build`
+needs checking because it deletes files. In `auto`, it goes to the judge; in the other
+modes, it asks you. A matching explicit rule can change this unless a restriction applies.
+
+`recoverable` describes a permission policy, not a recovery guarantee.
+[`/rewind`](/configure/commands) restores available backups made by `edit_file` and
+`write_file`; changes made by shell commands are not restored by it. Project scripts such
+as `npm test` retain their existing automatic allowance, even though their effects are unknown.
 
 ### Protected paths
 
@@ -198,7 +204,7 @@ last-match-wins and it is not most-specific-wins.
 `git status` is **denied**. `bash(*)` matches it, `deny` is read first, and the
 `allow` is never reached. A blanket `deny` is a wall, and no narrower `allow`
 below it can cut a door. For the same reason **`ask: ["bash(*)"]` silences every
-`allow` in the file** — to ask about the rest, write no rule and let the rank
+`allow` in the file** — to ask about the rest, write no rule and let the tier
 decide.
 
 ## Decision order
@@ -211,7 +217,7 @@ deny rule  →  escape  →  ask rule  →  allow rule  →  the mode's line
                                             in auto, a model decides
 ```
 
-Two positions carry all the weight. **Rules come before the rank**, so a rule can
+Two positions carry all the weight. **Rules come before the automatic tier decision**, so a rule can
 silence a prompt. **Escapes sit above `allow`**, so no rule can silence *those*.
 
 `rm -rf build/`, no rules, in `auto-edits`:
@@ -233,7 +239,7 @@ silence a prompt. **Escapes sit above `allow`**, so no rule can silence *those*.
 | `ask` rule | nothing matches |
 | `allow` rule | `bash(npm run *)` matches → **runs** |
 
-The second one stopped at link four. The rank was never consulted.
+The second one stopped at link four. The automatic tier decision was never used.
 
 ## Approvals
 
@@ -291,7 +297,7 @@ caching that throws away the property being paid for.
 |---|---|
 | your messages, verbatim and in order | anything the agent wrote |
 | up to the last 30 tool calls, within a 6,000-character history budget | any tool result |
-| the pending action, its rank, and the project root | the agent's own instructions |
+| the pending action, the reason for checking, and the project root | the agent's own instructions |
 | refusals you have already given this session | |
 
 The right column is the prompt-injection defense. A file the agent read saying

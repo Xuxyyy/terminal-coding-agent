@@ -29,15 +29,15 @@ function outcomeFor(
   mode: Mode,
   fallback?: string,
 ): Outcome {
-  const {level, reason} = classification;
-  if (withinCut(level, mode)) {
+  const {tier, reason, cause, restrictions} = classification;
+  if (withinCut(tier, mode)) {
     return {decision: 'allow', reason, suppressible: true};
   }
-  const explained = level === null ? (fallback ?? UNCLASSIFIED_REASON) : reason;
+  const explained = cause === 'unknown' ? (fallback ?? UNCLASSIFIED_REASON) : reason;
   return {
     decision: aboveCut(mode),
     reason: explained,
-    suppressible: level !== 'escape',
+    suppressible: !restrictions.onceOnly,
   };
 }
 
@@ -55,7 +55,7 @@ function fileOutcome(
   if (verdict === 'deny') {
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false};
   }
-  if (classification.level === 'escape') {
+  if (classification.restrictions.mustCheck) {
     return outcomeFor(classification, mode);
   }
   if (verdict !== null) {
@@ -93,7 +93,7 @@ export function decide(
     return {decision: 'deny', reason: RULE_REASON.deny, suppressible: false, command};
   }
   const classification = classifyCommand(command, root);
-  if (classification.level === 'escape') {
+  if (classification.restrictions.mustCheck) {
     return {...outcomeFor(classification, mode, request.reason), command};
   }
   if (verdict !== null) {

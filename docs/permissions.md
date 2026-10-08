@@ -96,33 +96,47 @@ is not defensible on its own terms, and neither is the reverse.
 
 Failure direction is **fail closed**: anything unparsed asks.
 
-## Levels
+## Permission tiers and check reasons
 
 ```ts
-// classify.ts
-type Level = 'observe' | 'recoverable' | 'protected' | 'destroy' | 'escape';
-type Classification = {level: Level | null; reason: string};
+// src/core/permission/classify.ts
+type Tier = 'observe' | 'recoverable' | 'needs-checking';
+type CheckCause = 'protected' | 'destroy' | 'escape' | 'unknown';
+type Classification = {
+  tier: Tier;
+  reason: string;
+  cause: CheckCause | null;
+  restrictions: {mustCheck: boolean; onceOnly: boolean};
+};
 ```
 
-`null` is "cannot be classified from its text" — not a sixth level, because it has no rank.
-`protected` and `destroy` are levels rather than flags on a classification, because under the
-rule above they decide the answer rather than decorating it.
+There are exactly three permission tiers. `observe` describes understood observations,
+`recoverable` covers ordinary changes admitted by the existing policy, and `needs-checking`
+covers every action above the automatic threshold. Recoverable is not a recovery guarantee.
 
-Rank for "worst stage wins": `observe` < `recoverable` < `protected` < `destroy` < `escape`.
-An unclassified stage makes the whole command unclassified, **unless** another stage escapes —
-an escape anywhere wins outright.
+Protected settings, deletion, outside access or restricted execution, and unknown effects
+are **check reasons**, not additional tiers. An unclassified command has
+`tier: 'needs-checking'` and `cause: 'unknown'`; there is no null tier. Automatic tiers
+have `cause: null`. The human-readable `reason` remains available to the judge and prompts.
 
-`decide.ts` allows every level up to the mode's cut; everything above it asks or is denied.
-`suppressible` is `level !== 'escape'`, so an escape can never be remembered, and an
-unclassified command can.
+The only tier order is `observe` < `recoverable` < `needs-checking`. When combining stages,
+restrictions survive every other finding. Otherwise unknown effects take precedence over
+known check reasons. Among known findings, the highest tier wins; deletion retains its
+existing explanation priority over a protected write. That last choice selects explanatory
+text, not a stricter permission level.
 
-`judge` is not a sixth level either, for the same reason `null` is not: it has no rank. It is a
-**routing** answer on `Outcome.decision` — "a model decides this one" — produced above the cut
-in `auto` where the other modes produce `ask`. See *The judge*.
+Escape findings carry two explicit restrictions: `mustCheck` prevents saved ask/allow rules
+from bypassing the mode's checked route, and `onceOnly` prevents remembered session approval.
+A deny rule still wins. The decision layer reads these restrictions instead of comparing
+category names. Other check reasons have neither restriction, preserving existing behavior.
+
+`decide.ts` allows tiers up to the mode's cut and routes the rest to ask or judge.
+`suppressible` is `!classification.restrictions.onceOnly` unless a deny rule applies.
+`judge` is a routing answer on `Outcome.decision`, not a classification tier.
 
 ## Modes
 
-A mode is **a cut point on that rank, plus what happens above it** (`mode.ts`). Two values, not
+A mode is **a cut point on the tier order, plus what happens above it** (`mode.ts`). Two values, not
 a code path per mode — everything at or below the cut runs without asking, and everything above
 it takes the mode's above-cut action:
 
@@ -137,9 +151,8 @@ it takes the mode's above-cut action:
 first. A mode still can never disagree with the classifier, only be stricter or looser about
 the same judgment, or put the judgment to a model.
 
-The mode was one value until `auto`; it is two now because a cut point alone could not say
-*"ask a model instead of a human"* without a lower cut, and a lower cut is the one thing that
-must not be added — see below.
+A mode needs both fields: the automatic threshold and who checks actions above it.
+`auto` changes the second field while keeping the threshold at `recoverable`.
 
 **No mode denies.** A `deny` comes only from a `deny` rule in `settings.json` — never from an
 escape, from a path outside the project, from the mode alone, and never from the judge, which
@@ -149,8 +162,8 @@ cannot deny. Above its cut a mode asks or judges, and that is the whole of what 
 escape, and not one of them comes back `deny`. A mode that needs to refuse rather than ask must
 put a second field back on the cut, and that test is what will go red to say so.
 
-**No new cut may be added below `recoverable`.** `auto` adds a second opinion above the cut,
-not a lower cut, and that is the shape any looser mode has to take. A lower cut would auto-run
+**No automatic cut may be raised above `recoverable`.** `auto` adds a second opinion above the cut,
+not a higher automatic threshold, and that is the shape any looser mode has to take. A higher cut would auto-run
 an irreversible action — a delete, a push, a write outside the project — from its text alone,
 with nothing between the model's guess and the disk. No amount of context makes that safe,
 because the context is exactly what a cut point cannot read: a cut is a fact about a command's
@@ -179,7 +192,7 @@ before `allow`, so the `deny` pattern has to stop short of the directory that st
 request and — for `deny` only — a `read` one, but never for a `bash` command, so
 `deny: ["edit(**)"]` stops `edit_file` and `write_file` and does not stop
 `echo x > src/a.ts`. A redirect goes through `ruleVerdict`, which matches `bash(...)`
-patterns only; the classifier then levels the target `recoverable`, which `auto-edits`
+patterns only; the classifier then assigns the target the `recoverable` tier, which `auto-edits`
 allows with no prompt, so the write lands silently. Closing it means routing a stage's write
 targets through `pathVerdict` as well. Do that before anything treats `edit(**)` as a
 boundary.
@@ -203,10 +216,10 @@ stays, the same surgery `restoreMessages` does. The tool list and the `/context`
 no call-site change: both default to `toolsFor(session.mode)` and are re-read per turn, so the
 next turn is offered the new list.
 
-**A switch does not clear `session.allowed`.** It does not need to. The only level the modes
+**A switch does not clear `session.allowed`.** It does not need to. The only tier the modes
 disagree on is `recoverable`, and `recoverable` never prompts in `auto-edits` or `auto`, so it
-is never remembered. Every key that *can* reach `session.allowed` — `protected`, `destroy`,
-unclassified — is asked about in **every** mode, so nothing carries over that `ask-edits` would
+is never remembered. The `needs-checking` causes eligible for session approval — `protected`, `destroy`,
+and `unknown` — is asked about in **every** mode, so nothing carries over that `ask-edits` would
 have wanted to re-ask. Clearing them would only punish the user for switching. Switching into
 or out of `auto` changes nothing here either: a judge `allow` is never written to
 `session.allowed`, so `auto` never puts a key there that another mode would inherit.
@@ -578,26 +591,48 @@ For one `bash` command:
    stage normalization (`rules.ts`): `deny` beats `ask`, which beats `allow`, and every
    stage must match an allow rule for the whole command to have an allow verdict.
    A `deny` verdict ends it here. An
-   `ask` or `allow` verdict is held, not applied: the classifier still runs, and an `escape`
-   overrides it. Steps 1-9 below are the classifier, reached whenever no rule decided.
+   `ask` or `allow` verdict is held, not applied: the classifier still runs, and the `mustCheck` restriction
+   overrides it. Steps 1-9 below describe analysis and classification, reached unless a deny rule decided.
 1. **Fork bomb** — matched against the whole command before anything is split.
 2. **`splitStages(command)`** — split on `&& || |& ; | &` and newlines, aware of quotes,
-   backslashes, and heredocs. Unbalanced quotes → unclassified. This is the part that makes
+   backslashes, and heredocs. Unbalanced quotes → `needs-checking` with cause `unknown`. This is the part that makes
    `ls && rm -rf ~` honest.
 3. **`commandParts(stage)`** — a small `shlex.split`, then skip `VAR=x` assignments and `env`,
    `nice`, `nohup`, `stdbuf`, `time`, `timeout`, `xargs`, `command`, `builtin` to find the real
-   executable. Node has no `shlex`, so it is written, not imported. Failure → unclassified.
-4. **Escaping executable** — `sudo`, `mkfs*`, `dd of=`, `git push` → `escape`.
-5. **Write targets** — redirect targets (`>`, `>>`, after discarding `2>/dev/null` and
-   friends) plus the non-flag arguments of `cp ln mkdir mv rm rmdir tee touch`. A redirect
-   target is matched out of the raw text, so `unquoteTarget` strips its quotes and backslash
-   escapes before anything looks at it: the gate has to resolve the name **the shell will
-   open**, and `> "/etc/passwd"` is not a relative path just because it starts with a quote.
-   The argument targets arrive through `commandParts` already unquoted. If a stage has
-   write targets **and** contains `` ` ``, `$`, `(` or `)`, the target cannot be determined →
-   `escape`. Otherwise resolve each against the root: outside → `escape`; the root itself with
-   a destructive command → `escape`; protected → `protected`; a delete → `destroy`; else
-   `recoverable`.
+   executable. Node has no `shlex`, so it is written, not imported. Failure → `needs-checking` with cause `unknown`.
+4. **Escaping executable** — `sudo`, `mkfs*`, `dd of=`, `git push` → `needs-checking`, cause `escape`, with both restrictions.
+5. **Understood writes** — `recoverable.ts` parses `cp ln mkdir mv rm rmdir tee touch`
+   options; `stages.ts` parses literal redirects separately from the executable and its arguments.
+   Short option groups, attached values, `--option=value`, and `--` are supported.
+   Copy sources and `touch --reference` values are file inputs; mode and timestamp
+   values are not paths. Move sources are changed, and hard-link sources retain
+   protected-path checks. `-t`/`--target-directory` destinations are checked even
+   when attached to an option; `-T`/`--no-target-directory` prevents directory mapping.
+
+   Inputs and outputs are checked against the project boundary, following symlinks,
+   including dangling links whose referents do not exist yet. Directory destinations
+   also check the actual child files created inside them. Recursive copies inspect
+   every source entry and mapped destination, including copied symbolic links at their
+   new locations. Platform copy layout, trailing slashes, and supported link-following
+   options determine this mapping. Unreadable trees, link cycles, special files, and
+   copies that can change their own inputs remain checked. `rmdir --parents` checks
+   each ancestor it can remove.
+
+   Literal input and output redirects are removed before command arguments are parsed.
+   Quoted or escaped targets use the filename the shell opens; exact descriptor and
+   `/dev/null`, `/dev/stdout`, and `/dev/stderr` noise redirects retain their behavior.
+   A plain `cat` observes; `cat input > output` is recoverable only when both paths
+   stay inside the project and the output is an ordinary write. A project output
+   cannot automatically approve a script such as `python3 build.py > output`.
+
+   Outside access and destructive actions on the project root → `needs-checking` with cause
+   `escape` and both restrictions. Protected writes → `needs-checking` with cause `protected`;
+   deletion → `needs-checking` with cause `destroy`; understood ordinary changes → `recoverable`. Protected paths used only as ordinary file inputs do not turn a copy
+   or timestamp update into a protected write. Existing `find` deletion guardrails stay
+   above the automatic threshold. Unknown options, conflicting destinations, unsupported
+   wrappers, indirect filename lists, external programs such as `rg --pre`, and uncertain
+   shell forms cannot receive automatic write approval. Substitution in a write stage
+   retains the `escape` guardrail. This category still does not guarantee recovery.
 6. **Observation stage** — `observe.ts` matches understood forms of `{cat cd diff echo
    find grep head ls od pwd rg sort tail test wc}`, Git's `{diff log ls-files show status}`,
    and `{stat file uname printf true false}`. It also recognizes exact version-only
@@ -614,7 +649,7 @@ For one `bash` command:
    File inputs passed through options receive the same root and symlink checks as
    positional paths. Attached writes such as `sort -o../out.txt in.txt` escape too.
    Unknown options, filename lists read from another file, path expansions, unsafe
-   wrappers, and external-program modes do not receive `observe`. Known legacy write
+   wrappers, and external-program modes do not receive `observe`. Understood write
    and destructive cases retain their classifications. Substitutions, real redirects,
    Git external diff/text conversion options, and `printf -v` are not observations.
 
@@ -622,14 +657,16 @@ For one `bash` command:
    project boundary. If a failed or skipped `cd`, a pipeline, or a later branch makes
    the directory uncertain, relative file targets remain checked. Symlinked directory
    changes also keep later relative targets checked. Directory tracking can add
-   write protections but cannot remove an existing write guardrail. Above the mode's
+   write protections but cannot remove an existing write guardrail. Earlier filesystem
+   changes that overlap later inputs or outputs keep the combined command checked;
+   overlapping pipeline or background stages do too. Above the mode's
    cut, classification still routes to `judge` in `auto` and `ask` in the other modes.
 7. **Project runner** — `npm`, `pnpm` or `yarn` with `test` or `run`, and no substitution →
-   `recoverable`. These stay inside the project and are the commands a real task runs most.
-8. otherwise → unclassified.
+   `recoverable`. This is the existing runner allowance; it does not establish what the script does or where its effects stay.
+8. otherwise → `needs-checking` with cause `unknown`.
 9. **Worst stage wins.**
 
-`bash -lc "..."`, `python -c`, `node -e` and similar land in unclassified and therefore ask.
+`bash -lc "..."`, `python -c`, `node -e` and similar have unknown effects and therefore ask, or go to the judge in `auto`.
 That is the intended answer: we do not try to parse a nested shell, we refuse to guess.
 
 ## Hardening
@@ -702,7 +739,8 @@ rule cannot make a read quieter than the classifier already makes it, and an `as
 only add a prompt to something already silent. Keeping the crossover to one word keeps the
 surface one word wide.
 
-`classifyRead` is the read half of the classifier: `escape` for a path outside the project,
+`classifyRead` is the read half of the classifier: `needs-checking` with cause `escape`
+and both restrictions for a path outside the project,
 `observe` for everything inside it, protected paths included. Reading is not changing, and a
 `bash` stage that only reads already answers the same way.
 
@@ -757,6 +795,19 @@ outside targets or protected writes. With On, known credential storage is always
 grants and validation but keeps these action permission checks.
 See `sandbox.md` for platform requirements, examples, and limits.
 
-Keep `classify.ts` focused on levels, project boundaries and stage aggregation.
-Command-specific observation forms belong in `observe.ts`; unusual scripts can use
-the existing saved rules rather than broader automatic matching.
+`stages.ts` handles shell structure, including redirect parsing. Saved-rule normalization
+remains separate from the stricter forms accepted by command analysis; stripping an
+environment assignment or wrapper for rule matching does not establish its effects.
+
+`observe.ts` and `recoverable.ts` report the shared `CommandEffects` type from `effects.ts`:
+known effects, reads, writes (including deletion markers), filesystem dependencies,
+changed paths, and inspected trees. `analyze.ts` combines these reports with redirect
+effects, directory changes, and execution metadata. Unknown commands retain any known
+path effects instead of being treated as commands that do nothing.
+
+`classify.ts` assigns tiers, check reasons, and restrictions, checks project boundaries, and combines stages. Opaque project
+scripts are explicitly reported as having unknown effects; their existing automatic
+allowance remains a classifier policy exception, not evidence that the scripts stay inside
+the project. Separating analysis and reducing the permission tiers does not change that policy, saved rules, or mode thresholds.
+`frontend.test.ts` records 69 command examples and their current default routing as
+compatibility checks, including known coverage gaps and the runner exception.

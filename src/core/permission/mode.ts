@@ -1,4 +1,4 @@
-import {RANK, type Level} from './classify.js';
+import {TIER_RANK, type Tier} from './classify.js';
 
 export type Mode = 'ask-edits' | 'auto-edits' | 'auto';
 
@@ -12,7 +12,7 @@ const STRICTNESS: Record<Mode, number> = {
   auto: 0,
 };
 
-const CUTS: Record<Mode, Level> = {
+const CUTS: Record<Mode, Exclude<Tier, 'needs-checking'>> = {
   'ask-edits': 'observe',
   'auto-edits': 'recoverable',
   auto: 'recoverable',
@@ -28,8 +28,8 @@ export function aboveCut(mode: Mode): 'ask' | 'judge' {
   return ABOVE[mode];
 }
 
-export function withinCut(level: Level | null, mode: Mode): boolean {
-  return level !== null && RANK[level] <= RANK[CUTS[mode]];
+export function withinCut(tier: Tier, mode: Mode): boolean {
+  return TIER_RANK[tier] <= TIER_RANK[CUTS[mode]];
 }
 
 export function isMode(value: unknown): value is Mode {

@@ -1,3 +1,5 @@
+import type {WriteTarget} from './effects.js';
+
 export type Stage = {text: string; separator: string};
 
 const STAGE_SEPARATORS = ['&&', '||', '|&', ';', '|', '&', '\r\n', '\n', '\r'];
@@ -251,4 +253,72 @@ export function stripWrappers(parts: string[]): string[] {
 export function commandParts(stage: string): string[] | null {
   const parts = tokenize(discardNoiseRedirects(stage));
   return parts === null ? null : stripWrappers(parts);
+}
+
+export type Redirects = {text: string; reads: string[]; writes: WriteTarget[]; known: boolean};
+
+/** Remove only actual redirects, preserving the command's quotes and word boundaries. */
+export function parseRedirects(stage: string): Redirects {
+  const result: Redirects = {text: stage, reads: [], writes: [], known: true};
+  const text = stage.split('');
+  let quote = '';
+  for (let index = 0; index < stage.length; index += 1) {
+    const character = stage[index];
+    if (character === '\\' && quote !== "'") { index += 1; continue; }
+    if (quote) { if (character === quote) quote = ''; continue; }
+    if (character === "'" || character === '"') { quote = character; continue; }
+    if (character === '#' && (index === 0 || /\s/.test(stage[index - 1]))) {
+      result.known = false;
+      break;
+    }
+    if (character !== '<' && character !== '>' && !(character === '&' && stage[index + 1] === '>')) continue;
+    let start = index;
+    if (character !== '&') {
+      while (start > 0 && /\d/.test(stage[start - 1])) start -= 1;
+      if (start > 0 && !/[\s<>]/.test(stage[start - 1])) start = index;
+    }
+    const operator = /^(?:&>>|&>|<<<|<<-?|<>|>>|>\||[<>]&|[<>])/.exec(stage.slice(index))![0];
+    let position = index + operator.length;
+    while (/\s/.test(stage[position] ?? '') && position < stage.length) position += 1;
+    const wordStart = position;
+    let wordQuote = '';
+    while (position < stage.length) {
+      const next = stage[position];
+      if (!wordQuote && /[\s;|&<>]/.test(next)) break;
+      if (next === '\\' && wordQuote !== "'" && position + 1 < stage.length) { position += 2; continue; }
+      if (!wordQuote && (next === "'" || next === '"')) wordQuote = next;
+      else if (next === wordQuote) wordQuote = '';
+      position += 1;
+    }
+    const words = tokenize(stage.slice(wordStart, position));
+    const target = words?.length === 1 ? words[0] : undefined;
+    const supported = ['<', '>', '>>', '&>', '&>>'].includes(operator);
+    const descriptor = operator === '>&' && target !== undefined && /^\d+$/.test(target);
+    if (target === undefined || target === '' || wordQuote || (!supported && !descriptor)) result.known = false;
+    if (target !== undefined && supported) {
+      const noise = operator === '<' ? target === '/dev/null' : ['/dev/null', '/dev/stdout', '/dev/stderr'].includes(target);
+      if (!noise) {
+        if (operator === '<') result.reads.push(target);
+        else result.writes.push({path: target});
+      }
+    }
+    for (let masked = start; masked < position; masked += 1) text[masked] = ' ';
+    index = Math.max(index, position - 1);
+  }
+  result.text = text.join('');
+  result.known &&= !quote && !/\\\r?\n/.test(stage);
+  return result;
+}
+
+export function supportedParts(text: string): string[] | null {
+  let parts = tokenize(text);
+  if (!parts) return null;
+  // Unlike saved-rule normalization, do not unwrap env, time, xargs, etc.
+  while (parts[0] === 'command' || parts[0] === 'builtin') {
+    const offset = parts[0] === 'command' && parts[1] === '-p' ? 2 : 1;
+    if (parts[offset]?.startsWith('-') && parts[offset] !== '--') return null;
+    parts = parts.slice(offset);
+    if (parts[0] === '--') parts = parts.slice(1);
+  }
+  return parts;
 }
