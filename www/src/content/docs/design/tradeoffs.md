@@ -22,8 +22,8 @@ the moment it matters.
 
 ## A git-backed snapshot
 
-**What it would do.** `/rewind` puts back every file the agent wrote after the
-message you rewind to. It does that by storing a copy of each file's bytes
+**What it would do.** `/rewind` currently restores files covered by file-tool
+backups after the message you rewind to. It stores a copy of each file's bytes
 before a write, keyed by the write. That works perfectly for `edit_file` and
 `write_file`, and not at all for `bash` — a `sed -i`, an `npm run build`, or a
 `node -e` changes the tree without going through a file tool, so nothing is

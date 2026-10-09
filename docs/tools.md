@@ -49,21 +49,24 @@ it: asked about, every time, never remembered. `permissions.md` has the matcher
 and the chain.
 
 **The list comes from one place.** `toolsFor(mode)` in
-`src/core/tools/index.ts` is the single source of what is offered. Every mode
-gets all six. In `auto`, it returns copies of the five file and shell tools with
-descriptions that prefer Bash for reads and searches, and Edit or Write for
-ordinary file changes. Other modes retain the original descriptions.
-Schemas, handlers, order, and shared tool objects do not change. It is the default
+`src/core/tools/index.ts` is the single source of what is offered. In `auto`,
+it removes `read_file` and `grep`, then copies the three remaining file and
+shell tools with descriptions that prefer Bash for reads and searches, and
+Edit or Write for ordinary file changes. It adds `agent` in every mode.
+`ask-edits` and `auto-edits` retain all six tools and the original descriptions.
+Filtering preserves the remaining tools' order, schemas, and handlers without
+mutating the shared tool objects. It is the default
 argument of both `runAgent` and `contextStatus`, so what
 the model is offered and what the context readout counts can never drift apart.
 
-The system prompt carries the same preferences. Prefer Bash for reading,
+These preferences live in the `auto` tool descriptions. The base system prompt
+is shared across permission modes. Prefer Bash for reading,
 searching, and running commands. Prefer `edit_file` and `write_file` for ordinary
 file changes so `/rewind` can use their existing backups when available:
 `edit_file` for partial edits, `write_file` for new files or full replacements.
 These are preferences, not restrictions; Bash remains available for edits,
-tests, formatters, and generators. Read and Grep remain useful for bounded
-output, search options, and sensitive-file exclusions. A child follows its
+tests, formatters, and generators. In the two edit modes, Read and Grep offer
+bounded output, search options, and sensitive-file exclusions. A child follows its
 effective permission mode and keeps its configured tool allowlist.
 
 Shell changes are not backed up for `/rewind`. Git cannot reliably recover
@@ -263,8 +266,8 @@ It starts a second agent loop with a fresh `Session`. An unnamed call, or a
 missing field in a named definition, keeps the existing defaults: the exact
 parent `ModelChoice`, all currently available tools except `agent`, and the
 parent mode. A configured model client is created only when that type runs. A
-configured tool list is exact and keeps its written order after intersection
-with the live tool registry. A configured mode resolves to the
+configured tool list is exact and keeps its written order. Every named tool
+must be available under the child's effective mode, or the invocation fails. A configured mode resolves to the
 stricter of it and the parent mode: `ask-edits` > `auto-edits` > `auto`.
 
 Missing provider keys and configured tools that are unavailable are invocation
@@ -291,7 +294,7 @@ local array. This is stronger than `withoutText` (`src/core/compact.ts:42`),
 which only drops `text_delta`, and it has to be: a forwarded `turn_end` would
 tell the terminal the parent's turn had ended, and a forwarded `tool_start`
 would break the one-row promise. The parent draws one `agent` row, exactly like
-`bash`.
+`bash`. The separate `onModelUsage` callback is forwarded for token accounting.
 
 **It does not get the store.** No `SessionStore` is passed, so nothing the child
 says is written to the parent's `session.jsonl`. Passing one would append the

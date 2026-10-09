@@ -5,19 +5,21 @@ description: A small terminal coding agent that reads, edits, and runs code in t
 
 `acc` is a coding agent that lives in your terminal. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
-them, edits them, and runs commands until the task is done — asking you first
-before anything it cannot take back.
+them, edits them, and runs commands until the task is done. Permission checks
+control file and shell actions; default `auto` mode uses a model judge for
+actions above its automatic allowance threshold, then asks you if needed.
 
 It is one npm package with a local test suite. Gemini supplies the model;
 conversation history, tools, permissions, and sessions stay in `acc`.
 
 ## Three decisions worth defending
 
-- **The permission rule is what git can undo, not which tool asked.** A write
-  inside the repo runs silently whether it came from `edit_file` or an `echo >`
-  in a shell command; a delete, a push, or anything outside the project stops
-  and asks. → [Permissions](/configure/permissions)
-- **Six tools, and editing matches an exact string.** Line numbers drift the
+- **One permission gate for file and shell actions.** Ordinary project edits
+  can run automatically. Deletes, protected paths, and outside actions receive
+  further checks. Permission rules and sandbox access grants still apply.
+  Automatic allowance does not guarantee that Git can undo a change.
+  → [Permissions](/configure/permissions)
+- **Editing matches an exact string.** Line numbers drift the
   moment the model makes its first edit; an exact match either applies or fails
   loudly, and loud is recoverable. → [Tools](/configure/tools)
 - **Resume reopens a session in place.** The history is seeded back into the
@@ -26,19 +28,21 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 
 ## What it can do
 
-- **Six tools.** It reads files, searches them with ripgrep, edits one exact
-  piece of text, writes whole files, runs shell commands, and hands a
-  self-contained job to a sub-agent.
-- **One provider, two models.** Gemini works through the native Interactions
-  API. Set `GEMINI_API_KEY`; Gemini 3.8 Flash is the default.
-- **One permission gate.** Everything the agent does passes through it. Changes
-  git can undo run silently; deletes, writes to protected paths, and anything
-  reaching outside the project stop and ask.
-- **Sessions you can reopen.** Every run is saved. `/resume` reopens a past
-  conversation where you left it, and `/rewind` takes the conversation *and*
-  the files back to before an earlier message.
-- **A context readout.** `/context` shows what is filling the window, and
-  `/compact` keeps recent user prompts and summarizes older context when it gets long.
+- **Four tools in default `auto` mode.** Bash handles reads, searches, and
+  commands. `edit_file` and `write_file` make backed-up file changes, and
+  `agent` delegates a job. The two edit modes also offer `read_file` and `grep`.
+- **One provider, three models.** Gemini uses the native Interactions API.
+  Set `GEMINI_API_KEY`; Gemini 3.8 Flash is the default. Pro Preview and
+  Flash-Lite are also selectable. Permission judging uses Flash-Lite.
+- **Bounded turns.** The agent reviews progress every 10 model turns.
+  Interactive runs ask to continue after each 60-turn segment. Print mode
+  stops at its selected turn or time limit.
+- **Sessions you can reopen.** Interactive sessions are saved. `/resume`
+  reopens one in place. `/rewind` restores the conversation and files covered
+  by file-tool backups; it cannot undo shell changes. Print runs are not saved.
+- **Context management.** `/context` shows window usage. The agent compacts
+  automatically at 80% projected usage, or manually with `/compact`, keeping
+  recent user prompts and summarizing older context.
 
 ## Where to start reading
 

@@ -8,7 +8,7 @@ Read when: changing what an unattended run is allowed to do, what it prints, or
 what it exits with
 See also: `agent-loop.md` (the loop it drives), `permissions.md`
 (the gate it still goes through), `sessions.md` (the store it deliberately
-skips), `evals.md` (its other caller)
+skips)
 
 Key names, so a search finds this file: `createHeadlessHost`, `HeadlessPolicy`,
 `RecordedPrompt`, `runHeadless`, `HeadlessResult`, `StopReason`, `plainLines`,
@@ -24,34 +24,18 @@ explicit headless model-turn budget. The terminal `Host` is built inside a
 React component (`src/ui/agent.ts`) and its `confirm` only resolves when a human
 presses a key. The headless one answers from a policy instead. Everything below
 that seam — the loop, the tools, the permission gate — is the same code running
-the same way. That is the point: a run you cannot compare to the real thing
-measures nothing.
+the same way in interactive and print mode.
 
-## It has two callers, and they enter by different doors
+## CLI and core responsibilities
 
-**You, from a shell**, through `acc -p`. `src/cli.tsx` parses the flags, runs
-the turn, prints, and sets the exit code.
+`src/cli.tsx` parses the flags, calls `runHeadless`, prints the result, and sets
+the exit code. `runHeadless` returns a `HeadlessResult` object and never prints
+anything itself. Formatting lives in `output.ts`, keeping execution separate
+from terminal output.
 
-**An eval, from TypeScript**, by importing `runHeadless` directly and reading
-the `HeadlessResult` object — no strings to parse. The judge eval already
-imports core this way (`src/evals/judge/run.ts`).
-
-That split is why `runHeadless` returns a result object and never prints
-anything itself. Formatting lives in `output.ts`, which only `cli.tsx` calls. A
-driver that wrote to stdout would be unusable from the eval, and an eval that
-had to parse text would be measuring the formatter.
-
-## Why it lives in core and not in `src/evals`
-
-It could have gone under `src/evals/` with the rest of the dev tooling. It did
-not, because of what the code *is* rather than who calls it: it implements a
-core interface and drives `runAgent`. That is agent machinery, not measurement
-machinery — there is no scoring, no fixture, no rubric in it. `src/evals` stays
-the place where *judging* lives.
-
-It imports no React, which is what puts it on the core side of the seam. And it
-never imports from `src/ui`: `cli.tsx` parses the flags and passes the options
-down, so the arrow points one way only.
+The headless runner lives in core because it implements `Host` and drives
+`runAgent`. It imports no React and never imports from `src/ui`; the CLI passes
+its parsed options into core.
 
 ## The two caps
 
@@ -110,29 +94,22 @@ A genuinely read-only run has to be configured, not assumed, and there is only
 one setting that does it: `"permission_mode": "ask-edits"`, which cuts at
 `observe` so every write asks — a `bash` write included.
 
-**A `deny` rule is not a second way there**, though it reads like one. Step 7 ran
-`{"permissions": {"deny": ["edit(**)"]}}` against a real model: `read_file` and
-`edit_file` were both refused, and the model then appended the line with
-`bash: printf 'hello\n' >> notes.txt`. That command is still `recoverable`, so
-`auto-edits` allows it outright and the rule never sees it. A rule tagged `edit`
-governs the path-taking tools; it does not govern the shell. It also denies
-**reads**, which is rarely what someone writing `edit(**)` intends.
+A rule tagged `edit` governs path-taking tools, not shell commands. For
+example, denying `edit(**)` does not prevent a shell command from writing a
+file. Use the permission mode to control approval for writes across tools.
 
-An eval must set this deliberately — inheriting whatever is in the user's
-`~/.acc/settings.json` would make a score depend on who ran it. `ACC_HOME`
-(`projects.ts:16`) is how to pin it: it redirects the settings file and the
-session store, but not `~/.acc/.env` (`env.ts:5-10`), so the API key still
-loads.
+For predictable unattended runs, set the permission mode deliberately.
+`ACC_HOME` redirects the settings file and session store, allowing an isolated
+configuration. It does not redirect `~/.acc/.env`, so the API key still loads.
 
 `--yes` answers `'once'`. **Never `'session'`** — nothing is remembered, so
 `permitted()` keeps asking on every call and every ask is recorded.
 
 **Every confirm is recorded either way**, request and decision together, and
 `HeadlessResult.prompts` carries them out. A silent auto-approve is the one
-thing this must never be: an eval that counts prompts would be measuring a lie,
-and the count would look best exactly when the gate had been bypassed. If a run
-with `--yes` reports zero prompts for a write, that is a bug in `host.ts`, not a
-clean run.
+thing this must never be: the recorded prompts must include confirmations
+approved through `--yes`. Actions already allowed by the permission gate do
+not produce a confirmation.
 
 ## No session is written
 
@@ -140,9 +117,8 @@ clean run.
 `src/core/loop.ts:97` takes `store` as optional. So a print run leaves nothing
 under `~/.acc/projects/`, and cannot be reopened with `/resume`.
 
-An eval runs dozens of these back to back and would otherwise flood the store
-with one-turn sessions nobody will ever resume, and it keeps its own records
-anyway. Revisit if someone asks to resume a print run.
+Repeated print runs do not fill the session store with one-turn conversations.
+Callers can save stdout or the JSON event stream when they need a record.
 
 ## stdout is the answer, stderr is everything else
 
@@ -155,9 +131,8 @@ activity, the prompts with their decisions, and the stop reason go to stderr.
 `{kind: 'result', schemaVersion, stopped, message, usage, tokenUsage, prompts,
 steps}` line.
 `schemaVersion` versions this public record, and `message` is the authoritative
-final assistant text so a harness does not need to rebuild it from deltas. The trailing summary
-mirrors the judge eval's result file (`evals.md`), so a harness reads a shape it
-already knows. `usage.prompt`, `usage.completion`, and `usage.total` remain the
+final assistant text so callers do not need to rebuild it from deltas.
+`usage.prompt`, `usage.completion`, and `usage.total` remain the
 original accumulated fields. `tokenUsage.requests` records each model response
 in request order, and `tokenUsage.totals` adds those provider-reported values,
 including cache-hit and cache-miss input tokens. When a provider reports only
@@ -175,8 +150,8 @@ stderr.
 A non-zero exit means **the run did not complete**, which is a different claim
 from *the answer was bad*. Nothing here judges the answer.
 
-`stopped` is decided in one place, inside `runHeadless`, so the CLI and any
-harness read the same field: `'timeout'` when the timer fired, `'step_limit'`
+`stopped` is decided in one place, inside `runHeadless`, so all callers
+read the same field: `'timeout'` when the timer fired, `'step_limit'`
 when the model-turn budget was exhausted, `'denied'` when any tool confirmation
 was refused, `'error'` when an error event arrived, else `'done'`. Budget
 exhaustion is distinct from permission denial, even if a tool was refused earlier.

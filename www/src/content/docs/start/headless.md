@@ -157,8 +157,8 @@ else.
 ## No session is saved
 
 A print run writes nothing under `~/.acc/projects/`, so it cannot be reopened
-with [`/resume`](/configure/commands). A harness running dozens of one-turn runs
-would otherwise fill the store with sessions nobody will ever reopen.
+with [`/resume`](/configure/commands). Repeated print runs do not fill the
+session store with one-turn conversations.
 
 ## Full reasoning
 

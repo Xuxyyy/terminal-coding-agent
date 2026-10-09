@@ -205,11 +205,11 @@ an `ask`, and no rule verdict ever reaches it.
 The mode lives on `Session`, beside `rules`, rather than in a module-level constant, which is
 what makes `/permission` a switch rather than a restart. `setMode(session, mode)` in
 `session.ts` does the whole job — the field, `session.systemPrompt`, and `messages[0]` — and
-`src/ui` calls only that. Splitting it would let a session run under one mode with a first
-message written for another. The auto prompt prefers Bash for reads and searches,
-and Edit or Write for ordinary file changes so `/rewind` can use their existing
-backups when available. The two edit modes retain their existing file-tool guidance.
-Keeping the three moves together prevents stale tool preferences.
+`src/ui` calls only that. The refreshed base prompt is shared across permission modes.
+Tool availability and mode-specific descriptions come from `toolsFor(session.mode)`
+on the next turn. In `auto`, these descriptions prefer Bash for reads and searches,
+and Edit or Write for ordinary file changes so `/rewind` can use existing backups.
+The two edit modes retain their original file-tool descriptions.
 
 **A switch keeps the conversation.** Only `messages[0]` is replaced; every later message
 stays, the same surgery `restoreMessages` does. The tool list and the `/context` readout need

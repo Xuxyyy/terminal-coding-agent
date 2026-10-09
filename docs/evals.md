@@ -1,13 +1,12 @@
 # Evaluation
 
 Status: permission-judge evaluation and package/CLI release checks are active.
-The removed Task/Case Evaluation remains documented only in the dated baseline.
 
 Covers: `src/evals/judge/`, `src/evals/operational/`,
 `src/evals/standard/`, `evals/cases/judge.jsonl`, and `evals/baselines/`.
 
 Read when: changing the permission rubric, packaging, CLI startup, release
-evidence, or the historical evaluation record.
+evidence, or the Judge eval.
 
 ## Active checks
 
@@ -74,9 +73,7 @@ It records six separate scenarios:
 5. print mode with masked provider keys names the missing key and exits;
 6. home-directory and filesystem-root startup refuse before model use.
 
-Results go to the ignored `evals/results/operational/` directory. Independent
-paid release checks also drive the packed CLI in print mode and exercise TUI
-resume in a real terminal. They are never run automatically.
+Results go to the ignored `evals/results/operational/` directory.
 
 ## Release standard
 
@@ -91,55 +88,15 @@ npm run eval:standard -- \
   --operational evals/results/operational/<operational>.jsonl
 ```
 
-It exits nonzero for judge harness errors, false-allows, operational failures,
+It exits nonzero for judge runner errors, false-allows, operational failures,
 or metadata and case-set mismatches. Each axis prints on its own line.
-
-## Historical baseline: 2026-09-17
-
-The repository preserves the complete sanitized baseline from 2026-09-17 at
-[`evals/baselines/2026-09-17-deepseek-v4-flash.json`](../evals/baselines/2026-09-17-deepseek-v4-flash.json).
-It requested `deepseek-v4-flash`, which DeepSeek documented on that date as
-routing to **DeepSeek-V4.1-Flash**.
-
-| Historical axis | Result |
-| --- | ---: |
-| Judge outcomes | 180/180 scored, 0 errors |
-| Judge false-allows | 0/105 |
-| Judge false-refusals | 1/75 |
-| Judge unstable cases | 1 (`stale-2`) |
-| Task trials solved | 75/75 |
-| Task trials clean | 75/75 |
-| Smoke `pass^3` | 10/10 |
-| Focused `pass^3` | 12/12 |
-| Workflow `pass^3` | 3/3 |
-| Operational scenarios | 6/6 |
-| Independent packed CLI/TUI scenarios | 2/2 |
-
-The task rows above are historical evidence, not an active or reproducible
-embedded suite. The dated JSON retains the task composition, per-suite and
-per-case results, usage, model-routing note, and source-result names without
-rewriting the record.
-
-That task evidence was a disclosed composition. A full 75-trial run exposed
-four case-contract defects. After the contracts were corrected and checked,
-only those four cases were rerun for three repeats; the other 21 cases were
-retained. Task usage was 1,000,769 prompt tokens and 88,959 completion tokens.
-The dated task-only cost range was about **$0.06–$0.21**.
-
-The independent installed-product gate passed both approved live scenarios.
-A fresh packed binary completed a real print-mode edit and passed its fixture
-test. A real tmux TUI returned `E2E_TUI_OK`, reopened the same session through
-`/resume`, replayed both messages, and exited cleanly. Observable usage was
-11,960 prompt plus 552 completion tokens, with a dated cost range of about
-**$0.00037–$0.00213**. The temporary package, workspaces, isolated homes, and
-tmux session were removed.
 
 ## Evidence boundaries
 
-- The dated Task/Case results describe the removed suite as it existed on
-  2026-09-17; they are not a current release gate.
-- The baseline covers one requested model ID on one date and environment.
-- Raw transcripts can contain local paths and model text, so the repository
-  tracks only the sanitized summary.
-- Live judge runs and independent CLI/TUI checks cost money and require
-  explicit approval. CI runs only offline tests.
+- Judge results describe the tested model, cases, and settings. They do not
+  guarantee future model behavior or cover every possible action.
+- Package/CLI checks verify installation and startup behavior; they do not
+  measure how well the agent completes coding tasks.
+- Saved results can contain local paths and model text. Keep raw output private.
+- Live Judge evals are optional paid checks and require explicit approval.
+  CI runs only offline tests.

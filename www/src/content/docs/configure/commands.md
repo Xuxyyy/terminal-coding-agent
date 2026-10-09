@@ -30,13 +30,13 @@ Prints how full the context window is right now: a total, a bar, and a breakdown
 into system prompt, system tools, messages, and free space.
 
 ```
-context: 41,208 / 262,144 tokens (16%)
-███░░░░░░░░░░░░░░░░░
+context: 41,208 / 1,048,576 tokens (4%)
+█░░░░░░░░░░░░░░░░░░░
 
 system prompt          ~1,180
 system tools           ~2,940
 messages              ~37,088
-free                  220,936
+free                1,007,368
 ```
 
 - **system prompt** — the instructions `acc` sends every turn, including a

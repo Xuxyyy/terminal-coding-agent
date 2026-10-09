@@ -13,7 +13,8 @@ the full argument in the repo at the end.
 
 The rule is one line long: **`src/core` runs the agent and never imports React;
 `src/ui` draws it with Ink.** They meet at a single interface, `Host`, in
-`src/core/host.ts`, and it has three members.
+`src/core/host.ts`. It requires `confirm`, `onEvent`, and `signal`, and offers
+an optional `onModelUsage` callback for token accounting.
 
 ```
         src/core                 │                src/ui
@@ -25,6 +26,7 @@ The rule is one line long: **`src/core` runs the agent and never imports React;
                                  │
               confirm(request) ──┼──▶  draws a prompt, waits for a key
               onEvent(event)   ──┼──▶  appends to the screen
+              onModelUsage     ──┼──▶  optional token accounting
               signal             │     Esc aborts
                                  │
                           no import points this way ◀──
@@ -38,8 +40,8 @@ What that buys shows up twice below — the loop runs with no terminal at all, a
 so does every test of it.
 
 The two pages that follow are about the core side of that line: [the permission
-gate](/configure/permissions) that every tool passes through, and [the six
-tools](/configure/tools) themselves.
+gate](/configure/permissions) for file and shell actions, including those
+inside subagents, and the [tools available in each mode](/configure/tools).
 
 ## The loop
 
@@ -111,7 +113,8 @@ and stops the run.
 
 ## What a run leaves on disk
 
-Every run writes to `~/.acc/projects/<name>-<hash>/sessions/<id>/`. The file that
+Interactive sessions write to `~/.acc/projects/<name>-<hash>/sessions/<id>/`.
+Print runs do not create resumable sessions. The file that
 matters is `session.jsonl`: **one `{kind, …}` record per line, append-only**,
 with the messages the model sees and the view the terminal drew interleaved in
 the same stream.
@@ -142,8 +145,8 @@ system message is a different object, and seeding the stored copy would write a
 duplicate of the whole history back into the file.
 
 `/rewind` uses the same picker, one row per user message, and drops the
-conversation from that message onward while putting back every file the agent
-wrote after it. On disk it **appends a marker** rather than cutting — the
+conversation from that message onward while restoring files covered by
+`edit_file` and `write_file` backups. Shell changes are not captured or restored. On disk it **appends a marker** rather than cutting — the
 dropped records stay where they are and every reader resolves the marker. So
 every consumer sees the short history while the file keeps the long one.
 

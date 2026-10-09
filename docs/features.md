@@ -1,6 +1,6 @@
 # What `acc` can do today
 
-Status: v7, 2026-09-03. A list of shipped features, not a design doc.
+Status: core overview updated on 2026-10-08. A list of shipped features, not a design doc.
 Read when: you want to know what exists before planning what is next.
 See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, and
 `headless.md` for *why* each part looks the way it does.
@@ -9,7 +9,8 @@ See also: `agent-loop.md`, `tools.md`, `permissions.md`, `sessions.md`, and
 
 One TypeScript package. `src/core` runs the
 agent and never imports React; `src/ui` draws it with Ink. The two meet at one
-seam, the `Host` interface (`confirm`, `onEvent`, `signal`).
+seam, the `Host` interface (`confirm`, `onEvent`, `signal`, and optional
+`onModelUsage` for token accounting).
 
 The workspace is the current directory. Installed as the `acc` command.
 
@@ -17,11 +18,13 @@ The workspace is the current directory. Installed as the `acc` command.
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
 - Six built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
-  `write_file`, `bash`, `agent`.
+  `write_file`, `bash`, `agent`. Default `auto` mode offers only `edit_file`,
+  `write_file`, `bash`, and `agent`; the two edit modes offer all six.
 - `agent` hands one self-contained job to a sub-agent. Files in
   `<ACC_HOME>/agents/*.md` define optional global types with a routing
   description, appended role prompt, model, exact tool list, and permission
-  mode. Missing fields inherit the parent's model, all tools except `agent`,
+  mode. Missing fields inherit the parent's model, tools available in the child's mode
+  except `agent`,
   and its mode; a configured mode can only make the child stricter. The child
   still runs in the current workspace. The parent blocks, draws one row, and
   gets back the child's final message alone — nothing the child read or ran is
@@ -30,12 +33,13 @@ The workspace is the current directory. Installed as the `acc` command.
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
   `bash`; it does not crash.
-- Every tool caps its own output, so no single call can outrun the compaction
-  trigger, and every truncation marker names the repair to try. `bash` keeps a
-  head and a tail; the other tools keep a head only. Sizes and the reasoning are
-  in `tools.md`.
+- File reads, searches, diffs, and shell output have size limits. These reduce
+  context growth but do not guarantee that a tool round fits the window.
+  `bash` keeps a head and a tail. Sizes and the reasoning are in `tools.md`.
 - `edit_file` and `write_file` return a diff, drawn in the scrollback.
-- Every path is confined to the workspace root before a tool runs.
+- File-tool paths are resolved against the workspace root and checked by the
+  permission gate. Outside paths need additional checks; Sandbox On also
+  requires explicit access grants.
 - Broken tool-call JSON comes back as a tool error, not a crash.
 - Hidden continuation state returned by reasoning-capable providers is preserved across tool
   rounds, compaction, resume, and model switching. It is counted as context but never printed.
@@ -46,16 +50,24 @@ The workspace is the current directory. Installed as the `acc` command.
 
 ## Models
 
-OpenAI-compatible client, so two providers work through one code path:
-DeepSeek and Kimi (four model ids). Default is DeepSeek v4 Flash. Keys
-load from `.env` files, including `~/.acc/.env`.
+Gemini is the only provider, using the native Interactions API through
+`@google/genai`. The adapter keeps OpenAI-shaped types inside the core; it does
+not use an OpenAI provider connection. History stays local, with `store: false`
+on requests.
+
+Three models are selectable: `gemini-3.8-flash` (default),
+`gemini-3.1-pro-preview`, and `gemini-3.5-flash-lite`. Each is configured with a
+1,048,576-token context window and a 32,000-token maximum reply.
+The permission judge always uses `gemini-3.5-flash-lite` for Gemini sessions.
+`GEMINI_API_KEY` loads from the shell first, then the project's `.env`, then
+`~/.acc/.env`.
 
 The model is chosen in three steps, first hit wins: `ACC_MODEL`, then the
 `"model"` key saved in `~/.acc/settings.json` by the `/model` picker, then the
-first model in registry order whose provider key is set. An env override a
+default `gemini-3.8-flash`. An env override a
 settings file could beat would not be an override, so `ACC_MODEL` stays on top.
 
-Three environment variables change what the client does: `ACC_MODEL` picks the
+Configuration includes these environment variables: `ACC_MODEL` picks the
 model id, `ACC_HOME` moves the session store off `~/.acc`, and `ACC_COMPACT_AT`
 overrides the fraction of the window at which the agent compacts itself. The
 last one is accepted only when it parses to a number in `(0, 1]`; anything else
@@ -75,7 +87,7 @@ threshold is the same as `auto-edits`:
   remembered. Sandbox resource grants still require explicit human approval;
 - an escape (`sudo`, `git push`, `dd of=`) follows the same judge route.
 
-In `auto`, instructions and tool descriptions prefer Bash for reading, searching,
+In `auto`, tool descriptions prefer Bash for reading, searching,
 and running commands. They prefer `edit_file` and `write_file` for ordinary file
 changes so `/rewind` can use their existing backups when available. Prefer
 `edit_file` for partial edits and `write_file` for new files or full replacements.
@@ -138,7 +150,7 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 
 ## Sessions and reliability
 
-- Every run is stored under `~/.acc/projects/<name>-<hash>/sessions/<id>/` as one
+- Every interactive session is stored under `~/.acc/projects/<name>-<hash>/sessions/<id>/` as one
   append-only `session.jsonl`, one `{kind, …}` record per line: what the model
   sees and what the terminal drew, interleaved. A reader ignores a kind it does
   not know. Files are `0600`.
@@ -164,9 +176,11 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 - Old sessions are evicted: 30 days, keeping the most recent 50.
 - Normal turns get a private progress review every 10 model turns and ask to keep
   going after 60. Each approval grants another bounded segment.
-- A turn that dies **before any output** is retried (3 attempts, 1s/2s/4s, only
-  connection errors, 429, 5xx). After output it reports the error instead, so
-  no half-answer is printed twice.
+- Before any output, supported connection errors, non-daily 429 responses, and
+  5xx responses get up to three retries after the first attempt, with 1s/2s/4s
+  backoff. Each attempt has a 120-second deadline. Daily limits, cancellation,
+  and deadline failures are not retried. After output, a failure is reported
+  without replaying the partial answer.
 - A failed session write warns once and the run continues.
 
 ## Print mode
@@ -174,8 +188,7 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 `acc -p "<task>"` runs one turn with no terminal and exits — no Ink, no
 keyboard, no TTY needed. It is a second implementation of `Host`, in
 `src/core/headless/`; the loop, the tools and the permission gate below the seam
-are unchanged. The evals reach the same code by importing `runHeadless` instead
-of starting the binary.
+are unchanged.
 
 - stdout is the answer and nothing else, so `acc -p "…" > out.txt` is useful.
   Tool lines, the prompts with their decisions, and the stop reason go to
@@ -207,20 +220,16 @@ behavior. These checks are development tooling, not commands that ship as part
 of `acc`.
 
 - `npm run eval:judge` runs 60 hand-labeled permission decisions against a
-  real model. It reports false-allows, false-refusals, and harness errors
+  real model. It reports false-allows, false-refusals, and runner errors
   separately.
 - `npm run eval:operational` builds, packs, installs, and invokes the CLI
   through six free subprocess scenarios.
 - `npm run eval:standard` checks explicit Judge and operational result paths
   against the tracked model, case set, repeat count, false-allow limit, and
   package/CLI scenario set.
-- Independent paid release checks exercise a packed print-mode edit and TUI
-  resume in a real terminal.
 
-The embedded Task/Case Evaluation is no longer part of the repository. Its
-sanitized 2026-09-17 results remain unchanged in the historical baseline. See
-`evals.md` for active commands, the full historical scorecard, and evidence
-limits.
+The Judge eval is an optional paid check. Normal tests and package/CLI checks
+run without paid model calls. See `evals.md` for commands and evidence limits.
 
 ## Terminal UI
 
@@ -329,16 +338,16 @@ total to fall back on until the next real turn, so it shows an estimate that
 runs ~28% low. Two numbers, one of them shaky, said less than one. Type
 `/context` if you want it. See `sessions.md`.
 
-`/model` switches the provider while you work, in the same box, marker and hint
-style as `/permission`. All four models are listed in registry order, opened on
+`/model` switches the model while you work, in the same box, marker and hint
+style as `/permission`. All three models are listed in registry order, opened on
 the one you are on. A model whose provider key is unset is **shown, not
 hidden**: the row stays grey when the cursor lands on it, `enter` refuses it,
-and the hint line under the box turns into `set MOONSHOT_API_KEY to use this model`.
+and the hint line under the box turns into `set GEMINI_API_KEY to use this model`.
 Hiding the row would leave you wondering where your model went; the grey row
 names the variable instead.
 
-A pick swaps the live client, so the next turn — and the permission judge, which
-follows the model for free — runs on the new provider. It also moves
+A pick swaps the live client, so the next turn uses the selected Gemini model.
+Permission judging continues to use Flash-Lite with the same API key. The pick also updates
 `session.contextWindow`, which is what `/context` measures against and what the
 80% compaction trigger reads. It stays tied to the active model's window.
 
@@ -350,9 +359,8 @@ naming the model that actually answered them.
 The pick is written back to `"model"` in `~/.acc/settings.json`, the same
 user-level-file-only rule `"permission_mode"` follows: the key in a project's
 `.acc/settings.json` stops `acc` at startup naming the user file, and an unknown
-model id stops it listing the six valid ones. `/resume` does not restore the
-model a session was last on — reopening a Kimi session while you are running
-DeepSeek should not quietly spend money on a provider you did not pick this run.
+model id stops it listing the supported IDs. `/resume` does not restore the
+model a session was last on; it keeps the model selected for the current run.
 
 **The header does not repaint when `/permission` changes the mode.** The picker
 closes and the notice prints, but the mode in the header stays stale. It is
@@ -397,4 +405,4 @@ interactive or print mode. The choice lasts for this ACC process through clear, 
 and rewind; it is not saved. Permission checks and Shell cleanup run in both modes.
 On is supported only on macOS; Linux uses Off. Off removes OS file and network
 restrictions; cleanup is not full credential protection.
-See `sandbox.md` for enforcement, platform requirements, and Harbor verification.
+See `sandbox.md` for enforcement, platform requirements, and verification.

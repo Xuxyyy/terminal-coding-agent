@@ -24,9 +24,17 @@ step counts appear in text a user reads.
 
 ## Context
 
-Three choices shape the code. The **OpenAI SDK** is the model client, so DeepSeek and
-Kimi keep working through `baseURL`. The TUI is **Ink**. It is **one package**, with
-`src/core` and `src/ui` as folders rather than workspaces.
+The model client uses **Gemini's native Interactions API** through `@google/genai`.
+`gemini.ts` adapts requests and responses to the OpenAI-shaped message and chunk types
+used internally by `client.ts`; OpenAI is a type dependency, not the provider transport.
+History is kept locally and sent with each request using `store: false`.
+The TUI is **Ink**. It is **one package**, with `src/core` and `src/ui` as folders.
+
+The base system prompt is shared across permission modes. It asks the agent to follow
+repository instructions, preserve unrelated work, respect permission denials, apply and
+verify a candidate solution, and avoid repeating checks without a specific reason.
+Sandbox instructions and an environment block follow. In `auto`, tool descriptions
+supply the preferences for Bash reads and searches and file-tool edits.
 
 Tools execute with the process sandbox mode, Off by default, independently of permission mode. The model client,
 approval host, and private session store remain outside. Backups receive bytes read by a
@@ -42,6 +50,7 @@ inside the loop must be able to pause and ask the user something.
 interface Host {
   confirm(req: ConfirmRequest): Promise<ConfirmDecision>;
   onEvent(e: AgentEvent): void;
+  onModelUsage?(usage: ModelTokenUsage): void;
   signal: AbortSignal;
 }
 ```
@@ -49,7 +58,7 @@ interface Host {
 - The Ink app implements `confirm` by storing the promise's `resolve` and rendering
   `Confirm.tsx`. When the user presses a key, it calls `resolve('once')`.
 - Tests use a fake `Host` that always returns `'once'`, so the core is testable with no terminal.
-- Esc → `abortController.abort()`; the signal goes to the OpenAI request,
+- Esc → `abortController.abort()`; the signal goes to the Gemini request,
   `child_process`, and the judge call. Esc means *stop the turn*
   wherever it is pressed — including inside the approval box. `n` is the only key
   that refuses one command.
@@ -91,8 +100,8 @@ and verification, and report any unfinished work clearly.
 
 ### Streaming tool calls
 
-The riskiest part of `client.ts`. OpenAI streams tool calls as string fragments keyed by
-`index`, so arguments have to be concatenated before they are anything:
+`gemini.ts` translates native interaction events into the chunk shape consumed by
+`client.ts`. The shared accumulator combines tool-call fragments by `index`:
 
 ```ts
 for (const d of chunk.choices[0].delta.tool_calls ?? []) {
@@ -104,9 +113,11 @@ for (const d of chunk.choices[0].delta.tool_calls ?? []) {
 ```
 
 `JSON.parse(call.args)` at the end **can fail** — models emit broken JSON. That returns as a
-tool error message so the model retries; it never crashes the run. `finish_reason` decides
-what happens next: `tool_calls` → loop again, `stop` → done, `length` → the model hit its
-output cap and the loop says so.
+tool error message so the model can repair it. Invalid native argument deltas can also
+fail earlier in the Gemini adapter and are handled as request failures. A `length`
+finish reason produces an output-limit error when there are no tool calls. The actual loop decision uses
+`toolCalls.length`: calls are executed and their results appended before another request;
+a response with no calls ends the turn.
 
 ### What an interrupt leaves behind
 
@@ -148,10 +159,9 @@ model a workspace it cannot explain. Two places in `loop.ts` do this:
 message holding `INTERRUPTED_TURN` — `[the user interrupted this turn]`. Without it a
 text-only step just stops mid-sentence and the next turn can read that as *I finished*; the
 `INTERRUPTED` tool replies only imply it, and on a step with no tool calls there is nothing
-to imply it from. It is a `user` message and not a `system` one because every provider behind
-the OpenAI-compatible endpoint (DeepSeek, Kimi) accepts a `user` message anywhere, while
-a mid-conversation `system` message is handled inconsistently. Two `user` messages in a row
-are legal, and are exactly what the next turn should see. The helper appends nothing when the
+to imply it from. It is stored as a `user` message, which the Gemini adapter sends as
+`user_input`, keeping it in the conversation rather than the system instructions.
+Consecutive user messages are retained in order. The helper appends nothing when the
 marker is already last, so no path can double it, and `appendStep` writes only messages it has
 not written yet, so the marker lands on disk as its own record and `/resume` replays it.
 
@@ -161,23 +171,22 @@ marker that says why.
 
 ### What a failed turn says
 
-The `catch` does not print the provider's own words. `explainError` in `core/errors.ts` turns
-the error into a message and an optional hint, and the hint is what the screen draws under it.
+`explainError` in `core/errors.ts` turns recognized failures into a message and
+optional hint. It distinguishes request timeouts, insufficient balance or quota,
+ordinary rate limits, and daily limits. Other errors retain their original message.
+Status is read from the error or its cause so a `StreamFailure` can still explain
+the underlying failure.
 
-Raw provider text is unreadable to the person running the tool. Moonshot answers a rate limit
-with `Your account org-…<ak-…> request reached organization max RPM: 3` — it never says rate
-limit, never says which model, and never says what to do. Two cases are recognised, both by
-status with the text as a fallback: `429` is a rate limit, `402` or an `insufficient balance`
-is an empty account. Anything else passes through unchanged, because inventing a friendly
-sentence for an error nobody has seen hides more than it explains.
+Each `streamStep` attempt has a 120-second deadline. It aborts the request and
+reports `ModelTimeoutError` if the model does not finish. This deadline is separate
+from print mode's overall `--max-seconds` limit.
 
-The status is read from the error, then from its `cause` — a rate limit that arrives after the
-first chunk comes wrapped in a `StreamFailure`, which keeps the original underneath.
-
-Retries happen before this. `withRetry` treats `429` as retryable and backs off 1s, 2s, 4s, so
-what reaches the screen is a limit that survived four attempts. The backoff ignores the wait
-the server asks for; at Moonshot's 3 requests a minute no backoff would help anyway, because a
-turn needs one request per step and a slow crawl reads worse than a clear failure.
+`withRetry` retries supported connection errors, non-daily `429` responses, and
+`5xx` responses only before output is emitted. Three retries follow the first
+attempt, with 1s, 2s, and 4s backoff. Daily-limit responses, ordinary request or
+credential errors, cancellation, and `ModelTimeoutError` are not retried. After
+partial output, the loop reports the failure and preserves the partial text.
+The Gemini SDK's own retries are disabled, leaving this policy in ACC.
 
 ## Context pressure
 
@@ -205,10 +214,12 @@ remains the separate command that intentionally starts a new conversation.
 
 | window | threshold (0.8) | floor | room between |
 | --- | --- | --- | --- |
-| 262,144 — all four models | 209,715 | 230,144 | 20,429 |
+| 1,048,576 — all three configured models | 838,861 (rounded) | 1,016,576 | 177,715 (rounded) |
 
 The threshold is the configurable compaction policy. The floor is the physical request-fit
 guard, which reserves the maximum 32,000-token reply. They are different checks.
+The fit guard also counts any temporary progress-review text, reducing the available
+room on review steps.
 
 ### The threshold
 
@@ -234,14 +245,13 @@ On failure, the held task is restored, the detailed history remains unchanged, a
 emits `compact_end`, `could not compact; the run stopped`, and `turn_end` before returning. It
 does not send another normal request or retry through a different pressure strategy.
 
-Reasoning-capable providers can return hidden continuation state alongside visible content and
-tool calls. `client.ts` collects that state without emitting it to the `Host`; `messages.ts`
-attaches it to the assistant message in the provider's OpenAI-compatible wire shape. The loop
-does not branch on provider names. Normal turns, compaction summaries, persistence, resume, and
-model switching all carry the optional state through the same message path. Compaction removes
-the old continuation state with the old history and keeps only the new summary's state. Because
-providers can concatenate it into later context, `estimateMessage` counts it even though the
-terminal never displays it.
+The Gemini adapter preserves native interaction steps as hidden continuation state in
+an internal `reasoning_content` field. `client.ts` collects it without emitting it to the
+UI, and `messages.ts` stores it on assistant messages. Later requests replay those steps
+through the adapter. Normal turns, persistence, resume, and model switching retain it.
+Compaction removes old state with the old history. The summary is stored with its new
+state, but the adapter sends the summary text as `user_input` on later requests.
+`estimateMessage` counts the stored continuation even though the terminal never displays it.
 
 **Only prior user prompts survive verbatim.** `retainRecentUserPrompts` walks user messages
 newest-first under a 20,000 estimated-token budget, then restores chronological order. Whole
@@ -300,7 +310,7 @@ would count it twice in every later projection.
 
 On a fresh session `projectedTokens` falls back to `contextStatus(...).used`, so the trigger
 *can* fire before the first request. At a real 0.8 threshold it never does — a fresh session
-is a system prompt and tool definitions, a few hundred tokens against ~209,000 — but a test
+is a system prompt and tool definitions, a small prompt against an approximately 839,000-token threshold — but a test
 with an absurdly low `ACC_COMPACT_AT` will see it, and that is correct: the estimate is the
 only reading available, and it is the same one `/context` shows.
 
@@ -310,7 +320,7 @@ served by the number the provider charged. The two differing by a little is corr
 bug.
 
 `ACC_COMPACT_AT` overrides the fraction when it parses to a number in `(0, 1]`. It exists so
-a live test can fire the trigger at a few thousand tokens instead of 210,000, and it stays as
+a live test can fire the trigger at a few thousand tokens instead of approximately 839,000, and it stays as
 the escape hatch if 0.8 turns out to be wrong.
 
 ### The floor below the trigger
@@ -319,7 +329,7 @@ Below the threshold block, on **every** turn, the loop checks that the next requ
 fits:
 
 ```
-projectedTokens(session, registry) + MAX_OUTPUT_TOKENS > session.contextWindow
+projectedTokens(session, registry) + auditTokens + MAX_OUTPUT_TOKENS > session.contextWindow
 ```
 
 On a yes it emits `stopped: the next request would exceed the context window`, then
@@ -334,7 +344,7 @@ coming.
 
 `MAX_OUTPUT_TOKENS` (32,000, `client.ts`) is the right reserve because the reply has to fit
 too. Note what this implies about the window: the reserve only sits above the 0.8 line when
-the window is at least 160,000 tokens. Every real model in the table is 262,144 tokens, so
+the window is at least 160,000 tokens. Every configured model in the table has 1,048,576 tokens, so
 this holds today — but a small-window model added later would trip the floor below its own
 compaction line.
 

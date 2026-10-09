@@ -63,10 +63,11 @@ In `auto`, prefer Bash for reading, searching, and running commands. Prefer
 `edit_file` and `write_file` for ordinary file changes so `/rewind` can use their
 existing backups when available. Use Edit for partial changes and Write for
 new files or full replacements. These are preferences, not restrictions;
-Bash remains available for edits, tests, formatters, and generators. Read and
-Grep remain useful for bounded output, search options, and sensitive-file
-exclusions.
-The two edit modes keep their previous tool guidance.
+Bash remains available for edits, tests, formatters, and generators. `auto`
+offers only Bash, Edit, Write, and Agent. Read and Grep are available in the
+two edit modes, where they provide bounded output, search options, and
+sensitive-file exclusions. These preferences are in the tool descriptions;
+the base system prompt is shared across permission modes.
 
 Shell changes are not backed up for `/rewind`. Git cannot reliably recover
 overwritten uncommitted work. Existing file-tool backups are why auto prefers

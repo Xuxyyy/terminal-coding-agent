@@ -43,13 +43,13 @@ const answer = await host.confirm({
 
 `once` grants another 60-turn segment and `deny` stops. The non-suppressible request removes the
 session-wide approval choice, so every extension stays bounded. Reusing `confirm` rather than
-adding `Host.onLimit` keeps the seam at three methods and needs no new UI state.
+adding `Host.onLimit` avoids another callback and needs no new UI state.
 
 ## Retry
 
-The SDK's built-in retry covers the request that opens the stream. It cannot cover a failure
-after chunks start arriving, because the SDK does not know what the caller already did with
-them — and we have already written them to the screen.
+The Gemini SDK's built-in retries are disabled. ACC owns the retry policy so it can
+stop retrying once output has reached the screen. Each model request attempt also has
+a 120-second deadline; a deadline failure stops with `ModelTimeoutError`.
 
 > Retry a turn only if nothing has been emitted yet — `content === ''` and no tool call
 > deltas have arrived.
@@ -58,9 +58,10 @@ If the stream dies after any output, do **not** retry. Emit the error, keep the 
 assistant message in `session.messages`, and let the user decide. Replaying would print the
 first half of the answer twice, and the user cannot tell which half is real.
 
-3 attempts, 1s / 2s / 4s backoff, only for connection errors, 429 and 5xx (`retry.ts`). Never
-a 400 or a 401 — those are our bug or a bad key, and retrying hides them. The abort path stays
-first, so `Esc` still stops instantly.
+Up to three retries follow the first attempt, with 1s / 2s / 4s backoff, for supported
+connection errors, non-daily 429 responses, and 5xx responses (`retry.ts`). Daily-limit
+responses, 400 or 401 errors, and `ModelTimeoutError` are not retried. Cancellation also
+ends retrying; Esc interrupts both a request and its backoff.
 
 ## What a session stores
 
@@ -199,8 +200,8 @@ not add a separate explanation below the locked row. There is no session fork op
 ## `/rewind`
 
 The same picker, one row per user message, newest selected, dropping the conversation from that
-message onward and putting back every file the agent wrote after it. Rows older than the last
-summary say so. On disk it **appends a marker** rather than cutting: `store.rewind(to)` writes
+message onward and restoring files covered by file-tool backups. Changes made through
+Bash are not captured or restored. Rows older than the last summary say so. On disk it **appends a marker** rather than cutting: `store.rewind(to)` writes
 `{kind:'rewind', to}` and the dropped records stay where they are. Readers resolve the marker,
 so every consumer sees the short history while the file keeps the long one.
 
@@ -326,9 +327,10 @@ before any replacement is built.
 
 The summary is an `assistant` message, not a `user` one: the model wrote it. It sits behind a
 fixed `SUMMARY_PREFIX` so the model reads it as context rather than as an answer it already
-gave. Keeping the assistant role also avoids a provider-specific representation across the
-OpenAI-compatible providers. The summarizing request sends **no tool definitions** — that saves
-the ~526 tokens they cost and stops the model calling a tool when all it must do is write prose.
+gave. This is the internal representation. The Gemini adapter recognizes `SUMMARY_PREFIX`
+and sends its text as `user_input` on later requests, rather than replaying it as native
+model output. The summarizing request sends **no tool definitions**, reducing request size
+and leaving no tools for the model to call while it writes the summary.
 
 A failed or empty summary changes nothing and returns `null`. A compaction that half-runs would
 destroy the conversation it was meant to shrink.

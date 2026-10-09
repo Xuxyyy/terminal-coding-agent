@@ -18,12 +18,17 @@ them, edits them, and runs commands until the task is done. The default permissi
 mode is `auto`: actions above its automatic allowance threshold go to a model
 judge, then to you when approval is still needed. An explicitly saved mode wins.
 
-- Six built-in tools: `read_file`, `grep`, `edit_file`, `write_file`, `bash`,
-  and `agent`. Global [agent definitions](https://coding-cli-docs.vercel.app/configure/agents/)
+- Default `auto` mode offers four tools: `bash`, `edit_file`, `write_file`,
+  and `agent`. `ask-edits` and `auto-edits` also offer `read_file` and `grep`.
+  Global [agent definitions](https://coding-cli-docs.vercel.app/configure/subagent/)
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
-- Gemini is the only model provider. Gemini 3.8 Flash is the default; Gemini
-  3.1 Pro Preview is optional.
-- One permission gate that every tool call passes through.
+  The parent waits for its report; the child has a separate conversation and
+  cannot spawn another agent.
+- Gemini is the only model provider, using the native Interactions API.
+  Gemini 3.8 Flash is the default. Gemini 3.1 Pro Preview and Gemini 3.5
+  Flash-Lite are also selectable. Permission judging uses Flash-Lite regardless
+  of the main agent's selected model.
+- One permission gate for file and shell actions, including sub-agent actions.
 - In `auto`, prefer Bash for reading, searching, and commands. Prefer Edit and
   Write for ordinary file changes so `/rewind` can use their existing backups
   when available. These are preferences, not restrictions.
@@ -31,9 +36,13 @@ judge, then to you when approval is still needed. An explicitly saved mode wins.
   the conversation and files captured by file-tool backups back to before a
   message you sent. Shell changes are not captured or restored. Git cannot
   reliably recover overwritten uncommitted work.
-- A context readout. `/context` prints how full the window is, with a
-  breakdown; `/compact` keeps recent user prompts and summarizes the older
-  conversation when it gets long.
+- Context management. `/context` shows window usage. Before a model request,
+  the agent automatically compacts at 80% projected usage. `/compact` can also
+  run manually. Compaction keeps recent user prompts and summarizes older
+  context; a failed summary preserves the conversation and stops the run.
+- Bounded work. The agent reviews progress privately every 10 model turns.
+  Interactive runs ask to continue after each 60-turn segment. Print mode
+  stops at its configured turn or time limit.
 
 **It edits your files and runs shell commands** in the folder you start it
 from. That is what it is for, and it is why every call goes through the gate.
@@ -61,57 +70,84 @@ workspace-independent.
 
 - Node 22 or newer, on macOS or Linux. The `bash` tool runs commands through
   `bash`, so Windows needs WSL.
-- ripgrep (`rg`) on your `PATH`, for the `grep` tool. Without it the agent falls
-  back to shell `grep` — that works, but it is slower and ignores `.gitignore`.
+- ripgrep (`rg`) on your `PATH`, for fast shell searches and the `grep` tool.
+  If it is missing, the `grep` tool reports an error and suggests shell `grep`.
+  Shell searches do not inherit the tool's sensitive-file exclusions.
 - Set `GEMINI_API_KEY` in your environment or copy `.env.example` to `.env`
-  and fill it in. The two model ids are on
+  and fill it in. Keys load from the shell, then the project's `.env`, then
+  `~/.acc/.env`. Model IDs and selection settings are on
   [Models](https://coding-cli-docs.vercel.app/configure/models/).
+
+## Print mode
+
+Run one task without an interactive terminal:
+
+```bash
+acc -p "summarize this project" --max-steps 60 --max-seconds 300
+```
+
+`--json` emits structured events and a final result. `--max-steps` limits model
+turns, including the final answer; `--max-seconds` limits elapsed time. Their
+defaults are 60 and 300. Confirmations are denied unless `--yes` is passed.
+Actions already allowed by the permission gate can still run and edit files.
+Print runs do not save resumable sessions. See [Print mode](docs/headless.md).
+
+## Sandbox
+
+Sandbox defaults to **Off**. On is supported only on macOS; Linux uses Off.
+Use `/sandbox` while idle, or launch with `acc --sandbox on` (also supported
+with `-p`). The choice lasts for this ACC process and stays visible in the UI.
+Both modes keep permission checks and clean shell environments. Off removes
+ACC's OS file and network restrictions; environment cleanup cannot stop
+commands from reading credential files. See [sandbox details](docs/sandbox.md).
 
 ## How it works
 
 **The seam.** `src/core` runs the agent and never imports React; `src/ui` draws
-it with Ink. They meet at one interface, `Host` in `src/core/host.ts`, which is
-three members: `confirm`, `onEvent`, and `signal`. No import points the other
-way, so the turn loop is tested without ever starting a terminal.
+it with Ink. They meet at `Host` in `src/core/host.ts`: `confirm`, `onEvent`,
+`signal`, and optional `onModelUsage` for token accounting. Core never imports
+UI, so the turn loop is tested without starting a terminal.
 
-**One permission gate.** Every tool call passes through `permitted()` in
-`src/core/tools/registry.ts`; there is no second route to the filesystem or the
-shell. A session approval is remembered only when the decision comes back
+**The loop.** The model receives the conversation and available tools. Its
+requested tools run in order, their results enter the conversation, and the
+next model request continues the task. A response without tool calls ends the
+turn. Progress reviews, permission decisions, context checks, and cancellation
+bound this loop.
+
+**One permission gate.** File and shell actions pass through `permitted()` in
+`src/core/tools/registry.ts`. The parent `agent` call delegates a job; each file
+or shell action inside the child receives its own permission check. A session
+approval is remembered only when the decision comes back
 `suppressible`, which is what stops a guardrail from being remembered by
 mistake — a refusal you were meant to see cannot be turned off by an earlier
 "yes".
 
-**Resume in place.** Each run writes a `session.jsonl`, one record per line,
-holding both the messages the model saw and the view the terminal drew. `/resume`
+**Resume in place.** Each interactive session writes a `session.jsonl`, one
+record per line, holding both the messages the model saw and the view the terminal drew. `/resume`
 reopens a session in the folder it already owns instead of copying its history
 into a new one, so a resumed run and its original stay a single session on disk.
 
-The longer version of all three, with the alternatives that were rejected, is
+The longer explanation is
 [Architecture](https://coding-cli-docs.vercel.app/design/architecture/) on
-the docs site. Six design docs in [`docs/`](docs/) — about 2,400 lines — go one
-level deeper, one per subsystem: the code is the truth about *what*, those files
-are the truth about *why*.
+the docs site. The design docs in [`docs/`](docs/) explain each subsystem and
+its tradeoffs in more detail.
 
 ## Evaluation
 
 `acc` keeps two active release gates: 60 permission-judge cases and six
-black-box package/CLI scenarios. Independent paid checks also exercise a
-packed print-mode edit and TUI resume in a real terminal. Safety and
-installed-product behavior are reported separately.
+black-box package/CLI scenarios. Safety and installed-product behavior are
+reported separately. The Judge eval calls a live model and is an optional paid
+check; normal tests and package/CLI checks run without paid model calls.
 
-The embedded Task/Case Evaluation has been removed. Its complete sanitized
-2026-09-17 result remains in the historical baseline, alongside the Judge,
-operational, and independent CLI/TUI results from that date. See
-[Evaluation](https://coding-cli-docs.vercel.app/design/evaluation/) for the
-active commands, historical scorecard, and evidence limits.
+See [Evaluation](https://coding-cli-docs.vercel.app/design/evaluation/) for
+commands and evidence limits.
 
 ## Not built yet
 
 Left undone on purpose: a git-backed snapshot that would catch what `bash`
-changes, and a byte cap on the copies a write stores — both wait for numbers
-from real use rather than a guess. So does compacting and retrying when a
-provider rejects a turn for length: the error differs per provider, and there is
-no way to test it without paying for a deliberate failure.
+changes, a byte cap on file backups, and compacting and retrying after a
+provider rejects a request for length. The current loop checks projected
+context before sending a request.
 [`docs/features.md`](docs/features.md) lists what ships today and what does not.
 
 ## Docs
@@ -130,11 +166,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-
-Sandbox defaults to **Off**. Sandbox On is supported only on macOS; Linux runs with
-Sandbox Off, including Harbor evaluation. Use `/sandbox` while idle to choose On or
-Off, or launch with `acc --sandbox on` (also supported with `-p`). The status stays visible and the
-choice lasts for this ACC process. Both modes keep permission checks and clean Shell
-environments. Off removes ACC's OS file and network restrictions; environment cleanup
-cannot stop commands from reading credential files. See [sandbox details](docs/sandbox.md).

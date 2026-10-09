@@ -1,13 +1,15 @@
 ---
 title: Tools
-description: The six tools acc gives the model — what read_file, grep, edit_file, write_file, bash and agent each take, what they return, where they cap their output, and what happens before any of them runs.
+description: The six built-in tools and their availability by permission mode — what read_file, grep, edit_file, write_file, bash and agent each take, what they return, where they cap their output, and what happens before any of them runs.
 sidebar:
   order: 3
 ---
 
-The model gets six tools: read a file, search with ripgrep, edit one exact
-piece of text, write a whole file, run a shell command, and hand a job to a
-sub-agent. They are the complete tool set. File and shell execution defaults to Sandbox Off.
+There are six built-in tools. Default `auto` mode offers four: `edit_file`,
+`write_file`, `bash`, and `agent`. Reads and searches use Bash. `ask-edits` and
+`auto-edits` also offer `read_file` and `grep`.
+
+File and shell execution defaults to Sandbox Off.
 Permission checks apply in both modes. With Sandbox On, extra network access and
 host paths require approval for each call, and known credential storage stays hidden.
 
@@ -20,14 +22,18 @@ host paths require approval for each call, and known credential storage stays hi
 | [`bash`](#bash) | Runs a shell command in the workspace root — tests, git, deletes. |
 | [`agent`](#agent) | Hands one self-contained job to a sub-agent and waits for its answer. |
 
-Six, and not fifteen, because every tool is a slot in the model's attention: it
-re-reads the whole list on every step, and two tools that overlap make the wrong
-pick *plausible* rather than loud. Anything else a task needs is a shell command
-away, and `bash` is one slot rather than twenty.
+The offered tool list is chosen by permission mode. In `auto`, tool
+descriptions prefer Bash for reads and searches, and Edit or Write for ordinary
+file changes so `/rewind` can use their backups. Shell edits remain allowed,
+but are not backed up. Read and Grep are unavailable in `auto`, including as
+fallbacks. These preferences live in tool descriptions; the base system prompt
+is shared across permission modes.
 
 **Every path is resolved against the workspace root before the tool runs.** A
-path that lands outside it does not silently fail — it stops and asks you, every
-single time, and that prompt can never be remembered. See
+path that lands outside it receives further permission checks. In `auto`, the
+judge may allow it; otherwise the user is asked. An outside-path approval is
+never remembered. With Sandbox On, extra access requires explicit approval
+for each call. See
 [Permissions](/configure/permissions).
 
 ## Limits

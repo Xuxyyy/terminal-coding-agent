@@ -3,7 +3,7 @@
 ACC defaults to **Sandbox: Off**. Permission checks remain active in both modes.
 Bash, ripgrep, file-operation workers, and backup snapshots all use the selected mode.
 The model client and private session storage remain outside tool execution.
-Sandbox On is supported only on macOS. Linux, including Harbor, uses Sandbox Off.
+Sandbox On is supported only on macOS. Linux uses Sandbox Off.
 
 ## Controls
 
@@ -93,19 +93,6 @@ backend is missing or cannot initialize, operations also fail. They never fall b
 to Off automatically. A container needs its own restrictions too: do not
 expose host credentials, the host PID namespace, or a Docker socket.
 
-## Harbor
-
-Keep the provider key on the host and keep using the existing host model relay.
-Shell does not inherit the task's relay URL; the trusted ACC model client uses it.
-The adapter explicitly launches ACC with `--sandbox off`. Use the reusable runtime
-artifact with Node, Bash, and ripgrep.
-
-Keep Harbor's normal Docker protections and mounts. Do not add privileged mode,
-capabilities, unconfined security settings, host credential mounts, or a Docker socket.
-Unpaid install-only and scripted relay/tool checks verify compatibility before any
-separately approved paid evaluation. Harbor evaluates the agent with Sandbox Off;
-macOS CI separately tests ACC's sandbox protections.
-
 ## Limits and verification
 
 When On, the sandbox protects access to known storage, not secrets copied into arbitrary
@@ -122,24 +109,3 @@ ceiling in addition to each tool's display limit.
 `src/tests/core/sandbox.test.ts` tests real enforcement using fake keys, normal
 builds, symlinks, hard links, directory renames, one-call grants, local HTTP and
 Unix sockets, cancellation, and binary backups. It makes no paid model calls.
-
-## Verification record — October 5, 2026
-
-- ACC: all 886 tests passed, including both sandbox modes, the TUI controls,
-  permission checks, environment cleanup, cancellation, and file backups.
-- Harbor adapter: all 19 unit tests passed. Install-only and the unpaid scripted
-  smoke test passed with sandbox Off, all five tools, and the real host relay.
-  Docker's normal protections remained active, the fake provider key was absent
-  from task environment and job files, and the relay closed after the run.
-- Real API smoke test: one Gemini 3.8 Flash trial completed in 1m 24s with sandbox
-  Off. ACC created and read back `hello.txt`, then finished normally. The adapter
-  reported normal Docker protections and no provider key in the task environment
-  or job files.
-- Harbor recorded reward `0.0` because an Ubuntu package download returned
-  `502 Bad Gateway`, preventing the verifier tests from running. ACC/model execution
-  passed; Harbor task verification is inconclusive.
-
-Local evidence lives in the sibling Harbor adapter project:
-[unpaid smoke trajectory](../../acc-harbor-adapter/jobs/sandbox-off-unpaid-737635e7/hello-world/agent/acc.jsonl),
-[paid trial result](../../acc-harbor-adapter/jobs/acc-gemini-3-8-flash-live-20261005/hello-world__74bq6DE/result.json),
-and [verifier output](../../acc-harbor-adapter/jobs/acc-gemini-3-8-flash-live-20261005/hello-world__74bq6DE/verifier/test-stdout.txt).
