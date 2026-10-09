@@ -5,6 +5,7 @@ import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {once} from 'node:events';
+import {setTimeout as delay} from 'node:timers/promises';
 import test, {type TestContext} from 'node:test';
 import {cleanEnvironment, makePolicy, normalizeAccess, type SandboxAccess} from '../../core/sandbox/policy.js';
 import {macProfile, runCommand, runSandboxed} from '../../core/sandbox/run.js';
@@ -50,6 +51,43 @@ function context(root: string, answer: ConfirmDecision = 'once') {
 async function shell(ctx: ToolContext, command: string, access?: SandboxAccess) {
   return runTool([bash], 'bash', JSON.stringify({command, access}), ctx);
 }
+
+async function assertProcessExited(pid: number, timeoutMs = 2_000): Promise<void> {
+  assert.ok(Number.isSafeInteger(pid) && pid > 0, 'expected a valid child process ID');
+  const deadline = performance.now() + timeoutMs;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return;
+      throw error;
+    }
+    assert.ok(performance.now() < deadline, `process ${pid} still exists after ${timeoutMs}ms`);
+    await delay(20);
+  }
+}
+
+test('process exit check waits for delayed cleanup', async (t) => {
+  let checks = 0;
+  t.mock.method(process, 'kill', (pid: number, signal: number) => {
+    assert.equal(pid, 12345);
+    assert.equal(signal, 0);
+    if (++checks < 3) return true;
+    throw Object.assign(new Error('process exited'), {code: 'ESRCH'});
+  });
+  await assertProcessExited(12345);
+  assert.equal(checks, 3);
+});
+
+test('process exit check fails when the process stays alive', async () => {
+  await assert.rejects(assertProcessExited(process.pid, 40), /still exists after 40ms/);
+});
+
+test('process exit check does not mistake permission errors for cleanup', async (t) => {
+  const error = Object.assign(new Error('permission denied'), {code: 'EPERM'});
+  t.mock.method(process, 'kill', () => { throw error; });
+  await assert.rejects(assertProcessExited(12345), error);
+});
 
 test('the child environment contains settings, not credentials or startup injection', () => {
   const env = cleanEnvironment('/private/scratch', {
@@ -269,8 +307,7 @@ test('timeout and cancellation kill ordinary child processes and report the reas
   assert.equal(result.timedOut, true);
   assert.equal(result.code, 124);
   const pid = Number(fs.readFileSync(path.join(root, 'child.pid'), 'utf8'));
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  assert.throws(() => process.kill(pid, 0));
+  await assertProcessExited(pid);
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 100);
   const cancelled = await runSandboxed({root, program: '/bin/bash', args: ['-c', 'sleep 20'], signal: controller.signal});
@@ -346,7 +383,7 @@ for (const sandbox of ['off', 'on'] as const) {
     assert.equal(result.timedOut, true);
     assert.equal(result.code, 124);
     const pid = Number(fs.readFileSync(path.join(root, 'mode-child.pid'), 'utf8'));
-    assert.throws(() => process.kill(pid, 0));
+    await assertProcessExited(pid);
     const controller = new AbortController();
     const cancelled = runCommand({root, sandbox, program: '/bin/bash', args: ['-c', 'sleep 20'], signal: controller.signal});
     setTimeout(() => controller.abort(), 150);
