@@ -97,7 +97,7 @@ Configured tools are checked against the live registry at invocation time. If a
 named tool is unavailable, the child does not run with a smaller list. The tool
 result names every missing tool so you can fix the definition. Availability
 follows the child's effective permission mode: `auto` has Bash, Edit, and
-Write, while the two edit modes also have Read and Grep. The `agent` tool is
+Write, while the two edit modes also have Read, Grep, and Glob. The `agent` tool is
 always removed, so children cannot spawn nested agents.
 
 A definition can narrow permissions but cannot widen them. The order from most

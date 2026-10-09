@@ -661,7 +661,7 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
 });
 
 test('auto offers shell reading while other modes keep dedicated read and search tools', () => {
-  const full = ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent'];
+  const full = ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent'];
 
   for (const mode of ['auto-edits', 'ask-edits'] as const) {
     assert.deepEqual(toolsFor(mode).map((tool) => tool.name), full);

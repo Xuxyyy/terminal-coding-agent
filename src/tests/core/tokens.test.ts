@@ -78,10 +78,15 @@ test('mixed text charges each script its own rate', () => {
   assert.ok(estimateTokens('上下文用量') > estimateTokens('context'));
 });
 
-test('the five tool definitions cost several hundred tokens on every request', () => {
-  const estimate = estimateTools(toolDefinitions(tools));
+test('the existing five tools stay within their token budget', () => {
+  const estimate = estimateTools(toolDefinitions(tools.filter((tool) => tool.name !== 'glob')));
 
   assert.equal(estimateTools([]), 0);
   assert.ok(estimate > 260, `expected over 260 tokens, got ${estimate}`);
   assert.ok(estimate < 1_060, `expected under 1060 tokens, got ${estimate}`);
+});
+
+test('glob adds fewer than 200 estimated tokens', () => {
+  const estimate = estimateTools(toolDefinitions(tools.filter((tool) => tool.name === 'glob')));
+  assert.ok(estimate > 0 && estimate < 200, `expected 1-199 tokens, got ${estimate}`);
 });

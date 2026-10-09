@@ -122,6 +122,12 @@ export function formatArgs(
 ): string {
   if (!args || typeof args !== 'object') return '';
   if (name === 'grep') return searchCommand(args);
+  if (name === 'glob') {
+    const fields = args as {pattern?: unknown; path?: unknown};
+    if (typeof fields.pattern !== 'string') return '';
+    const target = typeof fields.path === 'string' ? fields.path : '.';
+    return truncate(`${JSON.stringify(fields.pattern)} in ${JSON.stringify(target)}`, SEARCH_COMMAND_MAX);
+  }
   const key = ARG_KEY[name];
   if (!key) return '';
   const value = (args as Record<string, unknown>)[key];

@@ -30,7 +30,7 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 
 - **Four tools in default `auto` mode.** Bash handles reads, searches, and
   commands. `edit_file` and `write_file` make backed-up file changes, and
-  `agent` delegates a job. The two edit modes also offer `read_file` and `grep`.
+  `agent` delegates a job. The two edit modes also offer `read_file`, `grep`, and `glob`.
 - **One provider, three models.** Gemini uses the native Interactions API.
   Set `GEMINI_API_KEY`; Gemini 3.8 Flash is the default. Pro Preview and
   Flash-Lite are also selectable. Permission judging uses Flash-Lite.

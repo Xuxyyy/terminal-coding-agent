@@ -22,6 +22,10 @@ import {
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
+test('glob calls show the pattern and directory to the judge', () => {
+  assert.equal(summarizeCall('glob', JSON.stringify({pattern: '**/*.ts', path: 'src'})), 'glob **/*.ts in src');
+});
+
 const REMOVING: Request = {kind: 'command', command: 'rm build.log'};
 const FLAGGED = "deletes 'build.log'";
 const ASKED = ['delete the stale build log'];

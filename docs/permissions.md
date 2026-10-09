@@ -225,8 +225,8 @@ or out of `auto` changes nothing here either: a judge `allow` is never written t
 `session.allowed`, so `auto` never puts a key there that another mode would inherit.
 
 `toolsFor(mode)` in `tools/index.ts` offers only `edit_file`, `write_file`, `bash`,
-and `agent` in `auto`. Reading and searching use Bash; `read_file` and `grep`
-are not available as fallbacks. The two edit modes keep all six tools and their
+and `agent` in `auto`. Reading and searching use Bash; `read_file`, `grep`, and `glob`
+are not available as fallbacks. The two edit modes keep all seven tools and their
 existing descriptions. Auto descriptions prefer Edit or Write for ordinary file
 changes. The base system prompt is shared across permission modes. Mode changes
 update the next turn's tool list, and subagents use their effective mode. The
@@ -281,7 +281,7 @@ Everything else is stripped, and each strip is load-bearing:
 - **the session's own system prompt.** The judge has its own rubric and is not the agent.
 
 **A tool call is summarized, never dumped.** `bash` → the command; `write_file` / `edit_file` /
-`read_file` → the path only; `grep` → the pattern and path; anything else, or arguments that do
+`read_file` → the path only; `grep` and `glob` → the pattern and path; anything else, or arguments that do
 not parse as JSON → the tool name plus the first 200 characters of the raw argument string. The
 reason is not size, though an `edit_file` call carrying a whole file would swamp the input on
 every judged action. It is that a file body is **a channel from the agent into its own audit**:
@@ -771,8 +771,8 @@ is the only verdict that crosses out there, which is what makes the reach safe t
 ## Enforcement
 
 `permitted()` in `registry.ts` calls `decide()` and builds the `ConfirmRequest` from the
-`Outcome`. It is the only place permission is checked — `resolveTarget` in `tools/paths.ts`
-resolves a path and judges nothing, so no tool can refuse behind the gate's back. The mode
+`Outcome`. It authorizes each call; Glob additionally omits matching files denied by path
+rules. `resolveTarget` in `tools/paths.ts` resolves a path and judges nothing. The mode
 reaches it on `ToolContext`, passed from `session.mode` where `session.rules` is already
 passed.
 
@@ -788,7 +788,7 @@ Session memory is keyed on the **normalized whole command**, stage by stage, joi
 ago must not be waiting after a restart. `/clear` clears it; `/rewind` does not, because a
 rewind is not a new session and the approvals were granted in this run.
 
-The five file and command tools carry a `request`. `agent` is the
+The six file and command tools carry a `request`. `agent` is the
 deliberate exception: starting a child is not itself an action on the workspace, so the parent
 call takes `permitted()`'s early exit. Each tool the child calls still reaches the gate in the
 normal way. Path confinement in `paths.ts` is the second layer for path-taking tools. It stays

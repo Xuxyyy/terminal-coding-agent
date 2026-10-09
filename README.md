@@ -19,7 +19,7 @@ mode is `auto`: actions above its automatic allowance threshold go to a model
 judge, then to you when approval is still needed. An explicitly saved mode wins.
 
 - Default `auto` mode offers four tools: `bash`, `edit_file`, `write_file`,
-  and `agent`. `ask-edits` and `auto-edits` also offer `read_file` and `grep`.
+  and `agent`. `ask-edits` and `auto-edits` also offer `read_file`, `grep`, and `glob`.
   Global [agent definitions](https://coding-cli-docs.vercel.app/configure/subagent/)
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
   The parent waits for its report; the child has a separate conversation and
@@ -70,8 +70,8 @@ workspace-independent.
 
 - Node 22 or newer, on macOS or Linux. The `bash` tool runs commands through
   `bash`, so Windows needs WSL.
-- ripgrep (`rg`) on your `PATH`, for fast shell searches and the `grep` tool.
-  If it is missing, the `grep` tool reports an error and suggests shell `grep`.
+- ripgrep (`rg`) on your `PATH`, for fast shell searches and the `grep` and `glob` tools.
+  If it is missing, the tools report an error and suggest shell `grep` or `find`.
   Shell searches do not inherit the tool's sensitive-file exclusions.
 - Set `GEMINI_API_KEY` in your environment or copy `.env.example` to `.env`
   and fill it in. Keys load from the shell, then the project's `.env`, then

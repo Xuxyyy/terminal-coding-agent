@@ -1,25 +1,26 @@
 # Tools
 
 Status: built.
-Covers: `src/core/tools/` — the six tools the model can call, their arguments,
+Covers: `src/core/tools/` — the seven tools the model can call, their arguments,
 their caps, and the exact text they fail with
 Read when: adding a tool, changing a schema, or changing what a tool returns
 See also: `permissions.md` (the gate a tool passes on its way to the disk),
 `agent-loop.md` (where `runTool` is called from), `features.md` (what ships today)
 
-## The six tools
+## The seven tools
 
 In the order `src/core/tools/index.ts` registers them, which is the order the
 model sees them in.
 
 In `auto` mode, only `edit_file`, `write_file`, `bash`, and `agent` are offered.
-Reading and searching use Bash. `read_file` and `grep` remain available in
+Reading and searching use Bash. `read_file`, `grep`, and `glob` remain available in
 `ask-edits` and `auto-edits`, but are not fallbacks in `auto`.
 
 | Tool | Arguments | What it does | When it asks |
 |---|---|---|---|
 | `read_file` | `path`, `offset?`, `limit?` | Reads a text file as numbered lines, so `edit_file` can quote it byte for byte. 400 lines by default. | only for a path outside the project, which can never be remembered |
 | `grep` | `pattern`, `path?`, `glob?`, `output_mode?`, `case_insensitive?`, `context?` | Searches file contents with `rg`. Returns matching paths only, unless asked for `content` or `count`. | only for a path outside the project, which can never be remembered |
+| `glob` | `pattern`, `path?` | Finds files by name, newest first, up to 100 paths. Includes gitignored files. | only for a path outside the project, which can never be remembered |
 | `edit_file` | `path`, `old_string`, `new_string` | Replaces one exact, unique piece of text. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `write_file` | `path`, `content` | Creates a file or replaces all of it. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
@@ -40,20 +41,20 @@ whatever mode it is in. One tag covers both tools, because both reach the gate a
 the same `{kind: 'write', path}`.
 
 **A `deny` rule can stop a path outside the project before it is ever asked
-about.** The four rows above say what happens with no rule. A `deny` rule whose
+about.** The five file-tool rows above say what happens with no rule. A `deny` rule whose
 pattern names the path absolutely — `deny: ["edit(~/.ssh/**)"]`, never
 `edit(**)`, which still means inside the project only — refuses the call with no
-prompt at all, and it is the one rule that reaches `read_file` and `grep` as well
+prompt at all, and it is the one rule that reaches `read_file`, `grep`, and `glob` as well
 as the two writers. Any other rule leaves an outside path where the rows leave
 it: asked about, every time, never remembered. `permissions.md` has the matcher
 and the chain.
 
 **The list comes from one place.** `toolsFor(mode)` in
 `src/core/tools/index.ts` is the single source of what is offered. In `auto`,
-it removes `read_file` and `grep`, then copies the three remaining file and
+it removes `read_file`, `grep`, and `glob`, then copies the three remaining file and
 shell tools with descriptions that prefer Bash for reads and searches, and
 Edit or Write for ordinary file changes. It adds `agent` in every mode.
-`ask-edits` and `auto-edits` retain all six tools and the original descriptions.
+`ask-edits` and `auto-edits` retain all seven tools and the original descriptions.
 Filtering preserves the remaining tools' order, schemas, and handlers without
 mutating the shared tool objects. It is the default
 argument of both `runAgent` and `contextStatus`, so what
@@ -65,7 +66,7 @@ searching, and running commands. Prefer `edit_file` and `write_file` for ordinar
 file changes so `/rewind` can use their existing backups when available:
 `edit_file` for partial edits, `write_file` for new files or full replacements.
 These are preferences, not restrictions; Bash remains available for edits,
-tests, formatters, and generators. In the two edit modes, Read and Grep offer
+tests, formatters, and generators. In the two edit modes, Read, Grep, and Glob offer
 bounded output, search options, and sensitive-file exclusions. A child follows its
 effective permission mode and keeps its configured tool allowlist.
 
@@ -100,12 +101,12 @@ mostly punctuation it tokenizes far closer to one token per character than to
 four — a long `.describe()` costs more than its length suggests.
 
 **A tool with no `request` never reaches the gate.** `permitted()` returns
-immediately when `tool.request` is absent. The five file and command tools carry
+immediately when `tool.request` is absent. The six file and command tools carry
 one. `agent` deliberately does not: starting a child is
 not itself an action on the workspace, while every tool the child calls still
-has its own permission decision. `read_file` and `grep` do not prompt for an
+has its own permission decision. `read_file`, `grep`, and `glob` do not prompt for an
 inside-project read because `decide()` classifies it as `observe`; an outside
-read still asks. `grep` passes `path ?? '.'`, which is what it actually searches.
+read still asks. Grep and Glob pass `path ?? '.'`, which is what it actually searches.
 The rule for what a `request` should be is `permissions.md`'s.
 
 ### What `runTool` does before `run`
@@ -192,6 +193,37 @@ this marker names a different fix than `read_file`'s.
 `chosenArgv` is exported for the UI, and it is deliberately **not** the argv that
 runs: it drops the four always-on flags and prints the path the model actually
 gave. The row shows the search the model chose, not the plumbing around it.
+
+## `glob`
+
+`pattern` is required; `path` is an optional existing directory, defaulting to
+the workspace. Patterns are relative to that directory and support `*`, `**`,
+`?`, character classes, and brace alternatives. Use `path` for an outside
+search directory; absolute patterns, parent traversal, leading `!`, empty
+strings, and null bytes are rejected.
+
+Glob finds file names, while Grep searches contents. A sandboxed Node worker
+runs `rg --files --null --hidden --no-ignore` with the requested glob. It
+includes dotfiles and gitignored files, but shares Grep's explicit sensitive-file
+and directory exclusions. Those exclusions also apply to the search directory.
+It does not follow file or directory symlinks within the search tree. Matching
+files denied by path rules are omitted.
+
+The worker sorts all matching files by modification time, newest first, with
+path order breaking ties. Results use workspace-relative paths inside the
+project and absolute paths outside it. Names containing control characters are
+JSON-quoted. The result has at most 100 paths and 32,000 characters, including
+any truncation or partial-access notice. Narrow `pattern` or `path` when capped.
+
+An empty match returns `no files matched glob '…'`. Invalid patterns, missing
+paths, non-directory paths, and worker failures return errors. Partial access
+is marked as incomplete. A 30-second timeout asks for a narrower search;
+cancellation returns the normal interrupted result. Missing `rg` suggests
+Bash with `find`. Enumeration and metadata reads both run under the selected
+sandbox mode and the existing read permission gate.
+
+Glob is available only in `ask-edits` and `auto-edits`, including subagents
+whose tool allowlists permit it. `auto` continues to use Bash for discovery.
 
 ## `edit_file`
 

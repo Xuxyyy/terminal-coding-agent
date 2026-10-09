@@ -65,13 +65,13 @@ export function summarizeCall(name: string, args: string): string {
     const target = text('path');
     if (target !== null) return `${name} ${target}`;
   }
-  if (name === 'grep') {
+  if (name === 'grep' || name === 'glob') {
     const pattern = text('pattern');
     if (pattern !== null) {
       const target = text('path');
       return target === null
-        ? `grep ${pattern}`
-        : `grep ${pattern} in ${target}`;
+        ? `${name} ${pattern}`
+        : `${name} ${pattern} in ${target}`;
     }
   }
   return `${name} ${args.slice(0, ARG_LIMIT)}`.trimEnd();

@@ -17,9 +17,9 @@ The workspace is the current directory. Installed as the `acc` command.
 ## The agent loop
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
-- Six built-in tools: `read_file`, `grep`, `edit_file` (unique-match),
+- Seven built-in tools: `read_file`, `grep`, `glob`, `edit_file` (unique-match),
   `write_file`, `bash`, `agent`. Default `auto` mode offers only `edit_file`,
-  `write_file`, `bash`, and `agent`; the two edit modes offer all six.
+  `write_file`, `bash`, and `agent`; the two edit modes offer all seven.
 - `agent` hands one self-contained job to a sub-agent. Files in
   `<ACC_HOME>/agents/*.md` define optional global types with a routing
   description, appended role prompt, model, exact tool list, and permission
@@ -33,6 +33,9 @@ The workspace is the current directory. Installed as the `acc` command.
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
   `bash`; it does not crash.
+- `glob` finds file names with `pattern` and optional directory `path`. It includes
+  gitignored files, excludes sensitive paths, and returns up to 100 files newest
+  first. Available in the two edit modes; `auto` uses Bash.
 - File reads, searches, diffs, and shell output have size limits. These reduce
   context growth but do not guarantee that a tool round fits the window.
   `bash` keeps a head and a tail. Sizes and the reasoning are in `tools.md`.

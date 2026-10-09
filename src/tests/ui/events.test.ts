@@ -25,6 +25,12 @@ import {
 } from '../../ui/events.js';
 import {chosenArgv} from '../../core/tools/grep.js';
 
+test('glob displays its pattern and search directory', () => {
+  assert.equal(formatArgs('glob', {pattern: '**/*.ts'}), '"**/*.ts" in "."');
+  assert.equal(formatArgs('glob', {pattern: '*.ts', path: 'source files'}), '"*.ts" in "source files"');
+  assert.equal(formatArgs('glob', {}), '');
+});
+
 test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(
     resultStatus('read_file', 'Error: no such file: src/main.ts'),

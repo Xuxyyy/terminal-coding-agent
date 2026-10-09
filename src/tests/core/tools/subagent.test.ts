@@ -169,7 +169,7 @@ test('an allow list narrows the child to those tools alone', () => {
 });
 
 test('auto child allowlists cannot restore read or search tools or add recursive agents', () => {
-  const offered = childTools('auto', ['grep', 'read_file']);
+  const offered = childTools('auto', ['grep', 'glob', 'read_file']);
   assert.deepEqual(offered, []);
   assert.deepEqual(childTools('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash']);
   const editing = childTools('auto', ['edit_file', 'write_file']);
@@ -197,7 +197,7 @@ test('children use the parent auto preference unless configured with a stricter 
     const offered = body.tools as {function: {name: string; description: string}}[];
     assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
       ? ['edit_file', 'write_file', 'bash']
-      : ['read_file', 'grep', 'edit_file', 'write_file', 'bash']);
+      : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash']);
     const shell = offered.find((tool) => tool.function.name === 'bash')!;
     assert.equal(shell.function.description.includes('Use this tool for ordinary file reads, searches, and running commands'), mode === 'auto');
     for (const tool of offered.filter((tool) => tool.function.name === 'edit_file' || tool.function.name === 'write_file')) {

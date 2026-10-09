@@ -30,8 +30,8 @@ export const bash: Tool = {
   name: 'bash',
   description:
     'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
-    'To search file contents use the grep tool instead; reach for a shell search only to build a pipeline, ' +
-    "to search git history, or to search another command's output. " +
+    'Find files with glob; search contents with grep. Use shell searches for pipelines, ' +
+    "git history, or another command's output. " +
     'Clean environment and private HOME/temp files. ' +
     'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
   schema,

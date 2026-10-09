@@ -2,12 +2,13 @@ import type {Mode} from '../permission/mode.js';
 import {bash} from './bash.js';
 import {editFile} from './edit.js';
 import {grep} from './grep.js';
+import {glob} from './glob.js';
 import {readFile} from './read.js';
 import type {Tool} from './registry.js';
 import {makeSubagent} from './subagent.js';
 import {writeFile} from './write.js';
 
-export const tools: Tool[] = [readFile, grep, editFile, writeFile, bash];
+export const tools: Tool[] = [readFile, grep, glob, editFile, writeFile, bash];
 
 const AUTO_DESCRIPTIONS: Record<string, string> = {
   bash:
@@ -29,7 +30,7 @@ const AUTO_DESCRIPTIONS: Record<string, string> = {
 export function toolsFor(mode: Mode): Tool[] {
   const offered = mode === 'auto'
     ? tools
-      .filter((tool) => tool.name !== 'read_file' && tool.name !== 'grep')
+      .filter((tool) => tool.name !== 'read_file' && tool.name !== 'grep' && tool.name !== 'glob')
       .map((tool) => ({...tool, description: AUTO_DESCRIPTIONS[tool.name] ?? tool.description}))
     : tools;
   return [...offered, makeSubagent()];

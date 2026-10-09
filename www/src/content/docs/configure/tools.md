@@ -1,13 +1,13 @@
 ---
 title: Tools
-description: The six built-in tools and their availability by permission mode — what read_file, grep, edit_file, write_file, bash and agent each take, what they return, where they cap their output, and what happens before any of them runs.
+description: The seven built-in tools and their availability by permission mode — what read_file, grep, glob, edit_file, write_file, bash and agent each take, what they return, where they cap their output, and what happens before any of them runs.
 sidebar:
   order: 3
 ---
 
-There are six built-in tools. Default `auto` mode offers four: `edit_file`,
+There are seven built-in tools. Default `auto` mode offers four: `edit_file`,
 `write_file`, `bash`, and `agent`. Reads and searches use Bash. `ask-edits` and
-`auto-edits` also offer `read_file` and `grep`.
+`auto-edits` also offer `read_file`, `grep`, and `glob`.
 
 File and shell execution defaults to Sandbox Off.
 Permission checks apply in both modes. With Sandbox On, extra network access and
@@ -17,6 +17,7 @@ host paths require approval for each call, and known credential storage stays hi
 |---|---|
 | [`read_file`](#read_file) | Reads a text file back with line numbers, a slice at a time. |
 | [`grep`](#grep) | Searches file contents with ripgrep, returning the matching paths. |
+| [`glob`](#glob) | Finds files by name pattern, newest first. |
 | [`edit_file`](#edit_file) | Replaces one exact, unique piece of text in a file. |
 | [`write_file`](#write_file) | Creates a file, or replaces everything in one. |
 | [`bash`](#bash) | Runs a shell command in the workspace root — tests, git, deletes. |
@@ -25,7 +26,7 @@ host paths require approval for each call, and known credential storage stays hi
 The offered tool list is chosen by permission mode. In `auto`, tool
 descriptions prefer Bash for reads and searches, and Edit or Write for ordinary
 file changes so `/rewind` can use their backups. Shell edits remain allowed,
-but are not backed up. Read and Grep are unavailable in `auto`, including as
+but are not backed up. Read, Grep, and Glob are unavailable in `auto`, including as
 fallbacks. These preferences live in tool descriptions; the base system prompt
 is shared across permission modes.
 
@@ -112,6 +113,35 @@ and the agent searches with the shell, which is slower and does not respect
 `.gitignore`. That sentence is the house style for a tool failure: it names what
 broke and the exact call to make instead, because the reader is a model with one
 chance to repair the call.
+
+## `glob`
+
+Finds files by name. Use `pattern`, such as `**/*.test.ts`, and optionally
+`path` to choose a directory. Patterns are relative to that directory;
+`path` defaults to the workspace.
+
+```
+ • glob "**/*.test.ts" in "src"
+```
+
+Results list file paths with the newest files first. Files inside the workspace
+use relative paths; files outside it use absolute paths. Glob includes hidden
+and gitignored files, but excludes sensitive files and directories. It does
+not follow symlinks inside the search tree. A search outside the workspace
+requires approval, and files denied by path rules are omitted.
+
+| Limit | Value |
+|---|---|
+| Files returned | 100 |
+| Total output | 32,000 characters |
+| Timeout | 30 seconds |
+
+A truncation message asks the model to narrow `pattern` or `path`. No matches,
+invalid patterns, missing directories, and access failures have separate
+messages. Glob needs `rg` installed; otherwise it suggests Bash with `find`.
+
+Glob is available in `ask-edits` and `auto-edits`. `auto` uses Bash for file
+searches.
 
 ## `edit_file`
 

@@ -100,7 +100,7 @@ test('headless startup uses auto by default and preserves saved permission modes
       const offered = request!.tools as {function: {name: string}}[];
       assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
         ? ['edit_file', 'write_file', 'bash', 'agent']
-        : ['read_file', 'grep', 'edit_file', 'write_file', 'bash', 'agent']);
+        : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent']);
       assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
     }
   } finally {

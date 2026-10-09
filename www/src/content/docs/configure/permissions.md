@@ -64,7 +64,7 @@ In `auto`, prefer Bash for reading, searching, and running commands. Prefer
 existing backups when available. Use Edit for partial changes and Write for
 new files or full replacements. These are preferences, not restrictions;
 Bash remains available for edits, tests, formatters, and generators. `auto`
-offers only Bash, Edit, Write, and Agent. Read and Grep are available in the
+offers only Bash, Edit, Write, and Agent. Read, Grep, and Glob are available in the
 two edit modes, where they provide bounded output, search options, and
 sensitive-file exclusions. These preferences are in the tool descriptions;
 the base system prompt is shared across permission modes.
