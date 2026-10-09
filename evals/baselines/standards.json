@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "model": "deepseek-v4-flash",
+  "model": "gemini-3.5-flash-lite",
   "judge": {
     "repeats": 3,
     "caseIds": [
