@@ -164,7 +164,7 @@ export function useAgent(
           return;
         }
         if (event.type === 'model_retry') {
-          setPhase({kind: 'busy', label: `Retrying Gemini (${event.attempt}/${event.total})…`});
+          setPhase({kind: 'busy', label: `Retrying DeepSeek (${event.attempt}/${event.total})…`});
           return;
         }
         if (event.type === 'text_delta') {

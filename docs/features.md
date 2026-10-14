@@ -58,9 +58,8 @@ DeepSeek is the coding provider, using its official Chat Completions API through
 Flash. The alias can change. Its context window is 1,048,576 tokens; replies are
 capped at 32,000 tokens, including reasoning, with a 120-second request timeout.
 
-`ACC_MODEL` overrides the user `model` setting. Saved Gemini selections migrate
-to `deepseek-flash`; explicit unsupported environment overrides fail. Missing
-`DEEPSEEK_API_KEY` is an error, with no provider fallback. Keys load from the shell,
+`ACC_MODEL` overrides the user `model` setting. Unsupported model selections
+fail. Missing `DEEPSEEK_API_KEY` is an error, with no provider fallback. Keys load from the shell,
 then the project's `.env`, then `~/.acc/.env`.
 
 `ACC_REASONING_EFFORT` overrides the user `reasoning_effort` setting, then defaults
@@ -68,8 +67,8 @@ to `high`. Accepted values are `none`, `low`, `high`, and `max`; `none` disables
 thinking. Subagents and compaction inherit the parent setting. Effective settings
 are shown in the header, session metadata, and headless JSON.
 
-The judge remains `gemini-3.5-flash-lite` through the Gemini Interactions API and
-`GEMINI_API_KEY`. Its rubric, limits, and fallback to confirmation are unchanged.
+The judge uses `deepseek-flash` through the DeepSeek API and
+`DEEPSEEK_API_KEY`. Its rubric, limits, and fallback to confirmation are unchanged.
 
 Configuration includes these environment variables: `ACC_MODEL` picks the
 model id, `ACC_HOME` moves the session store off `~/.acc`, and `ACC_COMPACT_AT`
@@ -344,7 +343,7 @@ runs ~28% low. Two numbers, one of them shaky, said less than one. Type
 
 `/model` retains its picker with DeepSeek as the sole coding choice. A missing
 key is shown as `set DEEPSEEK_API_KEY to use this model`. Permission judging
-remains independent and uses Gemini Flash-Lite with `GEMINI_API_KEY`.
+uses the same DeepSeek model with a separate prompt and token limit.
 
 Unlike `/permission`, a switch does **not** rewrite the transcript. A mode is a
 fact about now, so it repaints every past header; a model is a fact about a

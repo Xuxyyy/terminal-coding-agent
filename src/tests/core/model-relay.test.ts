@@ -6,7 +6,6 @@ import test from 'node:test';
 import {startModelRelay} from '../../core/model-relay.js';
 import {relayInvoke} from '../../core/model-relay-client.js';
 import {deepseekClient} from '../../core/deepseek.js';
-import {geminiClient, interactionRequest} from '../../core/gemini.js';
 import {judgeModelFor, streamStep} from '../../core/client.js';
 import {askJudge} from '../../core/permission/judge.js';
 import {fakeHost, streamOf, textChunk, toolCallChunk, finishChunk, usageChunk} from '../fakes.js';
@@ -18,21 +17,32 @@ const answer = {choices: [{message: {role: 'assistant', content: 'Hello'}, finis
 const endpoint = (relay: {port: number; path: string}) => `http://127.0.0.1:${relay.port}${relay.path}`;
 
 test('a separate key-free ACC process gets model answers and its descendants have no provider key', async () => {
-  const seen: unknown[] = [];
+  const seen: Record<string, unknown>[] = [];
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 20, bindHost: '127.0.0.1',
-    invoke: async (body) => { seen.push(body); return answer; }});
+    invoke: async (body) => {
+      seen.push(body);
+      return body.max_tokens === 512
+        ? {choices: [{message: {role: 'assistant', content: 'ALLOW'}, finish_reason: 'stop'}]}
+        : answer;
+    }});
   try {
     const clientModule = new URL('../../core/client.js', import.meta.url).href;
     const child = spawn(process.execPath, ['--input-type=module', '-e', `
-      import {createClient} from ${JSON.stringify(clientModule)};
+      import {createClient, createJudgeClient} from ${JSON.stringify(clientModule)};
       import {spawnSync} from 'node:child_process';
       const choice = createClient();
       const response = await choice.client.chat.completions.create({
         model: choice.model, messages: [{role: 'user', content: 'Hi'}], stream: false,
       });
+      const judge = createJudgeClient();
+      const verdict = await judge.client.chat.completions.create({
+        model: judge.model, messages: [{role: 'user', content: 'Decide'}], stream: false,
+        max_tokens: 512,
+      });
       const shell = spawnSync('bash', ['--noprofile', '--norc', '-c',
-        'test -z "$GEMINI_API_KEY$DEEPSEEK_API_KEY$MOONSHOT_API_KEY$TAVILY_API_KEY" && printf key-free']);
+        'test -z "$DEEPSEEK_API_KEY$MOONSHOT_API_KEY$TAVILY_API_KEY" && printf key-free']);
       console.log(JSON.stringify({answer: response.choices[0].message.content,
+        verdict: verdict.choices[0].message.content, judgeModel: judge.model,
         shell: shell.stdout.toString(), status: shell.status}));
     `], {env: {PATH: process.env.PATH, ACC_MODEL_RELAY_URL: endpoint(relay), ACC_MODEL: model},
       stdio: ['ignore', 'pipe', 'pipe']});
@@ -42,7 +52,8 @@ test('a separate key-free ACC process gets model answers and its descendants hav
     child.stderr.on('data', (data) => { stderr += String(data); });
     const [code] = await once(child, 'close');
     assert.equal(code, 0, stderr);
-    assert.deepEqual(JSON.parse(stdout), {answer: 'Hello', shell: 'key-free', status: 0});
+    assert.deepEqual(JSON.parse(stdout), {answer: 'Hello', verdict: 'ALLOW', judgeModel: model, shell: 'key-free', status: 0});
+    assert.deepEqual(seen.map((body) => body.model), [model, model]);
     assert.equal(JSON.stringify(seen).includes(sentinel), false);
     assert.equal(`${stdout}${stderr}`.includes(sentinel), false);
   } finally { await relay.close(); }
@@ -67,25 +78,28 @@ test('streamed tool calls and token usage survive the relay', async () => {
   } finally { await relay.close(); }
 });
 
-test('the relay uses Flash-Lite for permission judging and keeps the main model', async () => {
-  const seen: unknown[] = [];
+test('the relay uses DeepSeek for coding and permission judging', async () => {
+  const seen: Record<string, unknown>[] = [];
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
-    invoke: async (body) => { seen.push(body.model); return answer; },
-    judgeInvoke: async (body) => {
-      seen.push(body.model);
-      return {status: 'completed', steps: [{type: 'model_output', content: [{type: 'text', text: 'ALLOW'}]}]};
+    invoke: async (body) => {
+      seen.push(body);
+      return body.max_tokens === 512
+        ? {choices: [{message: {role: 'assistant', content: 'ALLOW'}, finish_reason: 'stop'}]}
+        : answer;
     }});
   try {
     const client = deepseekClient('', relayInvoke(endpoint(relay)));
     const response = await client.chat.completions.create({
       model, messages: [{role: 'user', content: 'Hi'}], stream: false,
     });
-    const verdict = await askJudge({client: geminiClient('', relayInvoke(endpoint(relay))), model: judgeModelFor(model), label: 'judge', contextWindow: 1_048_576},
+    const verdict = await askJudge({client: deepseekClient('', relayInvoke(endpoint(relay))), model: judgeModelFor(model), label: 'judge', contextWindow: 1_048_576},
       [{role: 'user', content: 'Run the project tests'}], new AbortController().signal);
 
     assert.equal(response.choices[0]?.message.content, 'Hello');
     assert.equal(verdict, 'allow');
-    assert.deepEqual(seen, ['deepseek-flash', 'gemini-3.5-flash-lite']);
+    assert.deepEqual(seen.map((body) => body.model), [model, model]);
+    assert.equal(seen[1]?.max_tokens, 512);
+    assert.equal(seen[1]?.stream, false);
   } finally { await relay.close(); }
 });
 
@@ -97,8 +111,8 @@ test('the relay rejects unknown routes, other models, built-in tools and excessi
     assert.equal((await fetch(`http://127.0.0.1:${relay.port}/key`)).status, 404);
     for (const body of [
       {...request(), model: 'another-model'},
-      {...request(), model: 'gemini-3.1-pro-preview'},
-      {...request(), tools: [{type: 'google_search'}]},
+      {...request(), model: 'other-provider-model'},
+      {...request(), tools: [{type: 'external_search'}]},
       {...request(), generation_config: {max_output_tokens: 100_000}},
       {...request(), url: 'https://another-host.example'},
       {...request(), store: true},

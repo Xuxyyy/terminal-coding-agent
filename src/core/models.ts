@@ -14,18 +14,11 @@ export const MODELS: Record<string, ModelInfo> = {
   },
 };
 
-export const JUDGE_MODEL = 'gemini-3.5-flash-lite';
 export const DEFAULT_MODEL = 'deepseek-flash';
-export const LEGACY_GEMINI_MODELS = new Set([
-  'gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite',
-]);
+export const JUDGE_MODEL = DEFAULT_MODEL;
 export const REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
 export type ReasoningEffort = typeof REASONING_EFFORTS[number];
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
-
-export function migratedModel(id: string): string {
-  return LEGACY_GEMINI_MODELS.has(id) ? DEFAULT_MODEL : id;
-}
 
 export function isReasoningEffort(value: unknown): value is ReasoningEffort {
   return REASONING_EFFORTS.includes(value as ReasoningEffort);

@@ -91,11 +91,11 @@ test('process exit check does not mistake permission errors for cleanup', async 
 
 test('the child environment contains settings, not credentials or startup injection', () => {
   const env = cleanEnvironment('/private/scratch', {
-    PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', TZ: 'UTC', GEMINI_API_KEY: 'fake-key',
+    PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', TZ: 'UTC', DEEPSEEK_API_KEY: 'fake-key',
     ACC_MODEL_RELAY_URL: 'http://localhost/fake-capability', SSH_AUTH_SOCK: '/fake/socket',
     BASH_ENV: '/fake/startup', NODE_OPTIONS: '--require=/fake/injection', AWS_SECRET_ACCESS_KEY: 'fake',
   });
-  for (const key of ['GEMINI_API_KEY', 'ACC_MODEL_RELAY_URL', 'SSH_AUTH_SOCK', 'BASH_ENV', 'NODE_OPTIONS', 'AWS_SECRET_ACCESS_KEY']) assert.equal(env[key], undefined);
+  for (const key of ['DEEPSEEK_API_KEY', 'ACC_MODEL_RELAY_URL', 'SSH_AUTH_SOCK', 'BASH_ENV', 'NODE_OPTIONS', 'AWS_SECRET_ACCESS_KEY']) assert.equal(env[key], undefined);
   assert.equal(env.HOME, '/private/scratch');
   assert.equal(env.TMPDIR, '/private/scratch');
   assert.equal(env.PATH, '/usr/bin:/bin');
@@ -134,7 +134,7 @@ test('ordinary Shell builds and edits still work without granting network', live
 
 test('Shell and its children cannot recover the parent key, relay URL, or startup environment', live, async (t) => {
   const {root} = fixture(t);
-  const injected = {GEMINI_API_KEY: 'FAKE_PARENT_PROVIDER_KEY', ACC_MODEL_RELAY_URL: 'http://localhost/FAKE_RELAY_CAPABILITY', BASH_ENV: path.join(root, 'startup.sh')};
+  const injected = {DEEPSEEK_API_KEY: 'FAKE_PARENT_PROVIDER_KEY', ACC_MODEL_RELAY_URL: 'http://localhost/FAKE_RELAY_CAPABILITY', BASH_ENV: path.join(root, 'startup.sh')};
   fs.writeFileSync(injected.BASH_ENV, 'printf FAKE_STARTUP_INJECTION');
   for (const [key, value] of Object.entries(injected)) {
     const previous = process.env[key];
@@ -145,7 +145,7 @@ test('Shell and its children cannot recover the parent key, relay URL, or startu
   const output = await shell(ctx, nodeCommand(`require('node:child_process').execFileSync('/bin/bash', ['--noprofile', '--norc', '-c', 'env'], {stdio: 'inherit'});`));
   assert.match(output.text, /^\[exit 0\]/);
   assert.doesNotMatch(output.text, /FAKE_PARENT_PROVIDER_KEY|FAKE_RELAY_CAPABILITY|FAKE_STARTUP_INJECTION/);
-  assert.equal(process.env.GEMINI_API_KEY, injected.GEMINI_API_KEY);
+  assert.equal(process.env.DEEPSEEK_API_KEY, injected.DEEPSEEK_API_KEY);
 });
 
 test('all file tools refuse project credentials before prompting or backing up', live, async (t) => {
@@ -359,7 +359,7 @@ for (const sandbox of ['off', 'on'] as const) {
 
   test(`${sandbox}: actual child environment is clean and private scratch is removed`, available, async (t) => {
     const {root} = fixture(t);
-    const names = ['GEMINI_API_KEY', 'ACC_MODEL_RELAY_URL', 'BASH_ENV', 'NODE_OPTIONS', 'SSH_AUTH_SOCK'];
+    const names = ['DEEPSEEK_API_KEY', 'ACC_MODEL_RELAY_URL', 'BASH_ENV', 'NODE_OPTIONS', 'SSH_AUTH_SOCK'];
     const prior = names.map((name) => process.env[name]);
     t.after(() => names.forEach((name, index) => {
       if (prior[index] === undefined) delete process.env[name];

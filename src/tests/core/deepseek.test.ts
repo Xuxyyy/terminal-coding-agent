@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import test from 'node:test';
 import {deepseekClient, deepseekInvoke} from '../../core/deepseek.js';
 import {chooseReasoning, createClient, createJudgeClient, modelSettings, streamStep, type ModelChoice} from '../../core/client.js';
-import {DEFAULT_MODEL, LEGACY_GEMINI_MODELS} from '../../core/models.js';
+import {DEFAULT_MODEL} from '../../core/models.js';
 import {parseModel, parseReasoning} from '../../core/settings.js';
 import {parseAgent} from '../../core/agents.js';
 import {assistantMessage} from '../../core/messages.js';
@@ -33,21 +33,18 @@ test('coding settings are explicit and reasoning overrides are validated', () =>
   });
 });
 
-test('saved Gemini selections migrate but explicit model overrides fail', () => {
-  for (const model of LEGACY_GEMINI_MODELS) {
-    assert.equal(parseModel(JSON.stringify({model}), 'settings.json', true), DEFAULT_MODEL);
-    const agent = parseAgent(`---\ndescription: Inspect code\nmodel: ${model}\n---\nFind the bug.`, '/tmp/reviewer.md');
-    assert.equal(agent.model, DEFAULT_MODEL);
-    assert.throws(() => createClient(model), /replaced/);
-  }
+test('only the DeepSeek model is accepted for coding and judging', () => {
+  assert.equal(parseModel(JSON.stringify({model: DEFAULT_MODEL}), 'settings.json', true), DEFAULT_MODEL);
+  const agent = parseAgent(`---\ndescription: Inspect code\nmodel: ${DEFAULT_MODEL}\n---\nFind the bug.`, '/tmp/reviewer.md');
+  assert.equal(agent.model, DEFAULT_MODEL);
+  assert.throws(() => createClient('another-model'), /Unknown coding model/);
   const old = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = '';
   try { assert.throws(() => createClient(DEFAULT_MODEL), /DEEPSEEK_API_KEY/); }
   finally { if (old === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = old; }
-  const oldJudge = process.env.GEMINI_API_KEY;
-  process.env.GEMINI_API_KEY = '';
-  try { assert.throws(() => createJudgeClient(), /GEMINI_API_KEY/); }
-  finally { if (oldJudge === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = oldJudge; }
+  process.env.DEEPSEEK_API_KEY = '';
+  try { assert.throws(() => createJudgeClient(), /DEEPSEEK_API_KEY/); }
+  finally { if (old === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = old; }
 });
 
 test('the SDK sends official DeepSeek requests and does not retry internally', async () => {

@@ -37,7 +37,7 @@ test('rate limits and server errors are retryable', () => {
   assert.equal(isRetryable(statusError(503)), true);
 });
 
-test('a daily Gemini quota error is not retried', async () => {
+test('a daily provider quota error is not retried', async () => {
   const quota = statusError(429, 'Rate limit exceeded (limit: 20 requests per day on Free Tier)');
   const attempt = counted(() => quota);
 

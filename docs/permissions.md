@@ -322,9 +322,9 @@ Deliberately not a latch, so the mode behaves the same at the end of a turn as a
 
 ### The model
 
-**Gemini 3.5 Flash-Lite**, via `createJudgeClient` in `client.ts`, judges Auto-mode
-actions independently of the DeepSeek coding model. It uses `GEMINI_API_KEY` and
-the existing Gemini Interactions API. One attempt, no retry, a 20-second timeout:
+**DeepSeek V4.1 Flash**, via `createJudgeClient` in `client.ts`, judges Auto-mode
+actions with a separate prompt and limit from coding. It uses `DEEPSEEK_API_KEY`
+and the DeepSeek Chat Completions API. One attempt, no retry, a 20-second timeout:
 a slow or broken judge must reach the human fast. Missing credentials or a
 failed judge request still answer `ask`; coding reasoning settings do not affect it.
 

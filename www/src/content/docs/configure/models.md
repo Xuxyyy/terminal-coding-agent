@@ -1,6 +1,6 @@
 ---
 title: Models
-description: DeepSeek coding, reasoning settings, and the separate Gemini permission judge.
+description: DeepSeek coding, reasoning settings, and permission judging.
 sidebar:
   order: 5
 ---
@@ -18,7 +18,7 @@ prove that runs made at different dates used the same model version.
 | Thinking | enabled; disabled when effort is `none` |
 | Maximum output | 32,000 tokens, including reasoning |
 | Request timeout | 120 seconds |
-| Permission judge | `gemini-3.5-flash-lite`, unchanged |
+| Permission judge | `deepseek-flash`, with a separate prompt and token limit |
 
 Tools execute locally under ACC's existing permission and sandbox rules.
 ACC keeps conversation history locally and sends it with each coding request.
@@ -26,22 +26,19 @@ Reasoning is kept for later requests and saved sessions, but is not displayed.
 
 ## API keys
 
-Set `DEEPSEEK_API_KEY` for coding. Set `GEMINI_API_KEY` to keep Auto mode's
-permission judge available. A missing DeepSeek key stops startup; ACC does not
-fall back to Gemini coding. A missing or unavailable Gemini judge keeps the
-existing fallback to human confirmation or the headless approval policy.
+Set `DEEPSEEK_API_KEY` for coding and Auto mode's permission judge. A missing
+key stops startup. An unavailable judge keeps the existing fallback to human
+confirmation or the headless approval policy.
 
 Create a DeepSeek key at [DeepSeek Platform](https://platform.deepseek.com/).
-The judge key comes from [Google AI Studio](https://aistudio.google.com/apikey).
 ACC reads the shell first, then the project's `.env`, then `~/.acc/.env`.
-Copy `.env.example` to `.env`, fill in the keys, and keep that file out of Git.
+Copy `.env.example` to `.env`, fill in the key, and keep that file out of Git.
 
 ## Model and reasoning selection
 
 `ACC_MODEL` overrides the user `model` setting; the default is `deepseek-flash`.
-Saved Gemini model selections and named-agent model fields are normalized to
-DeepSeek when loaded, without rewriting agent files. Explicit Gemini values in
-`ACC_MODEL` are rejected. `/model` remains available with one coding choice.
+Unsupported saved model selections, named-agent model fields, and explicit
+`ACC_MODEL` values are rejected. `/model` remains available with one choice.
 
 `ACC_REASONING_EFFORT` overrides the user `reasoning_effort` setting; the default
 is `high`. Supported values are `none`, `low`, `high`, and `max`. `none` disables
@@ -62,7 +59,7 @@ ACC_MODEL=deepseek-flash ACC_REASONING_EFFORT=low acc -p "Explain this project" 
 
 Subagents always inherit the parent's reasoning effort, including named agents.
 Compaction uses the same setting. Coding settings never change the judge's
-model, prompt, token limit, or timeout.
+prompt, token limit, or timeout.
 
 The interactive header, saved session metadata, and headless JSON result show
 the effective model, reasoning effort, and output limit. The JSON `modelSettings`

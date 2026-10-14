@@ -1,6 +1,5 @@
 import type OpenAI from 'openai';
 import {deepseekClient, DEEPSEEK_BASE_URL} from './deepseek.js';
-import {geminiClient} from './gemini.js';
 import {loadEnvFiles} from './env.js';
 import {relayInvoke} from './model-relay-client.js';
 import type {Host, ModelTokenUsage, Usage} from './host.js';
@@ -28,12 +27,12 @@ export function judgeModelFor(_model?: string): string {
 export function createJudgeClient(): ModelChoice {
   const relay = process.env.ACC_MODEL_RELAY_URL;
   if (!relay) loadEnvFiles();
-  const key = process.env.GEMINI_API_KEY;
-  if (!relay && !key) throw new Error('GEMINI_API_KEY is not set — needed for the permission judge.');
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!relay && !key) throw new Error('DEEPSEEK_API_KEY is not set — needed for the permission judge.');
   return {
-    client: geminiClient(key ?? '', relay ? relayInvoke(relay) : undefined),
+    client: deepseekClient(key ?? '', relay ? relayInvoke(relay) : undefined),
     model: JUDGE_MODEL,
-    label: 'Gemini 3.5 Flash-Lite',
+    label: MODELS[JUDGE_MODEL]!.label,
     contextWindow: 1_048_576,
   };
 }
@@ -105,7 +104,7 @@ export function createClient(modelId?: string, reasoningEffort?: ReasoningEffort
   const info = MODELS[resolved];
   if (!info) {
     throw new Error(
-      `Unknown coding model '${resolved}'. Gemini coding models have been replaced; use ${MODEL_IDS.join(', ')}.`,
+      `Unknown coding model '${resolved}'; use ${MODEL_IDS.join(', ')}.`,
     );
   }
   const provider = PROVIDERS[info.provider]!;

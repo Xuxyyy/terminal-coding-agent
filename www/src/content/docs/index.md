@@ -31,9 +31,9 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 - **Four tools in default `auto` mode.** Bash handles reads, searches, and
   commands. `edit_file` and `write_file` make backed-up file changes, and
   `agent` delegates a job. The two edit modes also offer `read_file`, `grep`, and `glob`.
-- **DeepSeek coding, Gemini permission judging.** Set `DEEPSEEK_API_KEY` for
+- **DeepSeek coding and permission judging.** Set `DEEPSEEK_API_KEY` for
   `deepseek-flash`, currently V4.1 Flash. Reasoning defaults to `high` and can be
-  overridden. Gemini 3.5 Flash-Lite remains the judge with `GEMINI_API_KEY`.
+  overridden. Auto mode uses the same DeepSeek model and key for judging.
 - **Bounded turns.** The agent reviews progress every 10 model turns.
   Interactive runs ask to continue after each 60-turn segment. Print mode
   stops at its selected turn or time limit.

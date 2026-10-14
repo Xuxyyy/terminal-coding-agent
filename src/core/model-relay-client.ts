@@ -1,4 +1,4 @@
-import type {Invoke} from './gemini.js';
+import type {Invoke} from './deepseek.js';
 
 export function relayInvoke(endpoint: string): Invoke {
   const url = new URL(endpoint);

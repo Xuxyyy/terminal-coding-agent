@@ -188,4 +188,4 @@ Headless runs use the same DeepSeek client and reasoning settings as interactive
 runs and subagents. The final JSON result includes `modelSettings` with the
 provider, base URL, model ID, reasoning effort, thinking switch, 32,000-token
 output limit, and 120-second request timeout. This is an additive field; existing
-result fields are unchanged. Auto mode still uses the separate Gemini judge.
+result fields are unchanged. Auto mode uses DeepSeek for permission judging.

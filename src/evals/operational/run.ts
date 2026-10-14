@@ -118,7 +118,8 @@ export function isolatedEnv(
   return {
     ...source,
     ACC_HOME: accHome,
-    GEMINI_API_KEY: '',
+    ACC_MODEL_RELAY_URL: '',
+    DEEPSEEK_API_KEY: '',
     NPM_CONFIG_AUDIT: 'false',
     NPM_CONFIG_CACHE: join(accHome, 'npm-cache'),
     NPM_CONFIG_FUND: 'false',
@@ -400,7 +401,7 @@ export function main(): number {
           {cwd: workspace, env, timeout: 15_000},
         );
         return {
-          ok: expectedFailure(command, /GEMINI_API_KEY is not set/),
+          ok: expectedFailure(command, /DEEPSEEK_API_KEY is not set/),
           detail: 'print mode named the missing provider key without hanging',
           commands: [command],
         };

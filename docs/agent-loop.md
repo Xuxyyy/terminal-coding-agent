@@ -26,8 +26,8 @@ step counts appear in text a user reads.
 
 The coding client uses DeepSeek's official Chat Completions API through `openai`.
 `deepseek.ts` validates streamed completions; `client.ts` accumulates messages,
-reasoning, tool calls, and token usage. History stays local. The separate judge
-continues to use Gemini's native Interactions API through `@google/genai`.
+reasoning, tool calls, and token usage. History stays local. The permission
+judge uses the same DeepSeek client with a separate prompt and token limit.
 The TUI is **Ink**. It is **one package**, with `src/core` and `src/ui` as folders.
 
 The base system prompt is shared across permission modes. It asks the agent to follow

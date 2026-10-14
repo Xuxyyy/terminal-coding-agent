@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {agentFiles, loadAgents} from './agents.js';
-import {MODEL_IDS, MODELS, migratedModel, isReasoningEffort, type ReasoningEffort} from './models.js';
+import {MODEL_IDS, MODELS, isReasoningEffort, type ReasoningEffort} from './models.js';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome, makeDir} from './projects.js';
 
@@ -82,8 +82,7 @@ export function parseModel(
   file: string,
   user: boolean,
 ): string | null {
-  const raw = parseObject(text, file)[MODEL_KEY];
-  const value = typeof raw === 'string' ? migratedModel(raw) : raw;
+  const value = parseObject(text, file)[MODEL_KEY];
   if (value === undefined) return null;
   if (!user) {
     throw new SettingsError(

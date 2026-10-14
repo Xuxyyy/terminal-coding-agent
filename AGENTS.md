@@ -11,8 +11,8 @@
 
 # API credentials and test approval
 
-- `DEEPSEEK_API_KEY` supplies the DeepSeek coding model. `GEMINI_API_KEY` supplies
-  the Gemini permission judge. Preserve these roles and the current model setup.
+- `DEEPSEEK_API_KEY` supplies both the DeepSeek coding model and the Auto-mode
+  permission judge. Preserve this single-provider setup.
 - Actual key values and file locations belong only in private configuration
   outside this repository. Read the credential-discovery section of the agent's
   private user-level instructions for the local configuration and loading steps.

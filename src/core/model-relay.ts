@@ -4,26 +4,10 @@ import {createServer} from 'node:http';
 import {createInterface} from 'node:readline';
 import {pathToFileURL} from 'node:url';
 import {z} from 'zod';
-import {geminiInvoke, type Invoke} from './gemini.js';
-import {deepseekInvoke} from './deepseek.js';
-import {JUDGE_MODEL, DEFAULT_MODEL} from './models.js';
+import {deepseekInvoke, type Invoke} from './deepseek.js';
+import {DEFAULT_MODEL} from './models.js';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-const judgeRequestSchema = z.object({
-  model: z.string(),
-  store: z.literal(false),
-  stream: z.boolean(),
-  input: z.array(z.record(z.unknown())),
-  system_instruction: z.string().optional(),
-  tools: z.array(z.object({
-    type: z.literal('function'),
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-  }).strict()).optional(),
-  generation_config: z.object({max_output_tokens: z.number().int().min(1).max(512)}).strict(),
-}).strict();
-
 const messageSchema = z.discriminatedUnion('role', [
   z.object({role: z.enum(['system', 'developer', 'user']), content: z.string()}).strict(),
   z.object({
@@ -50,10 +34,7 @@ const codingRequestSchema = z.object({
     }).strict(),
   }).strict()).optional(),
 }).strict().refine((body) => (body.reasoning_effort === 'none') === (body.thinking.type === 'disabled'));
-const requestSchema = z.union([
-  codingRequestSchema,
-  judgeRequestSchema.extend({model: z.literal(JUDGE_MODEL), stream: z.literal(false), tools: z.never().optional()}),
-]);
+const requestSchema = codingRequestSchema;
 
 export type ModelRelay = {
   port: number;
@@ -63,13 +44,11 @@ export type ModelRelay = {
 
 export async function startModelRelay(options: {
   apiKey: string;
-  judgeApiKey?: string;
   model: string;
   maxSeconds: number;
   maxRequests?: number;
   bindHost?: string;
   invoke?: Invoke;
-  judgeInvoke?: Invoke;
 }): Promise<ModelRelay> {
   if (options.model !== DEFAULT_MODEL) throw new Error('model relay requires a model supported by this ACC runtime');
   if (!options.apiKey) throw new Error('model relay requires a provider key on the host');
@@ -80,10 +59,8 @@ export async function startModelRelay(options: {
   if (!Number.isInteger(maxRequests) || maxRequests < 1 || maxRequests > 1024) {
     throw new Error('model relay request limit must be between 1 and 1024');
   }
-  const allowedModels = new Set([options.model, JUDGE_MODEL]);
   const path = `/${randomBytes(32).toString('hex')}/interactions`;
   const invoke = options.invoke ?? deepseekInvoke(options.apiKey);
-  const judgeInvoke = options.judgeInvoke ?? (options.judgeApiKey ? geminiInvoke(options.judgeApiKey) : undefined);
   const controllers = new Set<AbortController>();
   let requests = 0;
   let closed = false;
@@ -122,16 +99,11 @@ export async function startModelRelay(options: {
         return;
       }
       const parsed = requestSchema.safeParse(body);
-      if (!parsed.success || !allowedModels.has(parsed.data.model)) {
+      if (!parsed.success) {
         response.writeHead(400).end();
         return;
       }
-      const call = parsed.data.model === JUDGE_MODEL ? judgeInvoke : invoke;
-      if (!call) {
-        response.writeHead(503).end();
-        return;
-      }
-      const result = await call(parsed.data, controller.signal);
+      const result = await invoke(parsed.data, controller.signal);
       if (!parsed.data.stream) {
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify(result));

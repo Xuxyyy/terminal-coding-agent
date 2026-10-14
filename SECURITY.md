@@ -37,7 +37,7 @@ source files are outside this protection; do not put credentials there.
 
 Evaluation adapters can instead set `ACC_MODEL_RELAY_URL` and `ACC_MODEL` in a
 task container, without a provider key. ACC uses the host relay for model calls
-and skips loading `.env` files in this mode. The host holds the DeepSeek coding key and optional Gemini judge key and accepts
+and skips loading `.env` files in this mode. The host holds the DeepSeek key for coding and permission judging and accepts
 only bounded, stateless model requests through a temporary capability. This
 mode requires a compatible, rebuilt ACC runtime and deliberately has no
 direct-key fallback when the relay fails.
@@ -67,8 +67,8 @@ Anything that gets past the permission or sandbox boundaries:
   auto-allowed in `auto-edits`; scripts can still change permitted project files.
   An `ask` rule may require action approval independently of the sandbox mode.
 
-The relay starts with `model: "deepseek-flash"`, `apiKey` for DeepSeek, and optional
-`judgeApiKey` for Gemini. It accepts only the configured coding model and the
-fixed Gemini judge. Missing judge credentials preserve the confirmation fallback.
+The relay starts with `model: "deepseek-flash"` and `apiKey` for DeepSeek. It
+accepts only the configured model for coding and permission judging. Missing
+judge credentials preserve the confirmation fallback.
 Coding requests include validated reasoning and thinking settings and a bounded
 output limit. The relay never accepts a caller-selected provider URL.

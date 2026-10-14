@@ -28,7 +28,7 @@ judge, then to you when approval is still needed. An explicitly saved mode wins.
   official DeepSeek API. Set `DEEPSEEK_API_KEY`. Reasoning defaults to `high`;
   `ACC_REASONING_EFFORT` accepts `none`, `low`, `high`, or `max`. Subagents inherit
   it. Output is capped at 32,000 tokens, including reasoning. Auto permission
-  judging still uses Gemini 3.5 Flash-Lite with `GEMINI_API_KEY`.
+  judging uses the same DeepSeek model and key.
 - One permission gate for file and shell actions, including sub-agent actions.
 - In `auto`, prefer Bash for reading, searching, and commands. Prefer Edit and
   Write for ordinary file changes so `/rewind` can use their existing backups
@@ -74,7 +74,7 @@ workspace-independent.
 - ripgrep (`rg`) on your `PATH`, for fast shell searches and the `grep` and `glob` tools.
   If it is missing, the tools report an error and suggest shell `grep` or `find`.
   Shell searches do not inherit the tool's sensitive-file exclusions.
-- Set `GEMINI_API_KEY` in your environment or copy `.env.example` to `.env`
+- Set `DEEPSEEK_API_KEY` in your environment or copy `.env.example` to `.env`
   and fill it in. Keys load from the shell, then the project's `.env`, then
   `~/.acc/.env`. Model IDs and selection settings are on
   [Models](https://coding-cli-docs.vercel.app/configure/models/).

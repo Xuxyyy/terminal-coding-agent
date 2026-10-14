@@ -437,15 +437,13 @@ test('anything else the judge says is a question for the user', () => {
   }
 });
 
-test('coding models use Flash-Lite for permission judging', () => {
-  assert.equal(judgeModelFor('gemini-3.1-pro-preview'), 'gemini-3.5-flash-lite');
-  assert.equal(judgeModelFor('deepseek-flash'), 'gemini-3.5-flash-lite');
-  assert.equal(judgeModelFor('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
+test('permission judging uses the DeepSeek coding model', () => {
+  assert.equal(judgeModelFor('deepseek-flash'), 'deepseek-flash');
 });
 
-test('an unknown model id is judged by itself', () => {
-  assert.equal(judgeModelFor('gpt-9'), 'gemini-3.5-flash-lite');
-  assert.equal(judgeModelFor(''), 'gemini-3.5-flash-lite');
+test('an unknown model id still uses the configured judge', () => {
+  assert.equal(judgeModelFor('other-model'), 'deepseek-flash');
+  assert.equal(judgeModelFor(''), 'deepseek-flash');
 });
 
 type Sent = {model: string; messages: Message[]; max_tokens: number; stream: boolean};
@@ -462,7 +460,7 @@ function fakeJudge(
   };
   const choice = {
     client: {chat: {completions: {create}}},
-    model: 'deepseek-v4-flash',
+    model: 'deepseek-flash',
     label: 'flash',
     contextWindow: 128_000,
   } as unknown as ModelChoice;
@@ -484,7 +482,7 @@ test('the judge is given room to answer, and asks for one whole reply', async ()
 
   assert.equal(judge.sent().max_tokens, JUDGE_MAX_TOKENS);
   assert.equal(judge.sent().stream, false);
-  assert.equal(judge.sent().model, 'deepseek-v4-flash');
+  assert.equal(judge.sent().model, 'deepseek-flash');
 });
 
 test('the ceiling leaves room for a model that reasons before it speaks', () => {

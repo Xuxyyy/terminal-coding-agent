@@ -1,5 +1,5 @@
 import OpenAI, {type ClientOptions} from 'openai';
-import type {Invoke} from './gemini.js';
+export type Invoke = (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
 
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 

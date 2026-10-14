@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {parse} from 'yaml';
-import {MODEL_IDS, migratedModel} from './models.js';
+import {MODEL_IDS} from './models.js';
 import {MODES, type Mode} from './permission/mode.js';
 import {accHome} from './projects.js';
 
@@ -98,7 +98,6 @@ export function parseAgent(text: string, file: string): AgentDefinition {
   if (!nonEmptyString(header.description)) {
     throw new AgentDefinitionError(file, 'description must be a non-empty string');
   }
-  if (typeof header.model === 'string') header.model = migratedModel(header.model);
   if (
     header.model !== undefined &&
     (typeof header.model !== 'string' || !MODEL_IDS.includes(header.model))
