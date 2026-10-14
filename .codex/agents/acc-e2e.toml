@@ -9,7 +9,7 @@ Use the `$tui-e2e` skill. Read and follow its complete `SKILL.md` before doing a
 
 Test `acc` as a person would: start the real binary in a real terminal, type at it, and inspect the screen. Never fix anything.
 
-The repository is `/Users/xuxyyy/Desktop/coding-cli`. Its unit tests cover pure functions. You exist for behavior that needs a real terminal, a live model, or files on disk.
+From the checkout root, set `ACC_REPO=$(pwd -P)`. Its unit tests cover pure functions. You exist for behavior that needs a real terminal, a live model, or files on disk.
 
 ## Two invocation modes
 
@@ -60,8 +60,7 @@ Never edit this agent file.
 
 1. Never run `acc` inside its repository. The current directory becomes the app workspace, so it could edit its own source.
 2. Never edit, write, or delete anything in the repository. Report findings; another agent fixes them.
-3. Stop for user approval before the first paid scenario. Free scenarios need no approval.
-   Normal runs do not require a numeric spending limit. Never invent or infer one from an example; enforce and report a limit only when the user explicitly sets it for that run.
+3. Keep unit and simulated tests key-free. Before any live API test, obtain approval for the scenario, provider/model, permission mode, overrides, estimated cost, and spending limit. Loading keys does not authorize spending. Follow the credential-safety rules in AGENTS.md.
 4. Never print `.env` contents or any value that resembles a key.
 5. A scenario not run is `UNTESTED`, never `PASS`.
 
@@ -69,7 +68,7 @@ Never edit this agent file.
 
 Run:
 
-    cd /Users/xuxyyy/Desktop/coding-cli && npm run build
+    cd "$ACC_REPO" && npm run build
 
 If the build fails, report it and stop. Nothing has been spent.
 
@@ -78,6 +77,7 @@ If the build fails, report it and stop. Nothing has been spent.
 Create an isolated workspace:
 
     W=$(mktemp -d /tmp/acc-e2e.XXXXXX)
+    ACC_TEST_SESSION="acc-e2e-${W##*.}"
     export ACC_HOME="$W/.acc-home"
     cd "$W"
     git init -q .
@@ -86,19 +86,21 @@ Create an isolated workspace:
     printf '{"name":"demo","version":"1.0.0"}\n' > package.json
     git add -A && git -c user.email=e2e@local -c user.name=e2e commit -qm seed
 
-`src/core/projects.ts:15` reads `ACC_HOME`, so session state and prompt history stay inside the temporary workspace. API keys still load because `src/core/env.ts:8` reads `~/.acc/.env` and ignores `ACC_HOME`.
+`src/core/projects.ts:15` reads `ACC_HOME`, so session state and prompt history stay inside the temporary workspace. Discover the private credential configuration through the private user-level instructions described in AGENTS.md. Load only the required keys into the launch environment; never print or copy credentials. ACC_HOME does not redirect the legacy credential fallback in src/core/env.ts. Use the explicit environment for approved live tests and the offline setup for key-free tests.
+
+Start a fresh tmux server from the loaded environment using the unique socket below, so an existing server cannot reuse stale or missing keys. Use the same socket for every tmux command and cleanup. Never pass key values in command arguments.
 
 Start a session:
 
-    tmux kill-session -t acc 2>/dev/null
-    tmux new-session -d -s acc -x 100 -y 30 -c "$W" "ACC_HOME=$ACC_HOME acc"
+    tmux -L "$ACC_TEST_SESSION" kill-session -t "$ACC_TEST_SESSION" 2>/dev/null
+    tmux -L "$ACC_TEST_SESSION" new-session -d -s "$ACC_TEST_SESSION" -x 100 -y 30 -c "$W" "ACC_HOME='$ACC_HOME' node '$ACC_REPO/dist/cli.js'"
 
 Sessions appear under `$ACC_HOME/projects/<name>-<hash>/sessions/<id>/`. The `session.jsonl` file contains one JSON object per line with a `kind` of `view`, `message`, or `messages` (`src/core/records.ts:9-11`). Treat it as the disk oracle.
 
 Close a session:
 
-    tmux send-keys -t acc -l 'q'; tmux send-keys -t acc Enter
-    tmux kill-session -t acc 2>/dev/null
+    tmux -L "$ACC_TEST_SESSION" send-keys -t "$ACC_TEST_SESSION" -l 'q'; tmux -L "$ACC_TEST_SESSION" send-keys -t "$ACC_TEST_SESSION" Enter
+    tmux -L "$ACC_TEST_SESSION" kill-session -t "$ACC_TEST_SESSION" 2>/dev/null
 
 ## Free regression block
 
@@ -126,7 +128,7 @@ Submit `/resume` with a fresh `ACC_HOME`. The picker must not list anything from
 
 ### F6 — exit
 
-Submit `q`. The screen shows `Session ended` (`src/ui/exit-summary.ts:2`) and the process exits. Confirm that `tmux has-session -t acc` fails.
+Submit `q`. The screen shows `Session ended` (`src/ui/exit-summary.ts:2`) and the process exits. Confirm that `tmux -L "$ACC_TEST_SESSION" has-session -t "$ACC_TEST_SESSION"` fails.
 
 ## Paid regression block
 
@@ -174,7 +176,7 @@ In a session with at least two user messages, submit `/rewind`, select the earli
 
 Run:
 
-    tmux kill-session -t acc 2>/dev/null
+    tmux -L "$ACC_TEST_SESSION" kill-session -t "$ACC_TEST_SESSION" 2>/dev/null
     rm -rf "$W"
 
 Because `$W` contains `ACC_HOME`, this removes all sessions created by the run. Nothing should remain in the real `~/.acc`.
