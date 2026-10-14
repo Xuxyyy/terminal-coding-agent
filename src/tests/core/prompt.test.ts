@@ -8,6 +8,9 @@ test('the base prompt keeps concise guidance with repository and permission requ
   assert.match(prompt, /You are a coding agent/);
   assert.match(prompt, /Follow applicable repository instructions/);
   assert.match(prompt, /Preserve unrelated existing changes/);
+  assert.match(prompt, /Keep the implementation focused on the requested outcome/);
+  assert.match(prompt, /Preserve existing behavior unless the task calls for a change/);
+  assert.match(prompt, /Add features, options, or fallback behavior only when the task or repository shows a concrete need/);
   assert.match(prompt, /Never use another tool to bypass a permission denial/);
   assert.match(prompt, /<environment>/);
   assert.ok(prompt.includes(`working directory: ${process.cwd()}`));
