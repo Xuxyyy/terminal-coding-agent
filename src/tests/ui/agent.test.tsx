@@ -1238,7 +1238,7 @@ test('the header names the mode, and only the name', () => {
   }
 });
 
-test('interactive startup uses auto by default and honors explicitly saved modes', async () => {
+test('interactive startup uses auto-edits by default and honors explicitly saved modes', async () => {
   for (const saved of [undefined, 'ask-edits', 'auto-edits', 'auto'] as const) {
     const root = workspace();
     const file = path.join(process.env.ACC_HOME!, 'settings.json');
@@ -1251,7 +1251,7 @@ test('interactive startup uses auto by default and honors explicitly saved modes
     });
     const {agent, unmount} = mount(root, choice);
     try {
-      const mode = saved ?? 'auto';
+      const mode = saved ?? 'auto-edits';
       assert.equal(agent.current!.mode, mode);
       const header = agent.current!.committed[0] as HeaderItem;
       assert.equal(header.ready!.permission.id, mode);
@@ -1277,7 +1277,7 @@ function permissionAgent(): {agent: Ref; unmount: () => void} {
 
 test('/permission opens the picker, and a pick moves the whole session', async () => {
   const {agent, unmount} = permissionAgent();
-  assert.equal(agent.current!.mode, 'auto');
+  assert.equal(agent.current!.mode, 'auto-edits');
 
   agent.current!.permission();
   await tick();
@@ -1313,9 +1313,9 @@ test('cancelling the picker changes neither the mode nor the file', async () => 
   await tick();
 
   assert.equal(agent.current!.phase.kind, 'idle');
-  assert.equal(agent.current!.mode, 'auto');
+  assert.equal(agent.current!.mode, 'auto-edits');
   assert.deepEqual(agent.current!.committed, before);
-  assert.equal(modeOf(), 'auto');
+  assert.equal(modeOf(), 'auto-edits');
   assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
 });
@@ -1347,7 +1347,7 @@ test('/permission while the agent is busy does nothing', async () => {
   assert.equal(agent.current!.phase.kind, 'busy');
   release();
   await settle(agent);
-  assert.equal(agent.current!.mode, 'auto');
+  assert.equal(agent.current!.mode, 'auto-edits');
   unmount();
 });
 

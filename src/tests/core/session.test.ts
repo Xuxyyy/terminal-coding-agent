@@ -243,7 +243,7 @@ test('a low override moves the line down', () => {
 
 test('setMode moves the mode and the prompt together', () => {
   const session = createSession('/tmp/work', 'rules', 100_000);
-  assert.equal(session.mode, 'auto');
+  assert.equal(session.mode, 'auto-edits');
 
   setMode(session, 'ask-edits');
 

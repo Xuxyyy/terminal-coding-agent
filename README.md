@@ -15,11 +15,12 @@ directory.
 One TypeScript package with a local test suite. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done. The default permission
-mode is `auto`: actions above its automatic allowance threshold go to a model
-judge, then to you when approval is still needed. An explicitly saved mode wins.
+mode is `auto-edits`: ordinary project edits run automatically, while actions
+above its automatic allowance threshold ask you for approval. An explicitly saved mode wins.
 
-- Default `auto` mode offers four tools: `bash`, `edit_file`, `write_file`,
-  and `agent`. `ask-edits` and `auto-edits` also offer `read_file`, `grep`, and `glob`.
+- Default `auto-edits` mode offers seven tools: `read_file`, `grep`, `glob`,
+  `bash`, `edit_file`, `write_file`, and `agent`. Optional `auto` mode offers
+  only the last four and uses a model judge for actions needing review.
   Global [agent definitions](https://coding-cli-docs.vercel.app/configure/subagent/)
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
   The parent waits for its report; the child has a separate conversation and

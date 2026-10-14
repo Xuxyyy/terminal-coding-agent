@@ -386,7 +386,7 @@ required the same day.**
 
 ## Where the mode comes from
 
-**`permission_mode` in `~/.acc/settings.json`, else `auto`.** One value, global, and
+**`permission_mode` in `~/.acc/settings.json`, else `auto-edits`.** One value, global, and
 `modeOf()` is still the only place it is read.
 
 The fallback is used when settings are missing or the key is absent. Existing
@@ -737,8 +737,8 @@ keeps the whole permission chain testable with no network — every test in
 `permission.test.ts` and `judge.test.ts` runs against `decide()` and the pure builders, and
 `judge-gate.test.ts` drives the gate with a fake judge the test defines.
 
-`rules` defaults to empty and `mode` to `auto`. Callers that need the former
-behavior must select `auto-edits` explicitly. A `write` reads the `edit(...)`
+`rules` defaults to empty and `mode` to `auto-edits`. Callers that want
+model judging must select `auto` explicitly. A `write` reads the `edit(...)`
 rules and takes whatever verdict they produce. A
 `read` reads them too, but keeps only `deny`: `allow` and `ask` collapse to `null` before
 `fileOutcome` sees them. **A `deny` rule governs a read; nothing else does.** *Never read this

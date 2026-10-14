@@ -5,9 +5,9 @@ sidebar:
   order: 3
 ---
 
-There are seven built-in tools. Default `auto` mode offers four: `edit_file`,
-`write_file`, `bash`, and `agent`. Reads and searches use Bash. `ask-edits` and
-`auto-edits` also offer `read_file`, `grep`, and `glob`.
+Default `auto-edits` mode offers all seven built-in tools, as does `ask-edits`.
+Optional `auto` mode offers four: `edit_file`, `write_file`, `bash`, and `agent`.
+In `auto`, reads and searches use Bash.
 
 File and shell execution defaults to Sandbox Off.
 Permission checks apply in both modes. With Sandbox On, extra network access and

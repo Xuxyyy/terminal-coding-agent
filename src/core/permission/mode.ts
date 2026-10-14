@@ -4,7 +4,7 @@ export type Mode = 'ask-edits' | 'auto-edits' | 'auto';
 
 export const MODES: Mode[] = ['ask-edits', 'auto-edits', 'auto'];
 
-export const DEFAULT_MODE: Mode = 'auto';
+export const DEFAULT_MODE: Mode = 'auto-edits';
 
 const STRICTNESS: Record<Mode, number> = {
   'ask-edits': 2,

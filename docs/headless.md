@@ -77,7 +77,7 @@ does everywhere else.
 **What the policy governs is narrower than it sounds, and this is the thing to
 get right.** It answers confirms; it does not decide which actions produce one.
 An ordinary edit inside the workspace classifies as `recoverable`
-(`classify.ts:101`), the default mode `auto` cuts at `recoverable`
+(`classify.ts:101`), the default mode `auto-edits` cuts at `recoverable`
 (`mode.ts:11`), `withinCut` compares with `<=` (`mode.ts:26`), so `decide`
 returns `allow` (`decide.ts:36`) and `permitted()` returns before it ever calls
 `host.confirm` (`registry.ts:92`).

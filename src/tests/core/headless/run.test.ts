@@ -75,7 +75,7 @@ test('an answer with no tool call finishes and returns the deltas joined', async
   assert.equal(result.error, undefined);
 });
 
-test('headless startup uses auto by default and preserves saved permission modes', async () => {
+test('headless startup uses auto-edits by default and preserves saved permission modes', async () => {
   const previousHome = process.env.ACC_HOME;
   try {
     for (const saved of [undefined, 'ask-edits', 'auto-edits', 'auto'] as const) {
@@ -93,7 +93,7 @@ test('headless startup uses auto by default and preserves saved permission modes
       const result = await headless({root, choice});
 
       assert.equal(result.stopped, 'done');
-      const mode = saved ?? 'auto';
+      const mode = saved ?? 'auto-edits';
       assert.ok(request?.messages[0]?.content.startsWith(systemPrompt(root, mode)));
       assert.match(request!.messages[0]!.content, /at most 60 model turns, including the final answer/);
       assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
@@ -110,8 +110,17 @@ test('headless startup uses auto by default and preserves saved permission modes
   }
 });
 
-test('auto rejects dedicated reads and searches and can read through bash', async () => {
-  loadSettings([]);
+test('auto rejects dedicated reads and searches and can read through bash', async (t) => {
+  const previousHome = process.env.ACC_HOME;
+  process.env.ACC_HOME = tempDir();
+  t.after(() => {
+    if (previousHome === undefined) delete process.env.ACC_HOME;
+    else process.env.ACC_HOME = previousHome;
+    loadSettings([]);
+  });
+  const settings = path.join(process.env.ACC_HOME, 'settings.json');
+  fs.writeFileSync(settings, JSON.stringify({permission_mode: 'auto'}));
+  loadSettings([settings]);
   const root = tempDir();
   fs.writeFileSync(path.join(root, 'note.txt'), 'the note contents\n');
   const {choice} = fakeModel((nth) => {
@@ -122,6 +131,7 @@ test('auto rejects dedicated reads and searches and can read through bash', asyn
   });
 
   const result = await headless({root, choice});
+  loadSettings([]);
 
   assert.equal(result.stopped, 'done');
   assert.deepEqual(result.events.filter((event) => event.type === 'tool_end').map((event) => event.result), [

@@ -6,8 +6,8 @@ description: A small terminal coding agent that reads, edits, and runs code in t
 `acc` is a coding agent that lives in your terminal. You start it inside a
 project, describe a task in plain English, and it reads the files, searches
 them, edits them, and runs commands until the task is done. Permission checks
-control file and shell actions; default `auto` mode uses a model judge for
-actions above its automatic allowance threshold, then asks you if needed.
+control file and shell actions; default `auto-edits` mode runs ordinary project
+edits automatically and asks you about actions above its automatic allowance threshold.
 
 It is one npm package with a local test suite. DeepSeek supplies the coding model;
 conversation history, tools, permissions, and sessions stay in `acc`.
@@ -28,9 +28,10 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 
 ## What it can do
 
-- **Four tools in default `auto` mode.** Bash handles reads, searches, and
-  commands. `edit_file` and `write_file` make backed-up file changes, and
-  `agent` delegates a job. The two edit modes also offer `read_file`, `grep`, and `glob`.
+- **Seven tools in default `auto-edits` mode.** `read_file`, `grep`, and `glob`
+  handle reads and searches. Bash runs commands, `edit_file` and `write_file`
+  make backed-up file changes, and `agent` delegates a job. Optional `auto` mode
+  offers the last four tools and uses Bash for reads and searches.
 - **DeepSeek coding and permission judging.** Set `DEEPSEEK_API_KEY` for
   `deepseek-flash`, currently V4.1 Flash. Reasoning defaults to `high` and can be
   overridden. Auto mode uses the same DeepSeek model and key for judging.

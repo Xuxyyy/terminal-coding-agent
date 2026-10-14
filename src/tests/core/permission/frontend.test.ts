@@ -92,7 +92,7 @@ test('frontend command findings and default routing survive the tier refactor', 
     assert.equal(classification.tier, automatic ? expected : 'needs-checking', command);
     assert.equal(classification.cause, automatic ? null : expected, command);
     assert.equal(decide({kind: 'command', command}, project).decision,
-      expected === 'observe' || expected === 'recoverable' ? 'allow' : 'judge', command);
+      expected === 'observe' || expected === 'recoverable' ? 'allow' : 'ask', command);
   }
 });
 

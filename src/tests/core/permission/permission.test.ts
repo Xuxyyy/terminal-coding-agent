@@ -577,13 +577,13 @@ test('a rule verdict is never judged in auto', () => {
   assert.equal(allowedWrite.decision, 'allow');
 });
 
-test('omitting the mode uses auto for permission decisions and new sessions', () => {
+test('omitting the mode uses auto-edits for permission decisions and new sessions', () => {
   for (const text of [...QUIET, ...ADVERSARIAL]) {
-    assert.deepEqual(decide({kind: 'command', command: text}, project), command(text, undefined, 'auto'), text);
+    assert.deepEqual(decide({kind: 'command', command: text}, project), command(text, undefined, 'auto-edits'), text);
   }
-  assert.deepEqual(decide({kind: 'write', path: '.git/config'}, project), write('.git/config', undefined, 'auto'));
-  assert.deepEqual(decide({kind: 'read', path: '../outside.txt'}, project), read('../outside.txt', undefined, 'auto'));
-  assert.equal(createSession(project, 'system', 100).mode, 'auto');
+  assert.deepEqual(decide({kind: 'write', path: '.git/config'}, project), write('.git/config', undefined, 'auto-edits'));
+  assert.deepEqual(decide({kind: 'read', path: '../outside.txt'}, project), read('../outside.txt', undefined, 'auto-edits'));
+  assert.equal(createSession(project, 'system', 100).mode, 'auto-edits');
 });
 
 const alwaysApproves: Host = {

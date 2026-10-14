@@ -26,8 +26,8 @@ Reading and searching use Bash. `read_file`, `grep`, and `glob` remain available
 | `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
 | `agent` | `description`, `prompt`, `agent?` | Hands one self-contained job to a general or named sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
 
-That column describes `auto-edits`. The default is `auto`, which allows the same
-ordinary project writes but sends above-cut actions to a model judge before
+That column describes the default, `auto-edits`. Optional `auto` mode allows
+the same ordinary project writes but sends above-cut actions to a model judge before
 asking a human. `ask-edits` asks about ordinary writes instead. No mode refuses
 a tool call on its own; only a deny rule does. The `recoverable` classification
 does not guarantee that uncommitted content can be restored. `permissions.md`

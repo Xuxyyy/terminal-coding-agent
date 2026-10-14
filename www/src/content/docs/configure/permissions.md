@@ -38,8 +38,8 @@ above the line:
 | Mode | Runs without asking | Above the line |
 |---|---|---|
 | `ask-edits` | `observe` | asks you |
-| `auto-edits` | `observe`, `recoverable` | asks you |
-| `auto` *(default)* | `observe`, `recoverable` | [asks a model](#auto-mode) |
+| `auto-edits` *(default)* | `observe`, `recoverable` | asks you |
+| `auto` | `observe`, `recoverable` | [asks a model](#auto-mode) |
 
 A stricter mode moves the automatic allowance threshold down. In `auto`, actions
 above that threshold go to the model judge before asking you. Permission rules
@@ -56,8 +56,8 @@ This key is read from **your** `~/.acc/settings.json` only. A project you cloned
 does not get to choose how much of itself runs unattended, so the key in a
 project's `.acc/settings.json` is a startup error.
 
-When the key or settings file is absent, `auto` is used. An explicitly saved
-`ask-edits` or `auto-edits` remains your choice; it is not rewritten.
+When the key or settings file is absent, `auto-edits` is used. Any explicitly
+saved mode remains your choice; it is not rewritten.
 
 In `auto`, prefer Bash for reading, searching, and running commands. Prefer
 `edit_file` and `write_file` for ordinary file changes so `/rewind` can use their
@@ -269,7 +269,7 @@ disk. To make a permission permanent, write an `allow` rule.
 `auto` is not a third position on the line — it is `auto-edits` with **a model
 standing in for you above the line**.
 
-| | `auto-edits` | `auto` |
+| | `auto-edits` *(default)* | `auto` |
 |---|---|---|
 | Below the line | runs | runs — identically |
 | Above the line | asks you | a model answers first |

@@ -56,7 +56,7 @@ test('interactive DeepSeek text appears progressively, runs a local tool, and st
   let calls = 0;
   const client = deepseekClient('test-key', async (request, signal) => {
     const offered = request.tools as {function: {name: string}}[];
-    assert.deepEqual(offered.map((tool) => tool.function.name), ['edit_file', 'write_file', 'bash', 'agent']);
+    assert.deepEqual(offered.map((tool) => tool.function.name), ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent']);
     calls += 1;
     if (calls === 1) return (async function* () {
       yield reasoningChunk('read the note');

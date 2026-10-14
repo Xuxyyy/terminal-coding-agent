@@ -18,8 +18,8 @@ The workspace is the current directory. Installed as the `acc` command.
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
 - Seven built-in tools: `read_file`, `grep`, `glob`, `edit_file` (unique-match),
-  `write_file`, `bash`, `agent`. Default `auto` mode offers only `edit_file`,
-  `write_file`, `bash`, and `agent`; the two edit modes offer all seven.
+  `write_file`, `bash`, `agent`. Default `auto-edits` mode offers all seven.
+  Optional `auto` mode offers only `edit_file`, `write_file`, `bash`, and `agent`.
 - `agent` hands one self-contained job to a sub-agent. Files in
   `<ACC_HOME>/agents/*.md` define optional global types with a routing
   description, appended role prompt, model, exact tool list, and permission
@@ -79,16 +79,15 @@ is ignored and 0.8 is used.
 ## Permissions
 
 One gate, `permitted()` in `src/core/tools/registry.ts`. The default permission
-mode is `auto`, unless a mode is saved in user settings. Its automatic allowance
-threshold is the same as `auto-edits`:
+mode is `auto-edits`, unless a mode is saved in user settings:
 
 - reads and writes inside the project run silently;
 - protected paths (`protected.ts`), deletes, and unclassified commands go to the
-  model judge, then ask a human if needed; human approvals can be remembered;
+  user for approval; approvals can be remembered;
 - anything reaching outside the project — a file tool or a `bash` command
-  alike — goes to the judge and then asks if needed; its approval can never be
+  alike — asks the user; its approval can never be
   remembered. Sandbox resource grants still require explicit human approval;
-- an escape (`sudo`, `git push`, `dd of=`) follows the same judge route.
+- an escape (`sudo`, `git push`, `dd of=`) also asks the user.
 
 In `auto`, tool descriptions prefer Bash for reading, searching,
 and running commands. They prefer `edit_file` and `write_file` for ordinary file

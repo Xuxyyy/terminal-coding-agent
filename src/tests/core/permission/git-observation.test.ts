@@ -65,7 +65,7 @@ test('Git listing support does not allow writes or unknown options', () => {
     'git stash list && git stash drop',
   ]) {
     assert.equal(classifyCommand(command, process.cwd()).tier, 'needs-checking', command);
-    assert.equal(decide({kind: 'command', command}, process.cwd()).decision, 'judge', command);
+    assert.equal(decide({kind: 'command', command}, process.cwd()).decision, 'ask', command);
   }
 });
 
@@ -77,7 +77,7 @@ test('Git observations retain redirect and outside-path checks', () => {
     'git config --list --show-origin > .git/config',
     'git log --graph -- ../outside.txt',
   ]) {
-    assert.equal(decide({kind: 'command', command}, process.cwd()).decision, 'judge', command);
+    assert.equal(decide({kind: 'command', command}, process.cwd()).decision, 'ask', command);
   }
   const redirected = classifyCommand('git stash list > stash.txt', process.cwd());
   assert.equal(redirected.tier, 'recoverable');

@@ -38,9 +38,9 @@ function thrown(value: unknown): SettingsError {
   throw new Error(`expected ${JSON.stringify(value)} to be rejected`);
 }
 
-test('rulesOf is empty and modeOf is auto before the settings are loaded', () => {
+test('rulesOf is empty and modeOf is auto-edits before the settings are loaded', () => {
   assert.deepEqual(rulesOf(), {allow: [], ask: [], deny: []});
-  assert.equal(modeOf(), 'auto');
+  assert.equal(modeOf(), 'auto-edits');
 });
 
 test('parseSettings reads the three lists with the tag kept', () => {
@@ -315,21 +315,21 @@ test('an unknown permission mode refuses to start and lists the valid names', ()
   });
 });
 
-test('no permission mode anywhere leaves auto without rewriting settings', () => {
+test('no permission mode anywhere leaves auto-edits without rewriting settings', () => {
   withHome((home) => {
     const files = settingsIn(home, {permissions: {allow: ['bash(ls *)']}}, {});
     const before = files.map((file) => fs.readFileSync(file, 'utf8'));
     loadSettings(files);
-    assert.equal(modeOf(), 'auto');
+    assert.equal(modeOf(), 'auto-edits');
     assert.deepEqual(files.map((file) => fs.readFileSync(file, 'utf8')), before);
   });
 });
 
-test('missing settings files default to auto without creating a settings file', () => {
+test('missing settings files default to auto-edits without creating a settings file', () => {
   withHome((home) => {
     const files = [path.join(home, 'settings.json'), path.join(home, 'project', '.acc', 'settings.json')];
     loadSettings(files);
-    assert.equal(modeOf(), 'auto');
+    assert.equal(modeOf(), 'auto-edits');
     assert.ok(files.every((file) => !fs.existsSync(file)));
   });
 });
@@ -339,7 +339,7 @@ test('other unknown top-level keys are still ignored in every file', () => {
     loadSettings(
       settingsIn(home, {model: 'deepseek-flash'}, {transcripts: true, hats: 3}),
     );
-    assert.equal(modeOf(), 'auto');
+    assert.equal(modeOf(), 'auto-edits');
   });
 });
 
