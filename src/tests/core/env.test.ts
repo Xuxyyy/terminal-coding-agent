@@ -7,9 +7,9 @@ import {chooseModel, DEFAULT_MODEL} from '../../core/client.js';
 import {loadEnvFiles, parseEnv} from '../../core/env.js';
 import {MODEL_IDS, PROVIDERS} from '../../core/models.js';
 
-test('Gemini is the only provider with three model choices', () => {
-  assert.deepEqual(Object.keys(PROVIDERS), ['gemini']);
-  assert.deepEqual(MODEL_IDS, ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite']);
+test('DeepSeek Flash is the only coding model', () => {
+  assert.deepEqual(Object.keys(PROVIDERS), ['deepseek']);
+  assert.deepEqual(MODEL_IDS, ['deepseek-flash']);
 });
 
 test('parseEnv reads plain, quoted, and exported lines', () => {
@@ -58,18 +58,18 @@ test('loadEnvFiles fills gaps without overriding the real environment', () => {
 });
 
 test('chooseModel prefers the default model when its key is present', () => {
-  assert.equal(chooseModel({GEMINI_API_KEY: 'k'}), DEFAULT_MODEL);
-  assert.equal(DEFAULT_MODEL, 'gemini-3.8-flash');
+  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}), DEFAULT_MODEL);
+  assert.equal(DEFAULT_MODEL, 'deepseek-flash');
 });
 
 test('chooseModel uses the default even without a key', () => {
-  assert.equal(chooseModel({}), 'gemini-3.8-flash');
+  assert.equal(chooseModel({}), 'deepseek-flash');
 });
 
 test('chooseModel obeys an explicit ACC_MODEL', () => {
   assert.equal(
-    chooseModel({ACC_MODEL: 'gemini-3.1-pro-preview', GEMINI_API_KEY: 'k'}),
-    'gemini-3.1-pro-preview',
+    chooseModel({ACC_MODEL: 'deepseek-flash', DEEPSEEK_API_KEY: 'k'}),
+    'deepseek-flash',
   );
 });
 
@@ -78,13 +78,13 @@ test('chooseModel names the default when nothing is configured', () => {
 });
 
 test('chooseModel takes the saved model when the environment names none', () => {
-  assert.equal(chooseModel({}, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
+  assert.equal(chooseModel({}, 'deepseek-flash'), 'deepseek-flash');
 });
 
 test('an explicit ACC_MODEL beats a saved model', () => {
-  assert.equal(chooseModel({ACC_MODEL: 'gemini-3.8-flash'}, 'gemini-3.1-pro-preview'), 'gemini-3.8-flash');
+  assert.equal(chooseModel({ACC_MODEL: 'deepseek-flash'}, 'deepseek-flash'), 'deepseek-flash');
 });
 
 test('a saved model beats the key scan', () => {
-  assert.equal(chooseModel({GEMINI_API_KEY: 'k'}, 'gemini-3.1-pro-preview'), 'gemini-3.1-pro-preview');
+  assert.equal(chooseModel({DEEPSEEK_API_KEY: 'k'}, 'deepseek-flash'), 'deepseek-flash');
 });

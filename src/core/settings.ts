@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {agentFiles, loadAgents} from './agents.js';
-import {MODEL_IDS, MODELS} from './models.js';
+import {MODEL_IDS, MODELS, migratedModel, isReasoningEffort, type ReasoningEffort} from './models.js';
 import {DEFAULT_MODE, isMode, MODES, type Mode} from './permission/mode.js';
 import {accHome, makeDir} from './projects.js';
 
@@ -82,7 +82,8 @@ export function parseModel(
   file: string,
   user: boolean,
 ): string | null {
-  const value = parseObject(text, file)[MODEL_KEY];
+  const raw = parseObject(text, file)[MODEL_KEY];
+  const value = typeof raw === 'string' ? migratedModel(raw) : raw;
   if (value === undefined) return null;
   if (!user) {
     throw new SettingsError(
@@ -146,6 +147,21 @@ export function parseSettings(text: string, file: string): Rules {
 let cached: Rules = emptyRules();
 let cachedMode: Mode = DEFAULT_MODE;
 let cachedModel: string | null = null;
+let cachedReasoning: ReasoningEffort | null = null;
+
+export function parseReasoning(text: string, file: string, user: boolean): ReasoningEffort | null {
+  const value = parseObject(text, file).reasoning_effort;
+  if (value === undefined) return null;
+  if (!user) throw new SettingsError(`${file}: "reasoning_effort" is only read from ${userSettingsFile()}`);
+  if (!isReasoningEffort(value)) {
+    throw new SettingsError(`${file}: "reasoning_effort" must be none, low, high, or max`);
+  }
+  return value;
+}
+
+export function reasoningOf(): ReasoningEffort | null {
+  return cachedReasoning;
+}
 
 export function loadSettings(
   files: string[] = settingsFiles(process.cwd()),
@@ -153,6 +169,7 @@ export function loadSettings(
   const merged = emptyRules();
   let mode: Mode = DEFAULT_MODE;
   let model: string | null = null;
+  let reasoning: ReasoningEffort | null = null;
   for (const file of files) {
     if (!fs.existsSync(file)) continue;
     let text: string;
@@ -165,10 +182,12 @@ export function loadSettings(
     for (const list of LISTS) merged[list].push(...rules[list]);
     mode = parseMode(text, file, isUserSettings(file)) ?? mode;
     model = parseModel(text, file, isUserSettings(file)) ?? model;
+    reasoning = parseReasoning(text, file, isUserSettings(file)) ?? reasoning;
   }
   cached = merged;
   cachedMode = mode;
   cachedModel = model;
+  cachedReasoning = reasoning;
   loadAgents(agentFiles());
   return merged;
 }

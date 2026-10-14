@@ -103,7 +103,7 @@ export function fakeModel(next: (nth: number, body?: unknown) => unknown): {
   return {
     choice: {
       client: {chat: {completions: {create}}} as unknown as OpenAI,
-      model: 'fake-model',
+      model: 'deepseek-flash',
       label: 'Fake',
       contextWindow: 1_000_000,
     },

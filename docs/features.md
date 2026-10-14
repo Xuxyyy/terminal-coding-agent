@@ -53,22 +53,23 @@ The workspace is the current directory. Installed as the `acc` command.
 
 ## Models
 
-Gemini is the only provider, using the native Interactions API through
-`@google/genai`. The adapter keeps OpenAI-shaped types inside the core; it does
-not use an OpenAI provider connection. History stays local, with `store: false`
-on requests.
+DeepSeek is the coding provider, using its official Chat Completions API through
+`openai`. `deepseek-flash` is the only coding choice and currently maps to V4.1
+Flash. The alias can change. Its context window is 1,048,576 tokens; replies are
+capped at 32,000 tokens, including reasoning, with a 120-second request timeout.
 
-Three models are selectable: `gemini-3.8-flash` (default),
-`gemini-3.1-pro-preview`, and `gemini-3.5-flash-lite`. Each is configured with a
-1,048,576-token context window and a 32,000-token maximum reply.
-The permission judge always uses `gemini-3.5-flash-lite` for Gemini sessions.
-`GEMINI_API_KEY` loads from the shell first, then the project's `.env`, then
-`~/.acc/.env`.
+`ACC_MODEL` overrides the user `model` setting. Saved Gemini selections migrate
+to `deepseek-flash`; explicit unsupported environment overrides fail. Missing
+`DEEPSEEK_API_KEY` is an error, with no provider fallback. Keys load from the shell,
+then the project's `.env`, then `~/.acc/.env`.
 
-The model is chosen in three steps, first hit wins: `ACC_MODEL`, then the
-`"model"` key saved in `~/.acc/settings.json` by the `/model` picker, then the
-default `gemini-3.8-flash`. An env override a
-settings file could beat would not be an override, so `ACC_MODEL` stays on top.
+`ACC_REASONING_EFFORT` overrides the user `reasoning_effort` setting, then defaults
+to `high`. Accepted values are `none`, `low`, `high`, and `max`; `none` disables
+thinking. Subagents and compaction inherit the parent setting. Effective settings
+are shown in the header, session metadata, and headless JSON.
+
+The judge remains `gemini-3.5-flash-lite` through the Gemini Interactions API and
+`GEMINI_API_KEY`. Its rubric, limits, and fallback to confirmation are unchanged.
 
 Configuration includes these environment variables: `ACC_MODEL` picks the
 model id, `ACC_HOME` moves the session store off `~/.acc`, and `ACC_COMPACT_AT`
@@ -341,18 +342,9 @@ total to fall back on until the next real turn, so it shows an estimate that
 runs ~28% low. Two numbers, one of them shaky, said less than one. Type
 `/context` if you want it. See `sessions.md`.
 
-`/model` switches the model while you work, in the same box, marker and hint
-style as `/permission`. All three models are listed in registry order, opened on
-the one you are on. A model whose provider key is unset is **shown, not
-hidden**: the row stays grey when the cursor lands on it, `enter` refuses it,
-and the hint line under the box turns into `set GEMINI_API_KEY to use this model`.
-Hiding the row would leave you wondering where your model went; the grey row
-names the variable instead.
-
-A pick swaps the live client, so the next turn uses the selected Gemini model.
-Permission judging continues to use Flash-Lite with the same API key. The pick also updates
-`session.contextWindow`, which is what `/context` measures against and what the
-80% compaction trigger reads. It stays tied to the active model's window.
+`/model` retains its picker with DeepSeek as the sole coding choice. A missing
+key is shown as `set DEEPSEEK_API_KEY to use this model`. Permission judging
+remains independent and uses Gemini Flash-Lite with `GEMINI_API_KEY`.
 
 Unlike `/permission`, a switch does **not** rewrite the transcript. A mode is a
 fact about now, so it repaints every past header; a model is a fact about a

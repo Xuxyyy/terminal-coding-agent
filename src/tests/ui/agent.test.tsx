@@ -1487,7 +1487,7 @@ test('cancelling the model picker changes nothing', async () => {
   await tick();
 
   assert.equal(agent.current!.phase.kind, 'idle');
-  assert.equal(agent.current!.modelId, 'fake-model');
+  assert.equal(agent.current!.modelId, 'deepseek-flash');
   assert.deepEqual(agent.current!.committed, before);
   assert.equal(fs.existsSync(path.join(home, 'settings.json')), false);
   unmount();
@@ -1497,7 +1497,7 @@ test('picking the model already in use commits nothing', async () => {
   const {agent, unmount} = switchable();
   const before = agent.current!.committed;
 
-  await switchTo(agent, 'fake-model');
+  await switchTo(agent, 'deepseek-flash');
 
   assert.equal(agent.current!.phase.kind, 'idle');
   assert.deepEqual(agent.current!.committed, before);
@@ -1533,7 +1533,7 @@ test('/model while the agent is busy does nothing', async () => {
   assert.deepEqual(agent.current!.committed, before);
   release();
   await settle(agent);
-  assert.equal(agent.current!.modelId, 'fake-model');
+  assert.equal(agent.current!.modelId, 'deepseek-flash');
   unmount();
 });
 
@@ -1549,7 +1549,7 @@ test('a client that refuses to build leaves the model where it was', async () =>
   await switchTo(agent, KIMI.model);
 
   assert.equal(agent.current!.phase.kind, 'idle');
-  assert.equal(agent.current!.modelId, 'fake-model');
+  assert.equal(agent.current!.modelId, 'deepseek-flash');
   const notice = agent.current!.committed.at(-1) as NoticeItem;
   assert.equal(notice.kind, 'notice');
   assert.match(notice.text, /MOONSHOT_API_KEY is not set/);

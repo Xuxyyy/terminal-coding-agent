@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
-import {createClient, type ModelChoice} from '../core/client.js';
+import {createClient, modelSettings, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
@@ -71,6 +71,7 @@ function readyInfo(workspaceRoot: string, choice: ModelChoice): ReadyInfo {
   return {
     workspace: workspaceRoot,
     model: {id: choice.model, label: choice.label},
+    modelSettings: modelSettings(choice),
     permission: {id: mode},
   };
 }
@@ -111,7 +112,7 @@ export function useAgent(
   const openStore = (): SessionStore | null => {
     if (storeRef.current === undefined) {
       try {
-        storeRef.current = startSession(workspaceRoot);
+        storeRef.current = startSession(workspaceRoot, undefined, undefined, modelSettings(choiceRef.current));
       } catch {
         storeRef.current = null;
       }
@@ -319,7 +320,7 @@ export function useAgent(
     setPhase({kind: 'idle'});
     let opened: ReturnType<typeof openSession>;
     try {
-      opened = openSession(workspaceRoot, id);
+      opened = openSession(workspaceRoot, id, undefined, undefined, modelSettings(choiceRef.current));
     } catch (error) {
       const reason =
         error instanceof SessionLockedError ? error.message : String(error);

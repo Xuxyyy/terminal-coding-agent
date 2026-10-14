@@ -322,13 +322,11 @@ Deliberately not a latch, so the mode behaves the same at the end of a turn as a
 
 ### The model
 
-**Gemini 3.5 Flash-Lite**, via `judgeModelFor` in `client.ts`, judges every supported Gemini
-session. The main agent's selected model is unchanged; its default remains Gemini 3.8 Flash.
-The judge uses the same Gemini API key and needs no separate setting. A session already on
-Flash-Lite judges with the same model. One attempt, no retry, a 20-second timeout: a judge that is slow or broken
-must reach the human fast, and a retry only delays that. If `createClient` throws for that
-provider, the judge is one that always answers `ask` — everything degrades to a prompt and
-nothing crashes a turn.
+**Gemini 3.5 Flash-Lite**, via `createJudgeClient` in `client.ts`, judges Auto-mode
+actions independently of the DeepSeek coding model. It uses `GEMINI_API_KEY` and
+the existing Gemini Interactions API. One attempt, no retry, a 20-second timeout:
+a slow or broken judge must reach the human fast. Missing credentials or a
+failed judge request still answer `ask`; coding reasoning settings do not affect it.
 
 **`JUDGE_MAX_TOKENS` is 512, and the reason is not the length of the answer.** The answer is one
 word. These are reasoning models, and their reasoning is billed against `max_tokens` before a

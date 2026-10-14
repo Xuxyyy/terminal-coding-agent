@@ -1,49 +1,80 @@
 ---
 title: Models
-description: Gemini model choices, API key setup, and how acc selects a model.
+description: DeepSeek coding, reasoning settings, and the separate Gemini permission judge.
 sidebar:
   order: 5
 ---
 
-`acc` uses the native Gemini Interactions API. It keeps conversation history
-locally and sends it with each request using `store: false`. It does not use a
-Google-hosted agent. File and shell tools still run on your computer.
+ACC uses the official DeepSeek Chat Completions API at `https://api.deepseek.com`.
+`deepseek-flash` is its only coding model. As of October 13, 2026, this alias maps
+to DeepSeek V4.1 Flash. The alias can change, so matching the ID alone does not
+prove that runs made at different dates used the same model version.
 
-| Model id | Role | Context window |
-|---|---|---:|
-| `gemini-3.8-flash` | Default | 1,048,576 tokens |
-| `gemini-3.1-pro-preview` | Optional | 1,048,576 tokens |
-| `gemini-3.5-flash-lite` | Permission judge; also selectable | 1,048,576 tokens |
+| Setting | Effective default |
+|---|---|
+| Coding model | `deepseek-flash` |
+| Context window | 1,048,576 tokens |
+| Reasoning effort | `high` |
+| Thinking | enabled; disabled when effort is `none` |
+| Maximum output | 32,000 tokens, including reasoning |
+| Request timeout | 120 seconds |
+| Permission judge | `gemini-3.5-flash-lite`, unchanged |
 
-Every reply is capped at 32,000 output tokens.
-Permission checks in `auto` mode use Gemini 3.5 Flash-Lite regardless of the main
-agent's selected model, with the same API key and no separate setting.
+Tools execute locally under ACC's existing permission and sandbox rules.
+ACC keeps conversation history locally and sends it with each coding request.
+Reasoning is kept for later requests and saved sessions, but is not displayed.
 
-## API key
+## API keys
 
-Create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set
-`GEMINI_API_KEY`. `acc` checks your shell first, then `.env` in the current
-project, then `~/.acc/.env`.
+Set `DEEPSEEK_API_KEY` for coding. Set `GEMINI_API_KEY` to keep Auto mode's
+permission judge available. A missing DeepSeek key stops startup; ACC does not
+fall back to Gemini coding. A missing or unavailable Gemini judge keeps the
+existing fallback to human confirmation or the headless approval policy.
 
-```bash
-cp .env.example .env
-```
+Create a DeepSeek key at [DeepSeek Platform](https://platform.deepseek.com/).
+The judge key comes from [Google AI Studio](https://aistudio.google.com/apikey).
+ACC reads the shell first, then the project's `.env`, then `~/.acc/.env`.
+Copy `.env.example` to `.env`, fill in the keys, and keep that file out of Git.
 
-Fill in the key in `.env`. Keep that file private and out of Git.
+## Model and reasoning selection
 
-## Model selection
+`ACC_MODEL` overrides the user `model` setting; the default is `deepseek-flash`.
+Saved Gemini model selections and named-agent model fields are normalized to
+DeepSeek when loaded, without rewriting agent files. Explicit Gemini values in
+`ACC_MODEL` are rejected. `/model` remains available with one coding choice.
 
-`acc` uses `ACC_MODEL` if it is set. Otherwise it uses the model saved in
-`~/.acc/settings.json`. Otherwise it starts with `gemini-3.8-flash`.
-
-Use [`/model`](/configure/commands) to switch models and save your choice.
-The saved setting has this form:
+`ACC_REASONING_EFFORT` overrides the user `reasoning_effort` setting; the default
+is `high`. Supported values are `none`, `low`, `high`, and `max`. `none` disables
+thinking. Invalid values stop startup. Both settings belong in the user settings
+file, not a project's settings file.
 
 ```json
-{ "model": "gemini-3.1-pro-preview" }
+{
+  "model": "deepseek-flash",
+  "reasoning_effort": "high"
+}
 ```
 
-A model setting in a project's `.acc/settings.json` is a startup error; the
-setting belongs in the user file. Old DeepSeek and Kimi model settings are
-ignored after this update. If the selected model is unknown or the Gemini key
-is missing, `acc` stops with a clear error.
+```bash
+ACC_MODEL=deepseek-flash ACC_REASONING_EFFORT=high acc
+ACC_MODEL=deepseek-flash ACC_REASONING_EFFORT=low acc -p "Explain this project" --json
+```
+
+Subagents always inherit the parent's reasoning effort, including named agents.
+Compaction uses the same setting. Coding settings never change the judge's
+model, prompt, token limit, or timeout.
+
+The interactive header, saved session metadata, and headless JSON result show
+the effective model, reasoning effort, and output limit. The JSON `modelSettings`
+object also records the provider, base URL, thinking mode, and request timeout.
+These are the values to match in a future comparison; ACC does not configure
+Codex or run benchmarks for you.
+
+## Sessions from before the migration
+
+Start a fresh DeepSeek session. Legacy sessions without compatible DeepSeek
+metadata cannot resume. They remain stored unless explicitly deleted; ACC does
+not automatically delete them during startup as part of this migration.
+
+See [DeepSeek's model details](https://api-docs.deepseek.com/quick_start/pricing/)
+and [reasoning controls](https://api-docs.deepseek.com/guides/thinking_mode/).

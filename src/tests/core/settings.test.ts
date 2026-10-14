@@ -73,7 +73,7 @@ test('parseSettings treats missing lists and missing permissions as no rules', (
 test('parseSettings ignores top-level keys it does not implement', () => {
   assert.deepEqual(
     parse({
-      model: 'gemini-3.8-flash',
+      model: 'deepseek-flash',
       permission_mode: 'approve_for_me',
       transcripts: true,
       permissions: {allow: ['bash(ls *)']},
@@ -337,7 +337,7 @@ test('missing settings files default to auto without creating a settings file', 
 test('other unknown top-level keys are still ignored in every file', () => {
   withHome((home) => {
     loadSettings(
-      settingsIn(home, {model: 'gemini-3.8-flash'}, {transcripts: true, hats: 3}),
+      settingsIn(home, {model: 'deepseek-flash'}, {transcripts: true, hats: 3}),
     );
     assert.equal(modeOf(), 'auto');
   });
@@ -372,7 +372,7 @@ test('a remembered mode is what the next run reads', () => {
 test('remembering a mode keeps every other setting', () => {
   withHome((home) => {
     const files = settingsIn(home, {
-      model: 'gemini-3.8-flash',
+      model: 'deepseek-flash',
       permissions: {allow: ['bash(npm run *)']},
     });
     loadSettings(files);
@@ -381,7 +381,7 @@ test('remembering a mode keeps every other setting', () => {
     const rules = loadSettings(files);
 
     assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
-      model: 'gemini-3.8-flash',
+      model: 'deepseek-flash',
       permissions: {allow: ['bash(npm run *)']},
       permission_mode: 'ask-edits',
     });
@@ -409,11 +409,11 @@ test('a saved model round-trips through remembering and loading again', () => {
     loadSettings(files);
     assert.equal(modelOf(), null);
 
-    rememberModel('gemini-3.1-pro-preview');
-    assert.equal(modelOf(), 'gemini-3.1-pro-preview');
+    rememberModel('deepseek-flash');
+    assert.equal(modelOf(), 'deepseek-flash');
 
     loadSettings(files);
-    assert.equal(modelOf(), 'gemini-3.1-pro-preview');
+    assert.equal(modelOf(), 'deepseek-flash');
   });
 });
 
@@ -439,7 +439,7 @@ test('a saved model from a removed provider no longer blocks startup', () => {
 
 test('a model in a project file refuses to start and names the user file', () => {
   withHome((home) => {
-    const files = settingsIn(home, {}, {model: 'gemini-3.1-pro-preview'});
+    const files = settingsIn(home, {}, {model: 'deepseek-flash'});
     const message = refused(files).message;
 
     assert.ok(message.includes('"model"'), message);
@@ -455,12 +455,12 @@ test('remembering a model keeps every other setting', () => {
     });
     loadSettings(files);
 
-    rememberModel('gemini-3.1-pro-preview');
+    rememberModel('deepseek-flash');
 
     assert.deepEqual(JSON.parse(fs.readFileSync(files[0], 'utf8')), {
       permission_mode: 'ask-edits',
       permissions: {allow: ['bash(npm run *)']},
-      model: 'gemini-3.1-pro-preview',
+      model: 'deepseek-flash',
     });
     assert.equal(modeOf(), 'ask-edits');
   });

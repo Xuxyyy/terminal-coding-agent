@@ -5,10 +5,11 @@ import {createInterface} from 'node:readline';
 import {pathToFileURL} from 'node:url';
 import {z} from 'zod';
 import {geminiInvoke, type Invoke} from './gemini.js';
-import {JUDGE_MODELS, MODELS} from './models.js';
+import {deepseekInvoke} from './deepseek.js';
+import {JUDGE_MODEL, DEFAULT_MODEL} from './models.js';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-const requestSchema = z.object({
+const judgeRequestSchema = z.object({
   model: z.string(),
   store: z.literal(false),
   stream: z.boolean(),
@@ -20,8 +21,39 @@ const requestSchema = z.object({
     description: z.string().optional(),
     parameters: z.record(z.unknown()).optional(),
   }).strict()).optional(),
-  generation_config: z.object({max_output_tokens: z.number().int().min(1).max(32_000)}).strict(),
+  generation_config: z.object({max_output_tokens: z.number().int().min(1).max(512)}).strict(),
 }).strict();
+
+const messageSchema = z.discriminatedUnion('role', [
+  z.object({role: z.enum(['system', 'developer', 'user']), content: z.string()}).strict(),
+  z.object({
+    role: z.literal('assistant'), content: z.string().nullable(), reasoning_content: z.string().optional(),
+    tool_calls: z.array(z.object({
+      id: z.string(), type: z.literal('function'),
+      function: z.object({name: z.string(), arguments: z.string()}).strict(),
+    }).strict()).optional(),
+  }).strict(),
+  z.object({role: z.literal('tool'), tool_call_id: z.string(), content: z.string()}).strict(),
+]);
+const codingRequestSchema = z.object({
+  model: z.literal(DEFAULT_MODEL),
+  messages: z.array(messageSchema),
+  stream: z.boolean(),
+  stream_options: z.object({include_usage: z.literal(true)}).strict().optional(),
+  max_tokens: z.number().int().min(1).max(32_000),
+  reasoning_effort: z.enum(['none', 'low', 'high', 'max']),
+  thinking: z.object({type: z.enum(['enabled', 'disabled'])}).strict(),
+  tools: z.array(z.object({
+    type: z.literal('function'),
+    function: z.object({
+      name: z.string(), description: z.string().optional(), parameters: z.record(z.unknown()).optional(),
+    }).strict(),
+  }).strict()).optional(),
+}).strict().refine((body) => (body.reasoning_effort === 'none') === (body.thinking.type === 'disabled'));
+const requestSchema = z.union([
+  codingRequestSchema,
+  judgeRequestSchema.extend({model: z.literal(JUDGE_MODEL), stream: z.literal(false), tools: z.never().optional()}),
+]);
 
 export type ModelRelay = {
   port: number;
@@ -31,14 +63,15 @@ export type ModelRelay = {
 
 export async function startModelRelay(options: {
   apiKey: string;
+  judgeApiKey?: string;
   model: string;
   maxSeconds: number;
   maxRequests?: number;
   bindHost?: string;
   invoke?: Invoke;
+  judgeInvoke?: Invoke;
 }): Promise<ModelRelay> {
-  const info = MODELS[options.model];
-  if (!info || info.provider !== 'gemini') throw new Error('model relay requires a model supported by this ACC runtime');
+  if (options.model !== DEFAULT_MODEL) throw new Error('model relay requires a model supported by this ACC runtime');
   if (!options.apiKey) throw new Error('model relay requires a provider key on the host');
   if (!Number.isInteger(options.maxSeconds) || options.maxSeconds < 1 || options.maxSeconds > 86_400) {
     throw new Error('model relay duration must be between 1 and 86400 seconds');
@@ -47,9 +80,10 @@ export async function startModelRelay(options: {
   if (!Number.isInteger(maxRequests) || maxRequests < 1 || maxRequests > 1024) {
     throw new Error('model relay request limit must be between 1 and 1024');
   }
-  const allowedModels = new Set([options.model, JUDGE_MODELS[info.provider]]);
+  const allowedModels = new Set([options.model, JUDGE_MODEL]);
   const path = `/${randomBytes(32).toString('hex')}/interactions`;
-  const invoke = options.invoke ?? geminiInvoke(options.apiKey);
+  const invoke = options.invoke ?? deepseekInvoke(options.apiKey);
+  const judgeInvoke = options.judgeInvoke ?? (options.judgeApiKey ? geminiInvoke(options.judgeApiKey) : undefined);
   const controllers = new Set<AbortController>();
   let requests = 0;
   let closed = false;
@@ -92,7 +126,12 @@ export async function startModelRelay(options: {
         response.writeHead(400).end();
         return;
       }
-      const result = await invoke(parsed.data, controller.signal);
+      const call = parsed.data.model === JUDGE_MODEL ? judgeInvoke : invoke;
+      if (!call) {
+        response.writeHead(503).end();
+        return;
+      }
+      const result = await call(parsed.data, controller.signal);
       if (!parsed.data.stream) {
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify(result));

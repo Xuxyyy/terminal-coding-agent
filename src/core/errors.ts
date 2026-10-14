@@ -20,7 +20,7 @@ export function explainError(error: unknown, model: string): ExplainedError {
   const raw = messageOf(error);
   if (error instanceof ModelTimeoutError ||
     (error as Error)?.cause instanceof ModelTimeoutError) {
-    return {message: raw, hint: 'try again, or check your Gemini connection'};
+    return {message: raw, hint: 'try again, or check your DeepSeek connection'};
   }
   const provider = providerLabelOf(model);
   if (!provider) return {message: raw};
@@ -31,19 +31,19 @@ export function explainError(error: unknown, model: string): ExplainedError {
   if (status === 402 || NO_BALANCE.test(raw)) {
     return {
       message: `${provider} refused the request — your balance is empty`,
-      hint: `top up your ${provider} account, or switch model with /model`,
+      hint: `top up your ${provider} account`,
     };
   }
   if (status === 429) {
     if (/requests? per day|\bdaily\b|\bRPD\b/i.test(raw)) {
       return {
         message: `${provider} daily limit reached for ${label}`,
-        hint: 'wait for the daily reset at midnight Pacific, or choose another available model with /model',
+        hint: 'check the provider quota and retry after it resets',
       };
     }
     return {
       message: `${provider} rate limit — ${label} sent more requests than your plan allows`,
-      hint: `switch model with /model, or raise your ${provider} plan`,
+      hint: `wait and retry, or check your ${provider} limits`,
     };
   }
   return {message: raw};

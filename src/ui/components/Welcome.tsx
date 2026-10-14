@@ -19,6 +19,11 @@ export function Welcome({
       {ready ? (
         <Text color={theme.muted}>permissions: {ready.permission.id}</Text>
       ) : null}
+      {ready?.modelSettings ? (
+        <Text color={theme.muted}>
+          model: {ready.model.id} · reasoning: {ready.modelSettings.reasoningEffort} · output limit: {ready.modelSettings.maxOutputTokens}
+        </Text>
+      ) : null}
       {ready ? <ModelDivider label={ready.model.label} /> : null}
     </Box>
   );

@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import {deepseekClient, DEEPSEEK_BASE_URL} from './deepseek.js';
 import {geminiClient} from './gemini.js';
 import {loadEnvFiles} from './env.js';
 import {relayInvoke} from './model-relay-client.js';
@@ -6,22 +7,44 @@ import type {Host, ModelTokenUsage, Usage} from './host.js';
 import type {AssistantContinuation} from './messages.js';
 import {
   DEFAULT_MODEL,
-  JUDGE_MODELS,
+  JUDGE_MODEL,
+  DEFAULT_REASONING_EFFORT,
+  isReasoningEffort,
+  type ReasoningEffort,
   MODELS,
   MODEL_IDS,
   PROVIDERS,
-  hasKey,
 } from './models.js';
 import {withRetry, type RetryOptions} from './retry.js';
-import {modelOf} from './settings.js';
+import {modelOf, reasoningOf} from './settings.js';
 import type {ToolDefinition} from './tools/registry.js';
 
 export {DEFAULT_MODEL, MODELS} from './models.js';
 
-export function judgeModelFor(model: string): string {
-  const info = MODELS[model];
-  if (!info) return model;
-  return JUDGE_MODELS[info.provider] ?? model;
+export function judgeModelFor(_model?: string): string {
+  return JUDGE_MODEL;
+}
+
+export function createJudgeClient(): ModelChoice {
+  const relay = process.env.ACC_MODEL_RELAY_URL;
+  if (!relay) loadEnvFiles();
+  const key = process.env.GEMINI_API_KEY;
+  if (!relay && !key) throw new Error('GEMINI_API_KEY is not set — needed for the permission judge.');
+  return {
+    client: geminiClient(key ?? '', relay ? relayInvoke(relay) : undefined),
+    model: JUDGE_MODEL,
+    label: 'Gemini 3.5 Flash-Lite',
+    contextWindow: 1_048_576,
+  };
+}
+
+export function chooseReasoning(
+  env: NodeJS.ProcessEnv = process.env,
+  saved: ReasoningEffort | null = reasoningOf(),
+): ReasoningEffort {
+  const value = env.ACC_REASONING_EFFORT ?? saved ?? DEFAULT_REASONING_EFFORT;
+  if (!isReasoningEffort(value)) throw new Error('ACC_REASONING_EFFORT must be none, low, high, or max.');
+  return value;
 }
 
 export const MAX_OUTPUT_TOKENS = 32_000;
@@ -29,7 +52,7 @@ export const MODEL_REQUEST_TIMEOUT_MS = 120_000;
 
 export class ModelTimeoutError extends Error {
   constructor(timeoutMs: number) {
-    super(`Gemini did not finish within ${Math.ceil(timeoutMs / 1_000)} seconds`);
+    super(`The model did not finish within ${Math.ceil(timeoutMs / 1_000)} seconds`);
     this.name = 'ModelTimeoutError';
   }
 }
@@ -39,7 +62,31 @@ export type ModelChoice = {
   model: string;
   label: string;
   contextWindow: number;
+  reasoningEffort?: ReasoningEffort;
 };
+
+export type ModelSettings = {
+  provider: string;
+  baseURL: string;
+  model: string;
+  reasoningEffort: ReasoningEffort;
+  thinking: 'enabled' | 'disabled';
+  maxOutputTokens: number;
+  requestTimeoutMs: number;
+};
+
+export function modelSettings(choice: Pick<ModelChoice, 'model' | 'reasoningEffort'>): ModelSettings {
+  const reasoningEffort = choice.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  return {
+    provider: MODELS[choice.model]?.provider ?? 'unknown',
+    baseURL: DEEPSEEK_BASE_URL,
+    model: choice.model,
+    reasoningEffort,
+    thinking: reasoningEffort === 'none' ? 'disabled' : 'enabled',
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    requestTimeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+  };
+}
 
 export function chooseModel(
   env: NodeJS.ProcessEnv = process.env,
@@ -48,18 +95,17 @@ export function chooseModel(
   const explicit = env.ACC_MODEL;
   if (explicit) return explicit;
   if (saved) return saved;
-  if (hasKey(DEFAULT_MODEL, env)) return DEFAULT_MODEL;
-  return MODEL_IDS.find((id) => hasKey(id, env)) ?? DEFAULT_MODEL;
+  return DEFAULT_MODEL;
 }
 
-export function createClient(modelId?: string): ModelChoice {
+export function createClient(modelId?: string, reasoningEffort?: ReasoningEffort): ModelChoice {
   const relay = process.env.ACC_MODEL_RELAY_URL;
   if (!relay) loadEnvFiles();
   const resolved = modelId ?? chooseModel();
   const info = MODELS[resolved];
   if (!info) {
     throw new Error(
-      `Unknown model '${resolved}'. Choose one of: ${MODEL_IDS.join(', ')}.`,
+      `Unknown coding model '${resolved}'. Gemini coding models have been replaced; use ${MODEL_IDS.join(', ')}.`,
     );
   }
   const provider = PROVIDERS[info.provider]!;
@@ -68,7 +114,8 @@ export function createClient(modelId?: string): ModelChoice {
     throw new Error(`${provider.keyEnv} is not set — needed for ${info.label}.`);
   }
   return {
-    client: relay ? geminiClient('', relayInvoke(relay)) : geminiClient(apiKey!),
+    client: deepseekClient(apiKey ?? '', relay ? relayInvoke(relay) : undefined),
+    reasoningEffort: reasoningEffort ?? chooseReasoning(),
     model: resolved,
     label: info.label,
     contextWindow: info.contextWindow,
@@ -166,12 +213,20 @@ async function attemptStep(
     const stream = await choice.client.chat.completions.create(
       {
         model: choice.model,
-        messages,
-        tools: toolDefs as OpenAI.ChatCompletionTool[],
+        ...(choice.model === DEFAULT_MODEL ? {
+          reasoning_effort: choice.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
+          thinking: {type: choice.reasoningEffort === 'none' ? 'disabled' : 'enabled'},
+        } : {}),
+        messages: choice.model === DEFAULT_MODEL ? messages.map((message) =>
+          message.role === 'assistant'
+            ? {...message, reasoning_content: (message as {reasoning_content?: string}).reasoning_content ?? ''}
+            : message,
+        ) : messages,
+        ...(toolDefs.length ? {tools: toolDefs as OpenAI.ChatCompletionTool[]} : {}),
         stream: true,
         stream_options: {include_usage: true},
         max_tokens: MAX_OUTPUT_TOKENS,
-      },
+      } as unknown as OpenAI.ChatCompletionCreateParamsStreaming,
       {signal},
     );
     if (!isActive()) throw new DOMException('The request was interrupted', 'AbortError');

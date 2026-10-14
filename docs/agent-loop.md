@@ -24,10 +24,10 @@ step counts appear in text a user reads.
 
 ## Context
 
-The model client uses **Gemini's native Interactions API** through `@google/genai`.
-`gemini.ts` adapts requests and responses to the OpenAI-shaped message and chunk types
-used internally by `client.ts`; OpenAI is a type dependency, not the provider transport.
-History is kept locally and sent with each request using `store: false`.
+The coding client uses DeepSeek's official Chat Completions API through `openai`.
+`deepseek.ts` validates streamed completions; `client.ts` accumulates messages,
+reasoning, tool calls, and token usage. History stays local. The separate judge
+continues to use Gemini's native Interactions API through `@google/genai`.
 The TUI is **Ink**. It is **one package**, with `src/core` and `src/ui` as folders.
 
 The base system prompt is shared across permission modes. It asks the agent to follow
@@ -58,7 +58,7 @@ interface Host {
 - The Ink app implements `confirm` by storing the promise's `resolve` and rendering
   `Confirm.tsx`. When the user presses a key, it calls `resolve('once')`.
 - Tests use a fake `Host` that always returns `'once'`, so the core is testable with no terminal.
-- Esc → `abortController.abort()`; the signal goes to the Gemini request,
+- Esc → `abortController.abort()`; the signal goes to the DeepSeek request,
   `child_process`, and the judge call. Esc means *stop the turn*
   wherever it is pressed — including inside the approval box. `n` is the only key
   that refuses one command.
@@ -100,8 +100,7 @@ and verification, and report any unfinished work clearly.
 
 ### Streaming tool calls
 
-`gemini.ts` translates native interaction events into the chunk shape consumed by
-`client.ts`. The shared accumulator combines tool-call fragments by `index`:
+`deepseek.ts` passes validated Chat Completions chunks to `client.ts`. The shared accumulator combines tool-call fragments by `index`:
 
 ```ts
 for (const d of chunk.choices[0].delta.tool_calls ?? []) {
@@ -113,8 +112,8 @@ for (const d of chunk.choices[0].delta.tool_calls ?? []) {
 ```
 
 `JSON.parse(call.args)` at the end **can fail** — models emit broken JSON. That returns as a
-tool error message so the model can repair it. Invalid native argument deltas can also
-fail earlier in the Gemini adapter and are handled as request failures. A `length`
+tool error message so the model can repair it. Incomplete streams and unsuccessful finish reasons fail in the DeepSeek adapter.
+A truncated tool-call response never executes its partial calls. A `length`
 finish reason produces an output-limit error when there are no tool calls. The actual loop decision uses
 `toolCalls.length`: calls are executed and their results appended before another request;
 a response with no calls ends the turn.
@@ -159,8 +158,7 @@ model a workspace it cannot explain. Two places in `loop.ts` do this:
 message holding `INTERRUPTED_TURN` — `[the user interrupted this turn]`. Without it a
 text-only step just stops mid-sentence and the next turn can read that as *I finished*; the
 `INTERRUPTED` tool replies only imply it, and on a step with no tool calls there is nothing
-to imply it from. It is stored as a `user` message, which the Gemini adapter sends as
-`user_input`, keeping it in the conversation rather than the system instructions.
+to imply it from. It is stored as a `user` message, keeping it in the conversation rather than the system instructions.
 Consecutive user messages are retained in order. The helper appends nothing when the
 marker is already last, so no path can double it, and `appendStep` writes only messages it has
 not written yet, so the marker lands on disk as its own record and `/resume` replays it.
@@ -186,7 +184,7 @@ from print mode's overall `--max-seconds` limit.
 attempt, with 1s, 2s, and 4s backoff. Daily-limit responses, ordinary request or
 credential errors, cancellation, and `ModelTimeoutError` are not retried. After
 partial output, the loop reports the failure and preserves the partial text.
-The Gemini SDK's own retries are disabled, leaving this policy in ACC.
+The provider SDKs' own retries are disabled, leaving this policy in ACC.
 
 ## Context pressure
 
@@ -245,13 +243,11 @@ On failure, the held task is restored, the detailed history remains unchanged, a
 emits `compact_end`, `could not compact; the run stopped`, and `turn_end` before returning. It
 does not send another normal request or retry through a different pressure strategy.
 
-The Gemini adapter preserves native interaction steps as hidden continuation state in
-an internal `reasoning_content` field. `client.ts` collects it without emitting it to the
-UI, and `messages.ts` stores it on assistant messages. Later requests replay those steps
-through the adapter. Normal turns, persistence, resume, and model switching retain it.
-Compaction removes old state with the old history. The summary is stored with its new
-state, but the adapter sends the summary text as `user_input` on later requests.
-`estimateMessage` counts the stored continuation even though the terminal never displays it.
+DeepSeek returns hidden reasoning in `reasoning_content`. `client.ts` collects it
+without displaying it, and `messages.ts` stores it on assistant messages. Later
+tool and user turns pass it back to DeepSeek. Save/resume and rewind preserve it.
+Compaction replaces old history and reasoning with an assistant summary and its
+new reasoning. `estimateMessage` counts reasoning as context.
 
 **Only prior user prompts survive verbatim.** `retainRecentUserPrompts` walks user messages
 newest-first under a 20,000 estimated-token budget, then restores chronological order. Whole

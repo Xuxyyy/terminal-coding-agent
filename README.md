@@ -24,10 +24,11 @@ judge, then to you when approval is still needed. An explicitly saved mode wins.
   can give a sub-agent its own prompt, model, tools, and stricter permission mode.
   The parent waits for its report; the child has a separate conversation and
   cannot spawn another agent.
-- Gemini is the only model provider, using the native Interactions API.
-  Gemini 3.8 Flash is the default. Gemini 3.1 Pro Preview and Gemini 3.5
-  Flash-Lite are also selectable. Permission judging uses Flash-Lite regardless
-  of the main agent's selected model.
+- DeepSeek V4.1 Flash (`deepseek-flash`) is the only coding model, through the
+  official DeepSeek API. Set `DEEPSEEK_API_KEY`. Reasoning defaults to `high`;
+  `ACC_REASONING_EFFORT` accepts `none`, `low`, `high`, or `max`. Subagents inherit
+  it. Output is capped at 32,000 tokens, including reasoning. Auto permission
+  judging still uses Gemini 3.5 Flash-Lite with `GEMINI_API_KEY`.
 - One permission gate for file and shell actions, including sub-agent actions.
 - In `auto`, prefer Bash for reading, searching, and commands. Prefer Edit and
   Write for ordinary file changes so `/rewind` can use their existing backups

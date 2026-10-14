@@ -5,15 +5,16 @@ import {createServer} from 'node:http';
 import test from 'node:test';
 import {startModelRelay} from '../../core/model-relay.js';
 import {relayInvoke} from '../../core/model-relay-client.js';
+import {deepseekClient} from '../../core/deepseek.js';
 import {geminiClient, interactionRequest} from '../../core/gemini.js';
 import {judgeModelFor, streamStep} from '../../core/client.js';
 import {askJudge} from '../../core/permission/judge.js';
-import {fakeHost, streamOf} from '../fakes.js';
+import {fakeHost, streamOf, textChunk, toolCallChunk, finishChunk, usageChunk} from '../fakes.js';
 
-const model = 'gemini-3.8-flash';
+const model = 'deepseek-flash';
 const sentinel = 'fake-provider-secret-for-relay-test';
-const request = () => interactionRequest({model, messages: [{role: 'user', content: 'Hi'}], stream: false});
-const answer = {status: 'completed', steps: [{type: 'model_output', content: [{type: 'text', text: 'Hello'}]}]};
+const request = () => ({model, messages: [{role: 'user', content: 'Hi'}], stream: false, max_tokens: 32_000, reasoning_effort: 'high', thinking: {type: 'enabled'}});
+const answer = {choices: [{message: {role: 'assistant', content: 'Hello'}, finish_reason: 'stop'}]};
 const endpoint = (relay: {port: number; path: string}) => `http://127.0.0.1:${relay.port}${relay.path}`;
 
 test('a separate key-free ACC process gets model answers and its descendants have no provider key', async () => {
@@ -50,16 +51,13 @@ test('a separate key-free ACC process gets model answers and its descendants hav
 test('streamed tool calls and token usage survive the relay', async () => {
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
     invoke: async () => streamOf(
-      {event_type: 'step.start', index: 0, step: {type: 'model_output'}},
-      {event_type: 'step.delta', index: 0, delta: {type: 'text', text: 'Reading'}},
-      {event_type: 'interaction.completed', interaction: {
-        status: 'requires_action', steps: [{type: 'function_call', id: 'call-1', name: 'read_file', arguments: {path: 'a.ts'}}],
-        usage: {total_input_tokens: 12, total_output_tokens: 3},
-      }},
+      textChunk('Reading'),
+      toolCallChunk('call-1', 'read_file', '{"path":"a.ts"}'),
+      finishChunk('tool_calls'), usageChunk(12, 3),
     )});
   try {
     const {host} = fakeHost();
-    const result = await streamStep({client: geminiClient('', relayInvoke(endpoint(relay))),
+    const result = await streamStep({client: deepseekClient('', relayInvoke(endpoint(relay))),
       model, label: 'relay', contextWindow: 100_000}, [{role: 'user', content: 'Read'}], [], host);
     assert.equal(result.content, 'Reading');
     assert.equal(result.finishReason, 'tool_calls');
@@ -72,23 +70,22 @@ test('streamed tool calls and token usage survive the relay', async () => {
 test('the relay uses Flash-Lite for permission judging and keeps the main model', async () => {
   const seen: unknown[] = [];
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
-    invoke: async (body) => {
+    invoke: async (body) => { seen.push(body.model); return answer; },
+    judgeInvoke: async (body) => {
       seen.push(body.model);
-      return body.model === model ? answer : {
-        status: 'completed', steps: [{type: 'model_output', content: [{type: 'text', text: 'ALLOW'}]}],
-      };
+      return {status: 'completed', steps: [{type: 'model_output', content: [{type: 'text', text: 'ALLOW'}]}]};
     }});
   try {
-    const client = geminiClient('', relayInvoke(endpoint(relay)));
+    const client = deepseekClient('', relayInvoke(endpoint(relay)));
     const response = await client.chat.completions.create({
       model, messages: [{role: 'user', content: 'Hi'}], stream: false,
     });
-    const verdict = await askJudge({client, model: judgeModelFor(model), label: 'judge', contextWindow: 1_048_576},
+    const verdict = await askJudge({client: geminiClient('', relayInvoke(endpoint(relay))), model: judgeModelFor(model), label: 'judge', contextWindow: 1_048_576},
       [{role: 'user', content: 'Run the project tests'}], new AbortController().signal);
 
     assert.equal(response.choices[0]?.message.content, 'Hello');
     assert.equal(verdict, 'allow');
-    assert.deepEqual(seen, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+    assert.deepEqual(seen, ['deepseek-flash', 'gemini-3.5-flash-lite']);
   } finally { await relay.close(); }
 });
 

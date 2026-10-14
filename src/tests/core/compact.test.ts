@@ -88,7 +88,7 @@ test('the summarizing request carries no tools', async () => {
 
   assert.equal(bodies.length, 1);
   const body = bodies[0]!;
-  assert.deepEqual(body.tools, []);
+  assert.equal(body.tools, undefined);
   assert.deepEqual(body.messages[body.messages.length - 1], {
     role: 'user',
     content: compactionPrompt(),

@@ -437,15 +437,15 @@ test('anything else the judge says is a question for the user', () => {
   }
 });
 
-test('all Gemini models use Flash-Lite for permission judging', () => {
+test('coding models use Flash-Lite for permission judging', () => {
   assert.equal(judgeModelFor('gemini-3.1-pro-preview'), 'gemini-3.5-flash-lite');
-  assert.equal(judgeModelFor('gemini-3.8-flash'), 'gemini-3.5-flash-lite');
+  assert.equal(judgeModelFor('deepseek-flash'), 'gemini-3.5-flash-lite');
   assert.equal(judgeModelFor('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
 });
 
 test('an unknown model id is judged by itself', () => {
-  assert.equal(judgeModelFor('gpt-9'), 'gpt-9');
-  assert.equal(judgeModelFor(''), '');
+  assert.equal(judgeModelFor('gpt-9'), 'gemini-3.5-flash-lite');
+  assert.equal(judgeModelFor(''), 'gemini-3.5-flash-lite');
 });
 
 type Sent = {model: string; messages: Message[]; max_tokens: number; stream: boolean};

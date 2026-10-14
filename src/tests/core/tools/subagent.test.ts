@@ -364,7 +364,7 @@ test('missing tools inherit every offered tool except agent and an empty list of
   ).map((entry) => entry.function.name);
   assert.ok(inheritedNames.length > 0);
   assert.equal(inheritedNames.includes('agent'), false);
-  assert.deepEqual(empty.bodies[0]!.tools, []);
+  assert.equal(empty.bodies[0]!.tools, undefined);
 });
 
 test('unknown types and unavailable tools return repairable errors before a model call', async () => {
@@ -443,3 +443,24 @@ for (const sandbox of ['off', 'on'] as const) {
     fs.rmSync(root, {recursive: true, force: true});
   });
 }
+
+
+test('named subagents inherit reasoning even when a factory supplies another effort', async () => {
+  const root = workspace();
+  try {
+    const parent = recordingChoice();
+    parent.choice.reasoningEffort = 'max';
+    const child = recordingChoice();
+    child.choice.model = 'deepseek-flash';
+    child.choice.reasoningEffort = 'low';
+    let passed: unknown;
+    const tool = makeSubagent([definition({model: 'deepseek-flash'})], (_id, effort) => {
+      passed = effort;
+      return child.choice;
+    });
+    await tool.run({...job, agent: 'explorer'}, context(root, fakeHost().host, parent.choice));
+    assert.equal(passed, 'max');
+    assert.equal(child.bodies[0]!.reasoning_effort, 'max');
+    assert.deepEqual(child.bodies[0]!.thinking, {type: 'enabled'});
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});

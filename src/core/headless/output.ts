@@ -26,6 +26,7 @@ export function jsonLines(result: HeadlessResult): string[] {
     JSON.stringify({
       kind: 'result',
       schemaVersion: 1,
+      ...(result.modelSettings ? {modelSettings: result.modelSettings} : {}),
       stopped: result.stopped,
       message: result.text,
       usage: result.usage,

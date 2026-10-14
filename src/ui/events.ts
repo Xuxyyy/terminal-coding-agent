@@ -1,3 +1,4 @@
+import type {ModelSettings} from '../core/client.js';
 import path from 'node:path';
 import type {AgentEvent, DiffPayload} from '../core/host.js';
 import type {ContextStatus} from '../core/session.js';
@@ -17,6 +18,7 @@ export type {
 export type ReadyInfo = {
   workspace: string;
   model: {id: string; label: string};
+  modelSettings?: ModelSettings;
   permission: {id: string};
 };
 

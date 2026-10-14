@@ -9,7 +9,7 @@ them, edits them, and runs commands until the task is done. Permission checks
 control file and shell actions; default `auto` mode uses a model judge for
 actions above its automatic allowance threshold, then asks you if needed.
 
-It is one npm package with a local test suite. Gemini supplies the model;
+It is one npm package with a local test suite. DeepSeek supplies the coding model;
 conversation history, tools, permissions, and sessions stay in `acc`.
 
 ## Three decisions worth defending
@@ -31,9 +31,9 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 - **Four tools in default `auto` mode.** Bash handles reads, searches, and
   commands. `edit_file` and `write_file` make backed-up file changes, and
   `agent` delegates a job. The two edit modes also offer `read_file`, `grep`, and `glob`.
-- **One provider, three models.** Gemini uses the native Interactions API.
-  Set `GEMINI_API_KEY`; Gemini 3.8 Flash is the default. Pro Preview and
-  Flash-Lite are also selectable. Permission judging uses Flash-Lite.
+- **DeepSeek coding, Gemini permission judging.** Set `DEEPSEEK_API_KEY` for
+  `deepseek-flash`, currently V4.1 Flash. Reasoning defaults to `high` and can be
+  overridden. Gemini 3.5 Flash-Lite remains the judge with `GEMINI_API_KEY`.
 - **Bounded turns.** The agent reviews progress every 10 model turns.
   Interactive runs ask to continue after each 60-turn segment. Print mode
   stops at its selected turn or time limit.

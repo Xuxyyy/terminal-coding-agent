@@ -1,6 +1,8 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
+import {modelSettings, type ModelSettings} from './client.js';
+import {DEFAULT_MODEL} from './models.js';
 import type {Usage} from './host.js';
 import {assistantContinuation} from './messages.js';
 import {
@@ -34,6 +36,7 @@ export type SessionMeta = {
   status: 'open' | 'closed';
   usage: Usage;
   firstTask?: string;
+  modelSettings?: ModelSettings;
 };
 
 type Message = OpenAI.ChatCompletionMessageParam;
@@ -78,6 +81,7 @@ export function startSession(
   workspace: string,
   home: string = accHome(),
   now: () => Date = () => new Date(),
+  settings: ModelSettings = modelSettings({model: DEFAULT_MODEL}),
 ): SessionStore {
   const started = now();
   const id = `${stamp(started)}-${crypto.randomBytes(4).toString('hex')}`;
@@ -92,6 +96,7 @@ export function startSession(
 
     const meta: SessionMeta = {
       version: SESSION_VERSION,
+      modelSettings: settings,
       id,
       workspace,
       startedAt: started.toISOString(),
@@ -231,6 +236,7 @@ export function openSession(
   id: string | null = null,
   home: string = accHome(),
   now: () => Date = () => new Date(),
+  settings?: ModelSettings,
 ): {stored: StoredSession; store: SessionStore} {
   const found = (
     id ? allEntries(home) : entriesIn(sessionsDir(workspace, home))
@@ -245,6 +251,9 @@ export function openSession(
     throw new Error(`that session belongs to another folder: ${owner}`);
   }
 
+  if (entry.meta.modelSettings?.model !== DEFAULT_MODEL || entry.meta.modelSettings.provider !== 'deepseek') {
+    throw new Error('this legacy session cannot resume with DeepSeek; start a fresh session with /clear');
+  }
   const lock = acquireSessionLock(entry.dir);
   try {
     const records = liveRecords(readRecords(entry.dir));
@@ -255,6 +264,7 @@ export function openSession(
       lastUsage: lastUsageOf(records),
     };
     stored.meta.status = 'open';
+    if (settings) stored.meta.modelSettings = settings;
     return {stored, store: makeStore(entry.dir, stored.meta, now, lock)};
   } catch (error) {
     lock.release();

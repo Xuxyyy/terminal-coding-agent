@@ -47,7 +47,7 @@ adding `Host.onLimit` avoids another callback and needs no new UI state.
 
 ## Retry
 
-The Gemini SDK's built-in retries are disabled. ACC owns the retry policy so it can
+The provider SDKs' built-in retries are disabled. ACC owns the retry policy so it can
 stop retrying once output has reached the screen. Each model request attempt also has
 a 120-second deadline; a deadline failure stops with `ModelTimeoutError`.
 
@@ -327,9 +327,7 @@ before any replacement is built.
 
 The summary is an `assistant` message, not a `user` one: the model wrote it. It sits behind a
 fixed `SUMMARY_PREFIX` so the model reads it as context rather than as an answer it already
-gave. This is the internal representation. The Gemini adapter recognizes `SUMMARY_PREFIX`
-and sends its text as `user_input` on later requests, rather than replaying it as native
-model output. The summarizing request sends **no tool definitions**, reducing request size
+gave. DeepSeek receives this assistant summary together with its reasoning. The summarizing request sends **no tool definitions**, reducing request size
 and leaving no tools for the model to call while it writes the summary.
 
 A failed or empty summary changes nothing and returns `null`. A compaction that half-runs would
@@ -447,3 +445,11 @@ it would replace this storage rather than extend it. Judge it on real use, in it
 `PERMISSION_LABEL` in `ui/agent.ts` states the permission rule in words and has drifted from the
 code once already. Anything that restates a rule in prose will drift again; if modes arrive, the
 label must come from the same place the decision does.
+
+## DeepSeek migration
+
+New sessions record `modelSettings`, including the coding model, reasoning effort,
+thinking mode, output limit, and request timeout. Legacy sessions without
+compatible DeepSeek metadata cannot resume; start a fresh session. Their files
+are not automatically deleted by this migration. On resume, the current resolved
+settings are recorded in metadata and the new transcript header.

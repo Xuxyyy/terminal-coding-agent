@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import type {ReasoningEffort} from '../models.js';
 import {agentsOf, type AgentDefinition} from '../agents.js';
 import {createClient, type ModelChoice} from '../client.js';
 import {INTERRUPTED, type AgentEvent, type Host, type Usage} from '../host.js';
@@ -38,7 +39,7 @@ const BASE_DESCRIPTION =
   'everything it needs in the prompt. It runs to completion before you continue, and you see only its ' +
   'final message — never the tools it called.';
 
-type ClientFactory = (modelId?: string) => ModelChoice;
+type ClientFactory = (modelId?: string, reasoningEffort?: ReasoningEffort) => ModelChoice;
 
 export function childTools(mode: Mode, allow?: string[]): Tool[] {
   const offered = toolsFor(mode).filter((tool) => tool.name !== NAME);
@@ -137,7 +138,8 @@ export function makeSubagent(
       let choice = ctx.choice;
       if (definition?.model) {
         try {
-          choice = clientFactory(definition.model);
+          choice = clientFactory(definition.model, ctx.choice?.reasoningEffort);
+          if (ctx.choice) choice = {...choice, reasoningEffort: ctx.choice.reasoningEffort};
         } catch (error) {
           return {
             text: `Error: agent '${definition.name}' could not start: ${(error as Error).message}`,

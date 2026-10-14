@@ -23,7 +23,7 @@ read from your own file only, and each page below says so where it matters.
 ```json
 {
   "permission_mode": "auto",
-  "model": "gemini-3.8-flash",
+  "model": "deepseek-flash",
   "permissions": {
     "deny":  ["bash(curl *)"],
     "ask":   ["bash(npm run deploy*)"],
@@ -39,7 +39,7 @@ Existing saved modes are honored; the default does not rewrite your settings.
 |---|---|---|
 | `permission_mode` | How much runs without asking. | [Permissions](/configure/permissions) |
 | `permissions` | The `allow`, `ask`, and `deny` rule lists. | [Permissions](/configure/permissions) |
-| `model` | Which Gemini model to start on. | [Models](/configure/models) |
+| `model` | The coding model, `deepseek-flash`. | [Models](/configure/models) |
 
 Unknown keys at the **top level** are ignored, so you can keep notes there.
 Unknown keys *inside* `permissions` are startup errors because a typo would
@@ -73,3 +73,7 @@ error: /Users/you/.acc/settings.json: the rule "write(src/**)" in "permissions.a
 This is deliberate. A settings file grants permissions, so starting with half of
 them loaded would mean trusting rules that are not active — and you have just
 edited the file, so the error lands while you are still looking at it.
+
+Reasoning defaults to `high`. `ACC_REASONING_EFFORT` overrides the user
+`reasoning_effort` setting (`none`, `low`, `high`, or `max`). All subagents inherit
+the parent effort; named agents cannot override it.

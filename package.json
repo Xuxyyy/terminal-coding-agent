@@ -19,7 +19,7 @@
     "llm",
     "terminal",
     "ink",
-    "gemini"
+    "deepseek"
   ],
   "type": "module",
   "engines": {
@@ -34,7 +34,7 @@
     "prepare": "npm run build",
     "dev": "npm run build && node dist/cli.js",
     "start": "node dist/cli.js",
-    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "test": "npm run build && node --import ./dist/tests/offline.js --test \"dist/**/*.test.js\"",
     "eval:judge": "npm run build && node dist/evals/judge/run.js",
     "eval:operational": "npm run build && node dist/evals/operational/run.js",
     "eval:standard": "npm run build && node dist/evals/standard/run.js"
@@ -48,12 +48,12 @@
     "string-width": "^7.2.0",
     "yaml": "^2.9.0",
     "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.24.1"
+    "zod-to-json-schema": "^3.24.1",
+    "openai": "^4.104.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
-    "openai": "^4.104.0",
     "typescript": "^5.6.3"
   }
 }

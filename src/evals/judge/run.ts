@@ -2,7 +2,8 @@ import {spawnSync} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createClient, judgeModelFor, type ModelChoice} from '../../core/client.js';
+import {createJudgeClient, type ModelChoice} from '../../core/client.js';
+import {DEFAULT_MODEL as CODING_MODEL, LEGACY_GEMINI_MODELS} from '../../core/models.js';
 import {
   JUDGE_MAX_TOKENS,
   JUDGE_TIMEOUT,
@@ -20,7 +21,7 @@ import {
 } from './score.js';
 
 export const DEFAULT_CASES = 'evals/cases/judge.jsonl';
-export const DEFAULT_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 export const RESULTS_DIR = 'evals/results';
 
 export type RunOptions = {
@@ -240,9 +241,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 1;
   }
 
-  const choice = createClient(
-    judgeModelFor(process.env['ACC_EVAL_MODEL'] ?? DEFAULT_MODEL),
-  );
+  if (process.env.ACC_EVAL_MODEL && process.env.ACC_EVAL_MODEL !== CODING_MODEL && !LEGACY_GEMINI_MODELS.has(process.env.ACC_EVAL_MODEL)) {
+    throw new Error('The permission judge remains gemini-3.5-flash-lite.');
+  }
+  const choice = createJudgeClient();
   const planned = cases.length * args.repeats;
   console.log(
     `${cases.length} cases × ${args.repeats} repeats = ${planned} calls ` +

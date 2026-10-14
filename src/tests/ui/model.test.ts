@@ -12,10 +12,10 @@ import {CURRENT_MARK, NOT_REMEMBERED} from '../../ui/permission.js';
 
 const NO_KEYS: NodeJS.ProcessEnv = {};
 
-const EVERY_KEY: NodeJS.ProcessEnv = {GEMINI_API_KEY: 'test-key'};
+const EVERY_KEY: NodeJS.ProcessEnv = {DEEPSEEK_API_KEY: 'test-key'};
 
 test('the rows list every model in the order the registry keeps them', () => {
-  const rows = modelRows('gemini-3.8-flash', EVERY_KEY);
+  const rows = modelRows('deepseek-flash', EVERY_KEY);
 
   assert.deepEqual(
     rows.map((row) => row.id),
@@ -25,11 +25,11 @@ test('the rows list every model in the order the registry keeps them', () => {
 });
 
 test('the row for the model the session runs is the marked one', () => {
-  const rows = modelRows('gemini-3.1-pro-preview', EVERY_KEY);
+  const rows = modelRows('deepseek-flash', EVERY_KEY);
 
   assert.deepEqual(
     rows.filter((row) => row.current).map((row) => row.id),
-    ['gemini-3.1-pro-preview'],
+    ['deepseek-flash'],
   );
 });
 
@@ -45,47 +45,47 @@ test('the picker opens on the first model when the id is unknown', () => {
 });
 
 test('a missing key is named by the variable the provider reads', () => {
-  for (const row of modelRows('gemini-3.8-flash', NO_KEYS)) {
+  for (const row of modelRows('deepseek-flash', NO_KEYS)) {
     assert.equal(row.missingKey, keyEnvOf(row.id), row.id);
   }
 });
 
 test('a key that is set leaves nothing missing on the row', () => {
-  for (const row of modelRows('gemini-3.8-flash', EVERY_KEY)) {
+  for (const row of modelRows('deepseek-flash', EVERY_KEY)) {
     assert.equal(row.missingKey, null, row.id);
   }
 });
 
 test('an empty variable counts as no key at all', () => {
-  const rows = modelRows('gemini-3.8-flash', {...EVERY_KEY, GEMINI_API_KEY: ''});
+  const rows = modelRows('deepseek-flash', {...EVERY_KEY, DEEPSEEK_API_KEY: ''});
 
-  assert.equal(rows.find((row) => row.id === 'gemini-3.1-pro-preview')!.missingKey, 'GEMINI_API_KEY');
-  assert.equal(rows.find((row) => row.id === 'gemini-3.8-flash')!.missingKey, 'GEMINI_API_KEY');
+  assert.equal(rows.find((row) => row.id === 'deepseek-flash')!.missingKey, 'DEEPSEEK_API_KEY');
+  assert.equal(rows.find((row) => row.id === 'deepseek-flash')!.missingKey, 'DEEPSEEK_API_KEY');
 });
 
 test('only the label is in the part the picker bolds', () => {
-  const rows = modelRows('gemini-3.8-flash', EVERY_KEY);
+  const rows = modelRows('deepseek-flash', EVERY_KEY);
   const current = rows.find((row) => row.current)!;
 
   const active = modelLine(current, true, 80);
-  assert.equal(active.head, `❯ Gemini 3.8 Flash${CURRENT_MARK}`);
-  assert.equal(active.tail, ' — gemini-3.8-flash');
+  assert.equal(active.head, `❯ DeepSeek V4.1 Flash${CURRENT_MARK}`);
+  assert.equal(active.tail, ' — deepseek-flash');
 
-  const idle = modelLine(rows.find((row) => !row.current)!, false, 80);
-  assert.equal(idle.head, '  Gemini 3.1 Pro Preview');
+  const idle = modelLine({...current, current: false}, false, 80);
+  assert.equal(idle.head, '  DeepSeek V4.1 Flash');
   assert.equal(idle.head.includes(CURRENT_MARK), false);
 });
 
 test('a row without a key says which variable it needs instead of the id', () => {
-  const row = modelRows('gemini-3.8-flash', NO_KEYS).find((r) => r.id === 'gemini-3.1-pro-preview')!;
+  const row = modelRows('deepseek-flash', NO_KEYS).find((r) => r.id === 'deepseek-flash')!;
 
   const {head, tail} = modelLine(row, false, 80);
-  assert.equal(head, '  Gemini 3.1 Pro Preview');
-  assert.equal(tail, ' — needs GEMINI_API_KEY');
+  assert.equal(head, `  DeepSeek V4.1 Flash${CURRENT_MARK}`);
+  assert.equal(tail, ' — needs DEEPSEEK_API_KEY');
 });
 
 test('a row is cut to the width it is given', () => {
-  for (const row of modelRows('gemini-3.1-pro-preview', EVERY_KEY)) {
+  for (const row of modelRows('deepseek-flash', EVERY_KEY)) {
     const whole = modelLine(row, true, 200);
     const width = whole.head.length + whole.tail.length - 4;
 
@@ -96,14 +96,14 @@ test('a row is cut to the width it is given', () => {
 });
 
 test('a row too narrow for the id keeps the label alone', () => {
-  const row = modelRows('gemini-3.8-flash', EVERY_KEY).find(
-    (r) => r.id === 'gemini-3.8-flash',
+  const row = modelRows('deepseek-flash', EVERY_KEY).find(
+    (r) => r.id === 'deepseek-flash',
   )!;
 
   const {head, tail} = modelLine(row, true, 12);
   assert.equal(tail, '');
   assert.ok(head.length <= 12, head);
-  assert.ok(head.startsWith('❯ Gemini'), head);
+  assert.ok(head.startsWith('❯ DeepSeek'), head);
 });
 
 test('the notice names the model that was picked', () => {
@@ -114,14 +114,14 @@ test('the notice names the model that was picked', () => {
 });
 
 test('the notice says so when the pick could not be saved', () => {
-  const notice = modelNotice('Gemini 3.1 Pro Preview', false);
+  const notice = modelNotice('DeepSeek V4.1 Flash', false);
 
-  assert.ok(notice.includes('Gemini 3.1 Pro Preview'), notice);
+  assert.ok(notice.includes('DeepSeek V4.1 Flash'), notice);
   assert.ok(notice.endsWith(NOT_REMEMBERED), notice);
 });
 
 test('the hint tells the reader which variable to set', () => {
-  const row = modelRows('gemini-3.1-pro-preview', NO_KEYS).find((r) => r.id === 'gemini-3.1-pro-preview')!;
+  const row = modelRows('deepseek-flash', NO_KEYS).find((r) => r.id === 'deepseek-flash')!;
 
-  assert.equal(missingKeyHint(row), 'set GEMINI_API_KEY to use this model');
+  assert.equal(missingKeyHint(row), 'set DEEPSEEK_API_KEY to use this model');
 });

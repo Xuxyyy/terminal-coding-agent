@@ -1,5 +1,5 @@
 import type {SandboxMode} from '../sandbox/mode.js';
-import type {ModelChoice} from '../client.js';
+import {modelSettings, type ModelSettings, type ModelChoice} from '../client.js';
 import type {AgentEvent, Usage} from '../host.js';
 import {runAgent} from '../loop.js';
 import {systemPrompt} from '../prompt.js';
@@ -17,6 +17,7 @@ export type StopReason = 'done' | 'denied' | 'timeout' | 'step_limit' | 'error';
 
 export type HeadlessResult = {
   text: string;
+  modelSettings?: ModelSettings;
   events: AgentEvent[];
   prompts: RecordedPrompt[];
   usage: Usage;
@@ -94,6 +95,7 @@ export async function runHeadless(options: {
 
   return {
     text,
+    modelSettings: modelSettings(options.choice),
     events,
     prompts,
     usage,

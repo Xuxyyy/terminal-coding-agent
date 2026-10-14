@@ -214,29 +214,18 @@ it worked, and reopening `/permission` shows the new mode marked `(current)`.
 
 *Switch the model.*
 
-Opens a picker of the three Gemini models, on the one you are using:
+Opens the model picker with DeepSeek as the only coding choice:
 
 ```
 Choose a model
-❯ Gemini 3.8 Flash (current) — gemini-3.8-flash
-  Gemini 3.1 Pro Preview — gemini-3.1-pro-preview
-  Gemini 3.5 Flash-Lite — gemini-3.5-flash-lite
+❯ DeepSeek V4.1 Flash (current) — deepseek-flash
 ↑↓ to move · enter to choose · esc to cancel
 ```
 
-A model whose provider key is not set is shown rather than hidden, so you can
-see it is there and read which variable it wants. Such a row stays grey when you
-move onto it, `enter` does nothing, and the hint line becomes
-`set GEMINI_API_KEY to use this model`.
-
-Choosing one prints `switched to Gemini 3.1 Pro Preview`, draws a divider across the
-transcript where the change happened, and saves the id to `~/.acc/settings.json`
-for next time. If it could not be saved, the notice says so:
-`switched to Gemini 3.1 Pro Preview (not saved to settings.json)`.
-
-The conversation carries over untouched — only the client changes. Earlier rows
-keep naming the model that answered them, and the new one picks up the context
-budget of its own window. [Models](/configure/models) lists both.
+A missing key is shown as `set DEEPSEEK_API_KEY to use this model`. The permission
+judge is separate and cannot be selected as a coding model. Set reasoning through
+`ACC_REASONING_EFFORT` or the user `reasoning_effort` setting; see
+[Models](/configure/models).
 
 ## Keys and leaving
 

@@ -1,6 +1,5 @@
 import {
-  createClient,
-  judgeModelFor,
+  createJudgeClient,
   MAX_OUTPUT_TOKENS,
   StreamFailure,
   streamStep,
@@ -78,11 +77,11 @@ function messagesForStep(
   return messages;
 }
 
-function judgeFor(session: Session, host: Host, model: string): Judge | undefined {
+function judgeFor(session: Session, host: Host): Judge | undefined {
   if (session.mode !== 'auto') return undefined;
   let choice: ModelChoice | null = null;
   try {
-    choice = createClient(judgeModelFor(model));
+    choice = createJudgeClient();
   } catch {
     choice = null;
   }
@@ -120,7 +119,7 @@ export async function runAgent(
 ): Promise<'step_limit' | void> {
   const {maxSteps} = options;
   const definitions = toolDefinitions(registry);
-  const judge = judgeFor(session, host, choice.model);
+  const judge = judgeFor(session, host);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
   let warned = false;
   let reportedThreshold = false;

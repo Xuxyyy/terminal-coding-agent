@@ -41,7 +41,7 @@ Save this as `~/.acc/agents/explorer.md`:
 ```md
 ---
 description: Explores and explains code without editing it
-model: gemini-3.8-flash
+model: deepseek-flash
 tools:
   - read_file
   - grep
@@ -124,3 +124,7 @@ run in parallel or in the background, spawn nested agents, inherit the parent's
 conversation, persist a child session, or show live child progress. There is no
 agent editor, picker, `/agents` command, hot reload, or per-agent token, turn,
 timeout, temperature, or reasoning setting.
+
+Reasoning defaults to `high`. `ACC_REASONING_EFFORT` overrides the user
+`reasoning_effort` setting (`none`, `low`, `high`, or `max`). All subagents inherit
+the parent effort; named agents cannot override it.
