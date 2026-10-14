@@ -1,13 +1,21 @@
 # Public repository safety
 
-- This repository is public. Never put credentials, private transcripts, personal
-  data, or private machine paths in tracked files. Use placeholders in examples.
+- This repository is public. Never put credentials, private transcripts, or
+  genuinely private personal or machine information in tracked files.
+- Demo screenshots the user confirms are intended for public display and
+  ordinary example paths are allowed. A visible local username, project name,
+  or file path alone must not block a commit or trigger Git history cleanup.
+  Prefer placeholders in new examples where practical. Still inspect approved
+  screenshots and examples for credentials and genuinely private information;
+  approval to display a demo does not waive those checks.
 - Before staging, committing, creating a pull request, or pushing, inspect all
   changed and staged files for secrets and sensitive local data. Check tracked
   files explicitly; do not rely on `.gitignore` alone. Never stage credential
   files. A sanitized `.env.example` may contain placeholders only.
-- If sensitive data may already be tracked or present in Git history, stop and
-  warn the user without displaying it. Do not commit or push until resolved.
+- If credentials or genuinely private information may already be tracked or
+  present in Git history, stop and warn the user without displaying it. Do not
+  commit or push until resolved. Allowed public demos and ordinary example
+  paths alone do not trigger this stop.
 
 # API credentials and test approval
 
