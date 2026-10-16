@@ -2,7 +2,7 @@ import {z} from 'zod';
 import type {ReasoningEffort} from '../models.js';
 import {agentsOf, type AgentDefinition} from '../agents.js';
 import {createClient, type ModelChoice} from '../client.js';
-import {INTERRUPTED, type AgentEvent, type Host, type Usage} from '../host.js';
+import {INTERRUPTED, type AgentEvent, type BackgroundTaskInfo, type Host, type Usage} from '../host.js';
 import {runAgent} from '../loop.js';
 import {stricterMode, type Mode} from '../permission/mode.js';
 import {subagentPrompt} from '../prompt.js';
@@ -41,8 +41,8 @@ const BASE_DESCRIPTION =
 
 type ClientFactory = (modelId?: string, reasoningEffort?: ReasoningEffort) => ModelChoice;
 
-export function childTools(mode: Mode, allow?: string[]): Tool[] {
-  const offered = toolsFor(mode).filter((tool) => tool.name !== NAME);
+export function childTools(mode: Mode, allow?: string[], background = false): Tool[] {
+  const offered = toolsFor(mode, background).filter((tool) => tool.name !== NAME);
   if (!allow) return offered;
   return allow
     .map((name) => offered.find((tool) => tool.name === name))
@@ -151,7 +151,7 @@ export function makeSubagent(
       const mode = definition?.permissionMode
         ? stricterMode(ctx.mode, definition.permissionMode)
         : ctx.mode;
-      const available = childTools(mode);
+      const available = childTools(mode, undefined, Boolean(ctx.backgroundTasks));
       if (definition?.tools) {
         const availableNames = new Set(available.map((tool) => tool.name));
         const missing = definition.tools.filter((name) => !availableNames.has(name));
@@ -179,9 +179,23 @@ export function makeSubagent(
       session.allowed = ctx.allowed;
       addTask(session, args.prompt);
       const child = childHost(ctx.host);
-      await runAgent(session, choice, child.host, tools);
+      const backgroundTasks = ctx.backgroundTasks?.fork((event) => {
+        child.host.onEvent(event);
+        ctx.host.onEvent(event);
+      });
+      let unfinished: BackgroundTaskInfo[] = [];
+      try {
+        await runAgent(session, choice, child.host, tools, undefined, {backgroundTasks});
+      } finally {
+        unfinished = await backgroundTasks?.close('owning subagent finished') ?? [];
+      }
       if (ctx.host.signal.aborted) return {text: INTERRUPTED};
-      return report(child.events);
+      const result = report(child.events);
+      if (unfinished.length > 0) {
+        result.text += '\nBackground commands stopped when this subagent finished:\n' +
+          unfinished.map((task) => JSON.stringify(task)).join('\n');
+      }
+      return result;
     },
   };
 }

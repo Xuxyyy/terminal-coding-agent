@@ -94,6 +94,11 @@ defaults are 60 and 300. Confirmations are denied unless `--yes` is passed.
 Actions already allowed by the permission gate can still run and edit files.
 Print runs do not save resumable sessions. See [Print mode](docs/headless.md).
 
+Print mode also supports background Bash commands, so the agent can use other
+tools while a command runs. Completion resumes the agent within the same time
+and step budgets. Private command logs are retained under `ACC_HOME/runs/`
+(default `~/.acc/runs/`). Normal interactive Bash remains foreground-only.
+
 ## Sandbox
 
 Sandbox defaults to **Off**. On is supported only on macOS; Linux uses Off.

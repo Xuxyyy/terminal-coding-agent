@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import {StringDecoder} from 'node:string_decoder';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -14,7 +15,7 @@ export type SandboxResult = {
   timedOut: boolean;
 };
 
-const OUTPUT_LIMIT = 32 * 1024 * 1024;
+export const OUTPUT_LIMIT = 32 * 1024 * 1024;
 const READY_MARKER = '\u001eacc-sandbox-ready\u001f';
 const quote = (value: string) => JSON.stringify(value);
 const subpath = (value: string) => `(subpath ${quote(value)})`;
@@ -75,14 +76,23 @@ function launch(policy: SandboxPolicy, program: string, args: string[]): {progra
   return {program: '/usr/bin/sandbox-exec', args: ['-p', macProfile(policy), program, ...args]};
 }
 
-type RunOptions = {
+export type RunOptions = {
   root: string;
   program: string;
   args: string[];
   signal: AbortSignal;
   access?: SandboxAccess;
   input?: string;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
+  captureOutput?: boolean;
+  onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
+};
+
+export type RunningCommand = {
+  pid: number | undefined;
+  ready: Promise<void>;
+  result: Promise<SandboxResult>;
+  stop: (reason?: 'interrupted' | 'timeout') => void;
 };
 
 export function runSandboxed(options: RunOptions): Promise<SandboxResult> {
@@ -91,6 +101,11 @@ export function runSandboxed(options: RunOptions): Promise<SandboxResult> {
 
 export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}): Promise<SandboxResult> {
   if (options.signal.aborted) return {code: 130, stdout: '', stderr: '', interrupted: true, timedOut: false};
+  return startCommand(options).result;
+}
+
+export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): RunningCommand {
+  if (options.signal.aborted) throw new DOMException('The command was interrupted before startup', 'AbortError');
   const isolated = (options.sandbox ?? DEFAULT_SANDBOX) === 'on';
   if (isolated && process.platform !== 'darwin') {
     throw new Error(`sandbox unavailable on ${process.platform}: Sandbox On is supported only on macOS; the command was not run`);
@@ -106,62 +121,110 @@ export async function runCommand(options: RunOptions & {sandbox?: SandboxMode}):
     const command = policy
       ? launch(policy, '/bin/bash', wrapper)
       : {program: options.program, args: options.args};
-    return await new Promise<SandboxResult>((resolve, reject) => {
-      const child = spawn(command.program, command.args, {
-        cwd: policy?.root ?? options.root,
-        env: cleanEnvironment(temporary),
-        detached: true,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      let stdout = '';
-      let stderr = '';
-      let size = 0;
-      let timedOut = false;
-      let overflow = false;
-      let ready = !isolated;
-      const kill = () => {
-        if (!child.pid) return;
-        try { process.kill(-child.pid, 'SIGKILL'); } catch {}
-      };
-      const timer = setTimeout(() => { timedOut = true; kill(); }, options.timeoutMs ?? 120_000);
-      const abort = () => kill();
-      options.signal.addEventListener('abort', abort, {once: true});
-      if (options.signal.aborted) kill();
-      const collect = (chunk: Buffer, stream: 'stdout' | 'stderr') => {
-        size += chunk.length;
-        if (size > OUTPUT_LIMIT) { overflow = true; kill(); return; }
-        if (stream === 'stdout') stdout += chunk.toString('utf8');
-        else {
-          stderr += chunk.toString('utf8');
-          if (isolated && stderr.includes(READY_MARKER)) {
-            ready = true;
-            stderr = stderr.replace(READY_MARKER, '');
-          }
-        }
-      };
-      child.stdout!.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
-      child.stderr!.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
-      child.stdin!.on('error', () => {});
-      child.stdin!.end(options.input);
-      const cleanup = () => {
-        clearTimeout(timer);
-        options.signal.removeEventListener('abort', abort);
-        kill();
-      };
-      child.on('error', (error) => { cleanup(); reject(new Error(`${isolated ? 'sandbox' : 'command'} could not start: ${error.message}; the command was not run`)); });
-      child.on('exit', () => kill());
-      child.on('close', (code, signal) => {
-        cleanup();
-        if (overflow) { reject(new Error('command exceeded the 32 MiB output limit')); return; }
-        const interrupted = options.signal.aborted;
-        if (!interrupted && !timedOut && !ready) {
-          reject(new Error(`sandbox could not initialize; the command was not run. ${stderr.trim() || `Backend exited with ${signal ?? code} before command startup.`} Path or network grants cannot fix backend setup.`));
-          return;
-        }
-        resolve({code: interrupted ? 130 : timedOut ? 124 : code ?? 1, stdout, stderr, interrupted, timedOut});
-      });
+    const child = spawn(command.program, command.args, {
+      cwd: policy?.root ?? options.root,
+      env: cleanEnvironment(temporary),
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-  } finally {
+    let resolveReady!: () => void;
+    let rejectReady!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+    let resolveResult!: (value: SandboxResult) => void;
+    let rejectResult!: (error: Error) => void;
+    const result = new Promise<SandboxResult>((resolve, reject) => { resolveResult = resolve; rejectResult = reject; });
+    void ready.catch(() => {});
+    void result.catch(() => {});
+    let stdout = '';
+    let stderr = '';
+    let startupError = '';
+    let size = 0;
+    let timedOut = false;
+    let interrupted = false;
+    let initialized = false;
+    let failure: Error | undefined;
+    const decoders = {stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8')};
+    const kill = () => {
+      if (!child.pid) return;
+      try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+    };
+    const stop = (reason: 'interrupted' | 'timeout' = 'interrupted') => {
+      if (reason === 'timeout') timedOut = true;
+      else interrupted = true;
+      kill();
+    };
+    const timer = options.timeoutMs === null ? null : setTimeout(() => stop('timeout'), options.timeoutMs ?? 120_000);
+    const abort = () => stop();
+    options.signal.addEventListener('abort', abort, {once: true});
+    if (options.signal.aborted) abort();
+    const emit = (text: string, stream: 'stdout' | 'stderr') => {
+      if (!text) return;
+      if (options.captureOutput !== false) {
+        if (stream === 'stdout') stdout += text;
+        else stderr += text;
+      }
+      options.onOutput?.(text, stream);
+    };
+    const decode = (text: string, stream: 'stdout' | 'stderr') => {
+      if (isolated && stream === 'stderr' && !initialized) {
+        startupError += text;
+        const marker = startupError.indexOf(READY_MARKER);
+        if (marker < 0) return;
+        text = startupError.slice(0, marker) + startupError.slice(marker + READY_MARKER.length);
+        startupError = '';
+        initialized = true;
+        resolveReady();
+      }
+      emit(text, stream);
+    };
+    const collect = (chunk: Buffer, stream: 'stdout' | 'stderr') => {
+      if (failure) return;
+      const available = OUTPUT_LIMIT - size;
+      size += chunk.length;
+      try {
+        decode(decoders[stream].write(chunk.subarray(0, Math.max(0, available))), stream);
+      } catch (error) {
+        failure = error as Error;
+      }
+      if (size > OUTPUT_LIMIT) failure = new Error('command exceeded the 32 MiB output limit');
+      if (failure) kill();
+    };
+    child.stdout!.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
+    child.stderr!.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
+    child.stdin!.on('error', () => {});
+    child.stdin!.end(options.input);
+    child.on('spawn', () => {
+      if (!isolated) { initialized = true; resolveReady(); }
+    });
+    child.on('error', (error) => {
+      failure = new Error(`${isolated ? 'sandbox' : 'command'} could not start: ${error.message}; the command was not run`);
+      rejectReady(failure);
+      kill();
+    });
+    child.on('exit', kill);
+    child.on('close', (code, signal) => {
+      if (timer) clearTimeout(timer);
+      options.signal.removeEventListener('abort', abort);
+      kill();
+      try {
+        if (!failure) {
+          decode(decoders.stdout.end(), 'stdout');
+          decode(decoders.stderr.end(), 'stderr');
+        }
+        fs.rmSync(temporary, {recursive: true, force: true});
+      } catch (error) {
+        failure ??= error as Error;
+      }
+      if (!failure && !interrupted && !timedOut && !initialized) {
+        failure = new Error(`sandbox could not initialize; the command was not run. ${startupError.trim() || `Backend exited with ${signal ?? code} before command startup.`} Path or network grants cannot fix backend setup.`);
+      }
+      if (!initialized) rejectReady(failure ?? new Error('command stopped before startup'));
+      if (failure) rejectResult(failure);
+      else resolveResult({code: interrupted ? 130 : timedOut ? 124 : code ?? 1, stdout, stderr, interrupted, timedOut});
+    });
+    return {pid: child.pid, ready, result, stop};
+  } catch (error) {
     fs.rmSync(temporary, {recursive: true, force: true});
+    throw error;
   }
 }

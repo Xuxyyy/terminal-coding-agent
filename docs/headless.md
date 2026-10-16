@@ -23,8 +23,8 @@ It is a second **implementation** of `Host` (`src/core/host.ts:46`), with an
 explicit headless model-turn budget. The terminal `Host` is built inside a
 React component (`src/ui/agent.ts`) and its `confirm` only resolves when a human
 presses a key. The headless one answers from a policy instead. Everything below
-that seam — the loop, the tools, the permission gate — is the same code running
-the same way in interactive and print mode.
+that seam uses the same loop and permission gate. Print mode additionally enables
+managed background Bash commands; interactive mode retains foreground-only Bash.
 
 ## CLI and core responsibilities
 
@@ -119,6 +119,57 @@ under `~/.acc/projects/`, and cannot be reopened with `/resume`.
 
 Repeated print runs do not fill the session store with one-turn conversations.
 Callers can save stdout or the JSON event stream when they need a record.
+
+## Background Bash commands
+
+Print mode offers `bash.run_in_background`, `bash.timeout`, `task_output`, and
+`task_stop` in every permission mode. A background launch returns a task ID and
+log path while the same command keeps running. A foreground command also moves
+to the background when its wait expires; it is never restarted or run twice.
+
+| Limit | Default | Maximum |
+|---|---|---|
+| Foreground wait | 120,000 ms | 600,000 ms |
+| Explicit background runtime | 1,800,000 ms | 7,200,000 ms |
+| Combined stdout and stderr | 32 MiB | 32 MiB |
+
+`timeout` is the foreground wait when `run_in_background` is false or omitted,
+and the allowed background runtime when it is true. An automatically moved
+command receives the default background runtime starting at the transition.
+There is no fixed count limit on simultaneous commands. The original
+`--max-seconds` deadline and `--max-steps` budget always take priority.
+
+Completion produces one runtime notice between complete model/tool steps.
+If the assistant has already replied, the run waits without model polling,
+then resumes the same loop when a command finishes. Continuations share the
+original step count and usage totals. Long-lived commands such as dev servers
+must be stopped with `task_stop` when no longer needed so the run can finish.
+The agent must inspect required results before dependent work or success claims.
+
+`task_output(task_id, offset?, limit?)` returns the task status, exit code or
+stop reason, output, and `next_offset`. Offsets count characters from zero;
+each page includes at most 30,000 output characters. It never waits for a task.
+`task_stop(task_id)` stops that task's process group and waits for cleanup.
+Both tools accept only tasks owned by the calling agent. A foreground subagent
+inherits background support but stops its remaining commands when it finishes,
+reporting unfinished work to its parent rather than handing over ownership.
+
+Logs and final task metadata are retained under
+`$ACC_HOME/runs/<run-id>/tasks/`, or `~/.acc/runs/<run-id>/tasks/` by default.
+Directories are private and files use mode `0600`. Output streams to disk
+instead of being accumulated in memory. The 32 MiB limit includes output
+written before a command moves into the background; exceeding it stops the
+command and produces an `output_limit` result. Saved logs are not resumable
+sessions and are not automatically deleted or restarted.
+
+The event stream adds `background_task` events with `started` and `completed`
+actions, owner, task ID, status, log path, and exit information. Final result
+fields and `schemaVersion: 1` remain unchanged; assistant text still joins all
+text deltas in order. The programmatic runner accepts an optional abort signal.
+CLI `SIGINT` and `SIGTERM`, deadline expiry, step exhaustion, and fatal failure
+stop owned process groups and clean temporary command environments before exit.
+External cancellation reports `stopped: 'error'` with an interruption message.
+Usage already recorded before cancellation remains included.
 
 ## stdout is the answer, stderr is everything else
 

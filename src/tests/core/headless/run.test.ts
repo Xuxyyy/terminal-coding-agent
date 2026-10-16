@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import test from 'node:test';
+import test, {after} from 'node:test';
 import type {ModelChoice} from '../../../core/client.js';
 import {runHeadless} from '../../../core/headless/run.js';
 import {systemPrompt} from '../../../core/prompt.js';
@@ -17,6 +17,15 @@ import {
   toolCallChunk,
   usageChunk,
 } from '../../fakes.js';
+
+const suiteHome = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-headless-suite-'));
+const originalHome = process.env.ACC_HOME;
+process.env.ACC_HOME = suiteHome;
+after(() => {
+  if (originalHome === undefined) delete process.env.ACC_HOME;
+  else process.env.ACC_HOME = originalHome;
+  fs.rmSync(suiteHome, {recursive: true, force: true});
+});
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'acc-headless-'));
@@ -96,11 +105,11 @@ test('headless startup uses auto-edits by default and preserves saved permission
       const mode = saved ?? 'auto-edits';
       assert.ok(request?.messages[0]?.content.startsWith(systemPrompt(root, mode)));
       assert.match(request!.messages[0]!.content, /at most 60 model turns, including the final answer/);
-      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
+      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode, true)));
       const offered = request!.tools as {function: {name: string}}[];
       assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
-        ? ['edit_file', 'write_file', 'bash', 'agent']
-        : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent']);
+        ? ['edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'agent']
+        : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'agent']);
       assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
     }
   } finally {

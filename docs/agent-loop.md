@@ -68,6 +68,14 @@ interface Host {
 `messages → model → tool calls? → run → append → repeat`. Every text delta, tool start and
 tool end leaves through `host.onEvent`, so `src/ui` and a test's `Host` see the same run.
 
+Headless runs pass a background-task manager into the same loop. Managed Bash
+can return a task ID before its process ends. Completion notices enter the
+conversation only between complete tool batches, as runtime-generated user
+messages rather than additional tool replies. After a reply, the main loop
+waits for pending work without model polling and continues under its original
+budget. Subagents do not wait after their final reply; their owner stops any
+unfinished shells. See `headless.md` for task tools, limits, logs, and cleanup.
+
 **A tool may report tokens it spent.** `ToolOutput` carries an optional `usage`, and
 the loop folds it into the turn total and into `session.usage` — but through
 `recordToolUsage`, never `recordUsage`. The difference is the one that matters:

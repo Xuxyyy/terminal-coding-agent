@@ -19,6 +19,10 @@ try {
   }
   if (!options.version && options.print !== null) {
     const choice = createClient();
+    const controller = new AbortController();
+    const interrupt = () => controller.abort();
+    process.on('SIGINT', interrupt);
+    process.on('SIGTERM', interrupt);
     const result = await runHeadless({
       root: options.workspaceRoot,
       task: options.print,
@@ -27,6 +31,10 @@ try {
       maxSeconds: options.maxSeconds,
       maxSteps: options.maxSteps,
       sandbox: options.sandbox,
+      signal: controller.signal,
+    }).finally(() => {
+      process.removeListener('SIGINT', interrupt);
+      process.removeListener('SIGTERM', interrupt);
     });
     if (options.json) {
       for (const line of jsonLines(result)) {

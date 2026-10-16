@@ -1,5 +1,5 @@
 import type {Mode} from '../permission/mode.js';
-import {bash} from './bash.js';
+import {bash, backgroundBash, BACKGROUND_INSTRUCTIONS} from './bash.js';
 import {editFile} from './edit.js';
 import {grep} from './grep.js';
 import {glob} from './glob.js';
@@ -7,6 +7,7 @@ import {readFile} from './read.js';
 import type {Tool} from './registry.js';
 import {makeSubagent} from './subagent.js';
 import {writeFile} from './write.js';
+import {taskOutput, taskStop} from './tasks.js';
 
 export const tools: Tool[] = [readFile, grep, glob, editFile, writeFile, bash];
 
@@ -27,13 +28,16 @@ const AUTO_DESCRIPTIONS: Record<string, string> = {
     'so /rewind can use its existing backups when available. Prefer edit_file for changing part of an existing file.',
 };
 
-export function toolsFor(mode: Mode): Tool[] {
+export function toolsFor(mode: Mode, background = false): Tool[] {
   const offered = mode === 'auto'
     ? tools
       .filter((tool) => tool.name !== 'read_file' && tool.name !== 'grep' && tool.name !== 'glob')
       .map((tool) => ({...tool, description: AUTO_DESCRIPTIONS[tool.name] ?? tool.description}))
     : tools;
-  return [...offered, makeSubagent()];
+  const enabled = background ? offered.map((tool) => tool.name === 'bash'
+    ? {...backgroundBash, description: tool.description + BACKGROUND_INSTRUCTIONS}
+    : tool) : offered;
+  return [...enabled, ...(background ? [taskOutput, taskStop] : []), makeSubagent()];
 }
 
 export {toolDefinitions, runTool} from './registry.js';

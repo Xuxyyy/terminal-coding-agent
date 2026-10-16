@@ -10,6 +10,7 @@ import {insideRoot, isProtectedPath} from '../permission/protected.js';
 import {absoluteTarget, accessReason, hasAccess, normalizeAccess, type SandboxAccess} from '../sandbox/policy.js';
 import {fileOperation} from '../sandbox/files.js';
 import {resolveTarget} from './paths.js';
+import type {BackgroundTasks} from '../background.js';
 
 export type Judge = (
   request: Request,
@@ -28,6 +29,7 @@ export type ToolContext = {
   judge?: Judge;
   denied?: string[];
   sandboxAccess?: SandboxAccess;
+  backgroundTasks?: BackgroundTasks;
 };
 
 export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage};

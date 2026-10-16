@@ -190,7 +190,7 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 `acc -p "<task>"` runs one turn with no terminal and exits — no Ink, no
 keyboard, no TTY needed. It is a second implementation of `Host`, in
 `src/core/headless/`; the loop, the tools and the permission gate below the seam
-are unchanged.
+are shared. Headless runs also enable managed background Bash commands.
 
 - stdout is the answer and nothing else, so `acc -p "…" > out.txt` is useful.
   Tool lines, the prompts with their decisions, and the stop reason go to
@@ -210,8 +210,13 @@ are unchanged.
   the final answer, and `--max-seconds` (default 300) aborts in-flight work.
   Both modes share 10-turn reviews and a default 60-turn boundary. Interactive
   runs ask to continue; headless runs stop at their configured budget. Exhaustion reports `step_limit`, separately from denial.
-- No session is written to `~/.acc`, so running dozens back to back leaves
-  nothing behind, and a print run cannot be reopened with `/resume`.
+- Bash can run in the background while the agent uses other tools. Foreground
+  wait expiry moves the same process into the background. Completion resumes
+  the agent within the original budgets; `task_output` reads results and
+  `task_stop` stops owned commands. Interactive Bash remains foreground-only.
+- No resumable session is written, and a print run cannot be reopened with
+  `/resume`. Command logs and final task metadata remain in the private
+  `runs/<run-id>/tasks/` directory under `ACC_HOME` (default `~/.acc`).
 - `--json`, `--yes`, `--max-seconds` and `--max-steps` throw without `-p`. Interactive mode
   still refuses to start without a TTY. See `headless.md`.
 

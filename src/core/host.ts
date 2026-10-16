@@ -23,6 +23,7 @@ export type ModelTokenUsage = {
 };
 
 export type AgentEvent =
+  | {type: 'background_task'; action: 'started' | 'completed'; task: BackgroundTaskInfo}
   | {type: 'model_request_start'; request: number}
   | {type: 'text_delta'; text: string}
   | {type: 'model_retry'; attempt: number; total: number}
@@ -39,6 +40,18 @@ export type AgentEvent =
   | {type: 'compact_start'}
   | {type: 'compact_end'; replaced: number; before: number; after: number}
   | {type: 'error'; message: string; hint?: string};
+
+export type BackgroundTaskInfo = {
+  id: string;
+  owner: string;
+  command: string;
+  description?: string;
+  status: 'running' | 'completed' | 'failed' | 'stopped' | 'timed_out' | 'output_limit';
+  logPath: string;
+  code: number | null;
+  reason?: string;
+  characters: number;
+};
 
 export const INTERRUPTED = '[interrupted by the user]';
 

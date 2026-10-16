@@ -24,6 +24,7 @@ import {displayPath, resolveTarget} from './tools/paths.js';
 import type {Judge, Tool} from './tools/registry.js';
 import {askJudge, judgeMessages} from './permission/judge.js';
 import {NORMAL_STEP_POLICY} from './step-policy.js';
+import type {BackgroundTasks} from './background.js';
 
 export {NORMAL_STEP_POLICY};
 
@@ -115,9 +116,9 @@ export async function runAgent(
   host: Host,
   registry: Tool[] = toolsFor(session.mode),
   store?: SessionStore,
-  options: {maxSteps?: number} = {},
+  options: {maxSteps?: number; backgroundTasks?: BackgroundTasks; waitForBackground?: boolean} = {},
 ): Promise<'step_limit' | void> {
-  const {maxSteps} = options;
+  const {maxSteps, backgroundTasks} = options;
   const definitions = toolDefinitions(registry);
   const judge = judgeFor(session, host);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
@@ -166,6 +167,16 @@ export async function runAgent(
         });
         host.onEvent({type: 'turn_end', usage: total});
         return 'step_limit';
+      }
+      const completed = backgroundTasks?.drain() ?? [];
+      if (completed.length > 0) {
+        session.messages.push({
+          role: 'user',
+          content: '[runtime background task completion notice]\n' +
+            completed.map((task) => JSON.stringify(task)).join('\n') +
+            '\nUse task_output if more output is needed. Check the result before claiming success.',
+        });
+        save(NO_USAGE);
       }
       if (
         maxSteps === undefined &&
@@ -263,6 +274,10 @@ export async function runAgent(
           });
         }
         save(result.usage);
+        if (result.finishReason !== 'length' && options.waitForBackground && backgroundTasks?.hasPending()) {
+          if (maxSteps === undefined || step + 1 < maxSteps) await backgroundTasks.wait();
+          continue;
+        }
         host.onEvent({type: 'turn_end', usage: total});
         return;
       }
@@ -299,6 +314,7 @@ export async function runAgent(
           backup,
           judge,
           denied: session.denied,
+          backgroundTasks,
         });
         if (output.usage) {
           addUsage(total, output.usage);

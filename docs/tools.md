@@ -1,7 +1,7 @@
 # Tools
 
 Status: built.
-Covers: `src/core/tools/` — the seven tools the model can call, their arguments,
+Covers: `src/core/tools/` — the tools the model can call, their arguments,
 their caps, and the exact text they fail with
 Read when: adding a tool, changing a schema, or changing what a tool returns
 See also: `permissions.md` (the gate a tool passes on its way to the disk),
@@ -15,6 +15,10 @@ model sees them in.
 In `auto` mode, only `edit_file`, `write_file`, `bash`, and `agent` are offered.
 Reading and searching use Bash. `read_file`, `grep`, and `glob` remain available in
 `ask-edits` and `auto-edits`, but are not fallbacks in `auto`.
+
+These are the interactive tools. Headless runs additionally offer `task_output`
+and `task_stop`, and extend Bash with `run_in_background` and `timeout`. See
+[background Bash](headless.md#background-bash-commands) for limits and lifecycle.
 
 | Tool | Arguments | What it does | When it asks |
 |---|---|---|---|
@@ -49,7 +53,7 @@ as the two writers. Any other rule leaves an outside path where the rows leave
 it: asked about, every time, never remembered. `permissions.md` has the matcher
 and the chain.
 
-**The list comes from one place.** `toolsFor(mode)` in
+**The list comes from one place.** `toolsFor(mode, background?)` in
 `src/core/tools/index.ts` is the single source of what is offered. In `auto`,
 it removes `read_file`, `grep`, and `glob`, then copies the three remaining file and
 shell tools with descriptions that prefer Bash for reads and searches, and
@@ -58,7 +62,10 @@ Edit or Write for ordinary file changes. It adds `agent` in every mode.
 Filtering preserves the remaining tools' order, schemas, and handlers without
 mutating the shared tool objects. It is the default
 argument of both `runAgent` and `contextStatus`, so what
-the model is offered and what the context readout counts can never drift apart.
+the interactive model is offered and what the context readout counts agree.
+Headless runs explicitly enable background tools and pass that registry to the
+loop, including its context-budget checks. A subagent inherits that capability
+while retaining its configured tool allowlist.
 
 These preferences live in the `auto` tool descriptions. The base system prompt
 is shared across permission modes. Prefer Bash for reading,

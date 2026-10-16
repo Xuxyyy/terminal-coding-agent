@@ -6,6 +6,8 @@ import {systemPrompt} from '../prompt.js';
 import {addTask, createSession} from '../session.js';
 import {modeOf} from '../settings.js';
 import {DEFAULT_MAX_STEPS, validateMaxSteps} from './budget.js';
+import {BackgroundTasks} from '../background.js';
+import {toolsFor} from '../tools/index.js';
 import {
   createHeadlessHost,
   type HeadlessTokenUsage,
@@ -34,6 +36,7 @@ export async function runHeadless(options: {
   maxSeconds: number;
   maxSteps?: number;
   sandbox?: SandboxMode;
+  signal?: AbortSignal;
 }): Promise<HeadlessResult> {
   const maxSteps = validateMaxSteps(options.maxSteps ?? DEFAULT_MAX_STEPS);
   const session = createSession(
@@ -47,6 +50,9 @@ export async function runHeadless(options: {
   addTask(session, options.task);
 
   const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  options.signal?.addEventListener('abort', interrupt, {once: true});
+  if (options.signal?.aborted) interrupt();
   const {host, events, prompts, tokenUsage} = createHeadlessHost({
     policy: options.policy,
     signal: controller.signal,
@@ -65,24 +71,31 @@ export async function runHeadless(options: {
   }
 
   let outcome: 'step_limit' | void;
+  const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
   try {
     outcome = await runAgent(
-      session, options.choice, host, undefined, undefined, {maxSteps},
+      session, options.choice, host, toolsFor(session.mode, true), undefined,
+      {maxSteps, backgroundTasks, waitForBackground: true},
     );
   } finally {
-    if (timer) clearTimeout(timer);
+    try {
+      await backgroundTasks.close(timedOut ? 'benchmark deadline reached' : 'headless run ended');
+    } finally {
+      if (timer) clearTimeout(timer);
+      options.signal?.removeEventListener('abort', interrupt);
+    }
   }
 
   let text = '';
-  let usage: Usage = {prompt: 0, completion: 0, total: 0};
+  const usage: Usage = {...session.usage};
   let error: string | undefined;
   for (const event of events) {
     if (event.type === 'text_delta') text += event.text;
-    if (event.type === 'turn_end') usage = event.usage;
     if (event.type === 'error' && error === undefined) error = event.message;
   }
 
   const denied = prompts.some((prompt) => prompt.decision === 'deny');
+  if (options.signal?.aborted) error ??= 'headless run interrupted';
   const stopped: StopReason = timedOut
     ? 'timeout'
     : outcome === 'step_limit'
