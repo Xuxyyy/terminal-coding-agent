@@ -87,23 +87,30 @@ that nothing in the conversation justifies. The money is real and is counted; th
 context is not and is not.
 
 `NORMAL_STEP_POLICY` in `step-policy.ts` shares defaults between interactive and
-headless runs: a soft review every 10 completed model turns and a hard boundary
+headless runs: a soft review every 20 completed model turns and a hard boundary
 at 60. A model turn may contain several tool calls. The next model request
-receives a temporary system-prompt review with the completed count, remaining
+receives an appended system-message review with the completed count, remaining
 turns, and next boundary. It asks the model to finish when required work is
 verified, otherwise prioritize essential work over optional improvements.
-Reviews are model-only and are never stored in session history.
+Reviews are saved in session history before their model requests and restored
+in order. Appending them preserves the initial system prompt and earlier messages
+so the conversation prefix remains available for caching. They are not displayed
+as chat replies. Existing compaction can still summarize older history.
 
 Interactive runs ask the user after each 60-turn segment. Approval grants another
 60 turns; the next review uses the new boundary. The gate cannot be suppressed
-for the rest of the turn. `'deny'` stops with a message. Esc returns silently;
-the UI reports the stop.
+for the rest of the turn. An extra review with ten turns left gives the first segment
+reviews after turns 20, 40, and 50. Approval at 60 allows the turn-60 review to use
+the new boundary at 120, followed by reviews at 80, 100, and 110. `'deny'` stops
+with a message. Esc returns silently; the UI reports the stop.
 
 Headless runs pass an explicit `maxSteps` budget, defaulting to the shared hard
 boundary. They stop at that budget and return `step_limit`, without interactive
 continuation checkpoints. A final answer on the last permitted turn completes
-normally. Reviews recur every 10 turns and also warn with ten turns left for a
-custom budget. Near the boundary they ask the model to plan required implementation
+normally. Reviews recur every 20 turns and also warn with ten turns left for a
+custom budget, or after the first turn for budgets of ten or fewer when another
+request can follow. Coincident triggers produce one review. Near the boundary
+they ask the model to plan required implementation
 and verification, and report any unfinished work clearly.
 
 ### Streaming tool calls

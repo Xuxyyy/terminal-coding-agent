@@ -81,8 +81,11 @@ Two caps, and both are on:
 - **60 model turns by default**, changed with `--max-steps`. The final answer
   counts as a turn; one turn may contain multiple tool calls. A larger budget
   allows the run to continue beyond turn 60. The model is told the budget and
-  receives private progress reviews every 10 turns, with updated counts and
-  a reminder to prioritize required work and verification. Exhaustion reports `step_limit`.
+  receives private progress reviews every 20 turns, plus a warning with 10 turns
+  left (after the first turn for smaller budgets, if another request can follow).
+  Reviews show updated counts and prioritize required work and verification.
+  They are appended system messages retained in saved history, preserving earlier
+  messages. Coincident triggers produce one review. Exhaustion reports `step_limit`.
   Tool permission checks remain active.
 - **300 seconds**, changed with `--max-seconds`. The timer aborts the run, and
   its signal reaches model requests and shell tools to stop in-flight work.

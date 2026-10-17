@@ -47,10 +47,13 @@ a model turn may contain several tool calls. Headless runs use this ceiling
 instead of the interactive continuation checkpoint. A budget above 60 can pass
 turn 60 under either permission policy. Tool permission checks remain active.
 
-The system prompt states the budget. Progress reviews every 10 completed turns
+The system prompt states the budget. Progress reviews every 20 completed turns
 show the completed count, remaining turns, and boundary. Another review is sent
 with ten turns left (or after the first turn
-for budgets of ten or fewer). These reminders are model-only. Exhaustion returns
+for budgets of ten or fewer, if another request can follow). Coincident triggers
+produce one review. These reminders are appended system messages retained in
+saved history; earlier messages stay unchanged. They are not displayed as chat
+replies. Exhaustion returns
 `stopped: 'step_limit'`, emits an error and accumulated usage, and exits 1.
 Interactive runs use the same review schedule and a 60-turn checkpoint, where
 the user can approve another segment. Both defaults come from `step-policy.ts`.

@@ -149,7 +149,7 @@ function makeStore(
     appendStep(messages, usage) {
       ensureOpen();
       const fresh = messages.filter(
-        (message) => message.role !== 'system' && !written.has(message),
+        (message, index) => !(index === 0 && message.role === 'system') && !written.has(message),
       );
       if (fresh.length === 0) return;
       for (const message of fresh) written.add(message);

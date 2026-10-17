@@ -309,9 +309,9 @@ test('a larger headless budget finishes beyond sixty turns under either policy',
   for (const policy of ['deny', 'yes'] as const) {
     const work = tempDir();
     fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
-    const sent: string[] = [];
+    const sent: string[][] = [];
     const {choice, calls} = fakeModel((nth, body) => {
-      sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
+      sent.push((body as {messages: {content: string}[]}).messages.map((message) => message.content));
       return nth < 82 ? callResponse('bash', {command: 'cat note.txt'}) : textResponse(['finished']);
     });
 
@@ -321,26 +321,31 @@ test('a larger headless budget finishes beyond sixty turns under either policy',
     assert.equal(result.stopped, 'done');
     assert.equal(result.text, 'finished');
     assert.deepEqual(result.prompts, []);
-    assert.match(sent[0]!, /at most 90 model turns/);
-    assert.match(sent[80]!, /10 model turns remain/);
+    assert.match(sent[0]![0]!, /at most 90 model turns/);
+    assert.match(sent[80]!.at(-1)!, /10 model turns remain/);
+    assert.equal(sent[80]!.filter((text) => text?.startsWith('Progress review:')).length, 4);
+    assert.ok(sent.every((messages) => messages[0] === sent[0]![0]));
   }
 });
 
 test('a custom budget stops exactly at its limit and preserves usage', async () => {
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
-  const sent: string[] = [];
+  const sent: string[][] = [];
   const {choice, calls} = fakeModel((_nth, body) => {
-    sent.push((body as {messages: {content: string}[]}).messages[0]!.content);
+    sent.push((body as {messages: {content: string}[]}).messages.map((message) => message.content));
     return callResponse('bash', {command: 'cat note.txt'});
   });
 
   const result = await headless({root: work, choice, maxSteps: 37});
 
   assert.equal(calls(), 37);
-  assert.match(sent[10]!, /10 model turns completed.*27 model turns remain.*turn 37/);
-  assert.match(sent[27]!, /27 model turns completed.*10 model turns remain.*turn 37/);
-  assert.match(sent[30]!, /30 model turns completed.*7 model turns remain.*turn 37/);
+  assert.match(sent[20]!.at(-1)!, /20 model turns completed.*17 model turns remain.*turn 37/);
+  assert.match(sent[27]!.at(-1)!, /27 model turns completed.*10 model turns remain.*turn 37/);
+  assert.deepEqual(sent.at(-1)!.filter((text) => text?.startsWith('Progress review:')), [
+    sent[20]!.at(-1), sent[27]!.at(-1),
+  ]);
+  assert.ok(sent.every((messages) => messages[0] === sent[0]![0]));
   assert.equal(result.stopped, 'step_limit');
   assert.deepEqual(result.prompts, []);
   assert.deepEqual(result.usage, {prompt: 370, completion: 74, total: 444});

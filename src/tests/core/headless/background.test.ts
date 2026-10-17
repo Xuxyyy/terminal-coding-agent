@@ -115,7 +115,8 @@ test('foreground timeout backgrounds the same command and completion resumes wit
   const {choice, calls: count} = fakeModel((nth, body) => {
     if (nth === 1) return calls(shell('echo $$ >> executions; while ! test -f release; do sleep 0.01; done; printf done', {timeout: 10}));
     if (nth === 2) {
-      assert.match((body as Request).messages.at(-1)!.content, /moved to the background/);
+      const output = (body as Request).messages.filter((message) => message.role === 'tool').at(-1);
+      assert.match(output!.content, /moved to the background/);
       setTimeout(() => fs.writeFileSync(path.join(work, 'release'), ''), 30);
       return reply('Waiting for the command.');
     }

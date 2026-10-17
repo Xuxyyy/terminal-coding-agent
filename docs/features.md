@@ -176,8 +176,9 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 - A session written before v4 is skipped, never migrated: neither picker sees it.
 - Approvals are never stored — they die with the run.
 - Old sessions are evicted: 30 days, keeping the most recent 50.
-- Normal turns get a private progress review every 10 model turns and ask to keep
-  going after 60. Each approval grants another bounded segment.
+- Normal turns get a private progress review every 20 model turns, plus a warning
+  with 10 turns left, and ask to keep going after 60. Each approval grants another
+  bounded segment. Reviews are appended to conversation history and saved.
 - Before any output, supported connection errors, non-daily 429 responses, and
   5xx responses get up to three retries after the first attempt, with 1s/2s/4s
   backoff. Each attempt has a 120-second deadline. Daily limits, cancellation,

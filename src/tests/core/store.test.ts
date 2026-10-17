@@ -126,6 +126,26 @@ test('reading a session returns both the messages and the view', () => {
   ]);
 });
 
+test('step records exclude the initial system prompt and retain appended system messages once', () => {
+  const root = home();
+  const work = workspace();
+  const store = startSession(work, root);
+  const initial: OpenAI.ChatCompletionMessageParam = {role: 'system', content: 'initial rules'};
+  const reminder: OpenAI.ChatCompletionMessageParam = {role: 'system', content: 'review progress'};
+  const messages = [initial, user('finish the work'), assistant('working'), reminder];
+
+  store.appendStep(messages, usage(10));
+  store.appendStep(messages, usage(0));
+  messages.push(assistant('done'));
+  store.appendStep(messages, usage(5));
+  store.close();
+
+  const restored = loadSession(work, store.id, root);
+  assert.deepEqual(restored.messages, messages.slice(1));
+  assert.deepEqual(restored.meta.usage, usage(15));
+  assert.equal(records(store.dir).length, 2);
+});
+
 test('a version 1 session is not loaded', () => {
   const root = home();
   const work = workspace();

@@ -18,7 +18,6 @@ import {
 } from './session.js';
 import type {SessionStore} from './store.js';
 import {captureSnapshot} from './history.js';
-import {estimateTokens} from './tokens.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveTarget} from './tools/paths.js';
 import type {Judge, Tool} from './tools/registry.js';
@@ -51,31 +50,23 @@ function shouldAudit(step: number): boolean {
   return step > 0 && step % NORMAL_STEP_POLICY.softAuditEvery === 0;
 }
 
-function messagesForStep(
-  session: Session,
+function reminderForStep(
   step: number,
   maxSteps?: number,
-): Session['messages'] {
-  const budgetWarning = maxSteps !== undefined &&
-    step === Math.max(1, maxSteps - NORMAL_STEP_POLICY.softAuditEvery);
-  if (!shouldAudit(step) && !budgetWarning) return session.messages;
-  const messages = [...session.messages];
-  const first = messages[0];
-  if (first?.role !== 'system' || typeof first.content !== 'string') {
-    return session.messages;
-  }
+): Session['messages'][number] | null {
   const boundary = maxSteps ??
     (Math.floor(step / NORMAL_STEP_POLICY.hardGateEvery) + 1) * NORMAL_STEP_POLICY.hardGateEvery;
+  const budgetWarning = step === Math.max(1, boundary - NORMAL_STEP_POLICY.finalWarningAt);
+  if (!shouldAudit(step) && !budgetWarning) return null;
   const remaining = boundary - step;
   const boundaryName = maxSteps === undefined ? 'continuation checkpoint' : 'step limit';
   const progress = `Progress review: ${step} model turns completed. ` +
     `${remaining} model turns remain before the next ${boundaryName}, at turn ${boundary}.`;
-  const closing = remaining <= NORMAL_STEP_POLICY.softAuditEvery
+  const closing = remaining <= NORMAL_STEP_POLICY.finalWarningAt
     ? '\n\nPlan the remaining implementation and verification work within this budget segment. ' +
       'If completion is not possible, clearly report what remains unfinished.'
     : '';
-  messages[0] = {...first, content: `${first.content}\n\n${progress}\n\n${COMPLETION_AUDIT}${closing}`};
-  return messages;
+  return {role: 'system', content: `${progress}\n\n${COMPLETION_AUDIT}${closing}`};
 }
 
 function judgeFor(session: Session, host: Host): Judge | undefined {
@@ -238,18 +229,13 @@ export async function runAgent(
         addUsage(session.usage, result.usage);
       }
 
-      const requestMessages = messagesForStep(session, step, maxSteps);
-      const auditTokens = requestMessages === session.messages
-        ? 0
-        : estimateTokens(
-            (requestMessages[0]!.content as string).slice(
-              (session.messages[0]!.content as string).length,
-            ),
-          );
+      const reminder = reminderForStep(step, maxSteps);
+      if (reminder) session.messages.push(reminder);
       if (
-        projectedTokens(session, registry) + auditTokens + MAX_OUTPUT_TOKENS >
+        projectedTokens(session, registry) + MAX_OUTPUT_TOKENS >
         session.contextWindow
       ) {
+        if (reminder) session.messages.pop();
         host.onEvent({
           type: 'error',
           message: 'stopped: the next request would exceed the context window',
@@ -258,8 +244,9 @@ export async function runAgent(
         return;
       }
 
+      if (reminder) save(NO_USAGE);
       host.onEvent({type: 'model_request_start', request: step + 1});
-      const result = await streamStep(choice, requestMessages, definitions, host);
+      const result = await streamStep(choice, session.messages, definitions, host);
       addUsage(total, result.usage);
       session.messages.push(
         assistantMessage(result.content, result.toolCalls, result.continuation),

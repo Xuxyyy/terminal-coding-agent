@@ -35,7 +35,8 @@ conversation history, tools, permissions, and sessions stay in `acc`.
 - **DeepSeek coding and permission judging.** Set `DEEPSEEK_API_KEY` for
   `deepseek-flash`, currently V4.1 Flash. Reasoning defaults to `high` and can be
   overridden. Auto mode uses the same DeepSeek model and key for judging.
-- **Bounded turns.** The agent reviews progress every 10 model turns.
+- **Bounded turns.** The agent reviews progress every 20 model turns,
+  with an extra warning when 10 turns remain before a boundary.
   Interactive runs ask to continue after each 60-turn segment. Print mode
   stops at its selected turn or time limit.
 - **Sessions you can reopen.** Interactive sessions are saved. `/resume`

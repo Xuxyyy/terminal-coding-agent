@@ -20,6 +20,7 @@ import {
   usageChunk,
 } from '../fakes.js';
 import type {AgentEvent, Usage} from '../../core/host.js';
+import {MAX_OUTPUT_TOKENS} from '../../core/client.js';
 import {
   COMPLETION_AUDIT,
   INTERRUPTED,
@@ -28,10 +29,11 @@ import {
   runAgent,
 } from '../../core/loop.js';
 import {filesDir} from '../../core/history.js';
-import {createSession, type Session} from '../../core/session.js';
+import {addTask, createSession, projectedTokens, restoreMessages, type Session} from '../../core/session.js';
 import {loadSession, startSession} from '../../core/store.js';
 import {writeFile} from '../../core/tools/write.js';
 import type {Tool} from '../../core/tools/registry.js';
+import {estimateMessage} from '../../core/tokens.js';
 
 const noop: Tool = {
   name: 'noop',
@@ -146,47 +148,150 @@ test('a short turn receives neither a completion audit nor a gate', async () => 
   );
 });
 
-test('the request after ten completed turns receives a model-only completion audit', async () => {
+test('the request after twenty completed turns appends and persists a completion audit', async () => {
   const sent: OpenAI.ChatCompletionMessageParam[][] = [];
   const {choice} = fakeModel((nth, body) => {
     sent.push([
       ...(((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? []),
     ]);
-    return nth <= NORMAL_STEP_POLICY.softAuditEvery ? toolResponse(nth) : finalResponse();
+    if (nth === 21) {
+      assert.deepEqual(loadSession(work, store.id, home).messages, active.messages.slice(1));
+    }
+    return nth <= 21 ? toolResponse(nth) : finalResponse();
   });
   const {host, asked, events} = fakeHost();
   const work = tempDir('acc-work-');
   const home = tempDir('acc-home-');
   const active = createSession(work, 'rules', 1_000_000);
+  addTask(active, 'finish the required work');
+  const initial = structuredClone(active.messages);
   const store = startSession(work, home);
 
   await runAgent(active, choice, host, [noop], store);
 
   assert.equal(asked.length, 0);
-  assert.equal(sent.length, NORMAL_STEP_POLICY.softAuditEvery + 1);
-  const auditedSystem = sent[NORMAL_STEP_POLICY.softAuditEvery]![0];
+  assert.equal(sent.length, 22);
+  const auditedRequest = sent[20]!;
+  const auditedSystem = auditedRequest.at(-1);
   assert.equal(auditedSystem?.role, 'system');
   assert.equal(typeof auditedSystem?.content, 'string');
   assert.match(auditedSystem!.content as string, new RegExp(COMPLETION_AUDIT));
-  assert.ok(
-    active.messages.every(
-      (message) =>
-        typeof message.content !== 'string' || !message.content.includes(COMPLETION_AUDIT),
-    ),
-  );
+  assert.deepEqual(auditedRequest.slice(0, initial.length), initial);
+  assert.deepEqual(auditedRequest.slice(0, sent[19]!.length), sent[19]);
+  assert.equal(auditedRequest.at(-2)?.role, 'tool');
+  assert.deepEqual(sent[21]!.slice(0, auditedRequest.length), auditedRequest);
+  assert.equal(sent[21]!.at(-1)?.role, 'tool');
+  assert.equal(active.messages.filter((message) => message.role === 'system').length, 2);
   assert.ok(
     events.every(
       (event) => event.type !== 'text_delta' || !event.text.includes(COMPLETION_AUDIT),
     ),
   );
   const stored = loadSession(work, store.id, home);
-  assert.ok(
-    stored.messages.every(
-      (message) =>
-        typeof message.content !== 'string' || !message.content.includes(COMPLETION_AUDIT),
-    ),
-  );
+  assert.deepEqual(stored.messages, active.messages.slice(1));
+  const restored = createSession(work, 'rules', 1_000_000);
+  restoreMessages(restored, stored.messages);
+  assert.deepEqual(restored.messages, active.messages);
+  assert.deepEqual(restored.asked, ['finish the required work']);
+  const resumed = fakeModel((_nth, body) => {
+    const messages = (body as {messages: OpenAI.ChatCompletionMessageParam[]}).messages;
+    assert.deepEqual(messages.slice(0, sent[21]!.length), sent[21]);
+    assert.equal(messages.at(-1)?.content, 'done');
+    return finalResponse();
+  });
+  await runAgent(restored, resumed.choice, host, [noop]);
+  assert.equal(resumed.calls(), 1);
+  assert.deepEqual(errors(events), []);
   store.close();
+});
+
+test('a completion audit survives a failed or interrupted following request', async () => {
+  for (const interrupted of [false, true]) {
+    const work = tempDir('acc-work-');
+    const home = tempDir('acc-home-');
+    const active = createSession(work, 'rules', 1_000_000);
+    const store = startSession(work, home);
+    const {host, controller} = fakeHost();
+    const {choice, calls} = fakeModel((nth) => {
+      if (nth <= 20) return toolResponse(nth);
+      const saved = loadSession(work, store.id, home).messages;
+      assert.match(saved.at(-1)!.content as string, /20 model turns completed/);
+      if (interrupted) controller.abort();
+      return streamOf(interrupted ? abortError() : new Error('fixture stream failed'));
+    });
+
+    await runAgent(active, choice, host, [noop], store);
+
+    assert.equal(calls(), 21);
+    assert.deepEqual(loadSession(work, store.id, home).messages, active.messages.slice(1));
+    assert.equal(active.messages.filter((message) =>
+      message.role === 'system' && typeof message.content === 'string' && message.content.includes(COMPLETION_AUDIT),
+    ).length, 1);
+    assert.equal(markers(active), interrupted ? 1 : 0);
+    store.close();
+  }
+});
+
+test('the request-fit guard counts a reminder once and sends it only when it fits', async () => {
+  for (const fits of [false, true]) {
+    const active = session();
+    const {host, events} = fakeHost();
+    let fitProjection = 0;
+    const {choice, calls} = fakeModel((nth) => {
+      if (nth === 21) {
+        fitProjection = projectedTokens(active, [noop]) + MAX_OUTPUT_TOKENS;
+        return finalResponse();
+      }
+      return toolResponse(nth);
+    });
+    const tool: Tool = {
+      ...noop,
+      async run() {
+        if (calls() === 20) {
+          const reminder = {
+            role: 'system' as const,
+            content: 'Progress review: 20 model turns completed. ' +
+              '40 model turns remain before the next continuation checkpoint, at turn 60.' +
+              `\n\n${COMPLETION_AUDIT}`,
+          };
+          const toolResult = {role: 'tool' as const, tool_call_id: 'call-20', content: 'ok'};
+          active.contextWindow = projectedTokens(active, [tool]) +
+            estimateMessage(toolResult) + estimateMessage(reminder) + MAX_OUTPUT_TOKENS -
+            (fits ? 0 : 1);
+        }
+        return {text: 'ok'};
+      },
+    };
+
+    await runAgent(active, choice, host, [tool]);
+
+    assert.equal(calls(), fits ? 21 : 20);
+    assert.equal(active.messages.filter((message) =>
+      message.role === 'system' && typeof message.content === 'string' && message.content.includes(COMPLETION_AUDIT),
+    ).length, fits ? 1 : 0);
+    if (fits) assert.equal(fitProjection, active.contextWindow);
+    else assert.match(errors(events).at(-1)!, /exceed the context window/);
+  }
+});
+
+test('coincident review and final warning append once, and short budgets keep their warning', async () => {
+  for (const [maxSteps, expected] of [[30, [20]], [10, [1]], [1, []]] as const) {
+    const active = session();
+    const {choice, calls} = keepsCalling();
+    const {host, asked} = fakeHost();
+
+    const result = await runAgent(active, choice, host, [noop], undefined, {maxSteps});
+
+    assert.equal(result, 'step_limit');
+    assert.equal(calls(), maxSteps);
+    assert.equal(asked.length, 0);
+    const reminders = active.messages.filter((message) => message.role === 'system').slice(1);
+    assert.equal(reminders.length, expected.length);
+    reminders.forEach((message, index) => {
+      assert.match(message.content as string, new RegExp(`${expected[index]} model turns completed`));
+      assert.match(message.content as string, /clearly report what remains unfinished/);
+    });
+  }
 });
 
 test('finishing between the audit and gate does not ask to continue', async () => {
@@ -252,17 +357,16 @@ test('a session answer cannot suppress later step gates', async () => {
 test('an approved segment receives another audit and another gate', async () => {
   const auditedRequests: number[] = [];
   const auditedPrompts: string[] = [];
+  let previous: OpenAI.ChatCompletionMessageParam[] = [];
   const {choice, calls} = fakeModel((nth, body) => {
     const messages =
       ((body as {messages?: OpenAI.ChatCompletionMessageParam[]})?.messages) ?? [];
-    if (
-      messages.some(
-        (message) =>
-          typeof message.content === 'string' && message.content.includes(COMPLETION_AUDIT),
-      )
-    ) {
+    assert.deepEqual(messages.slice(0, previous.length), previous);
+    previous = structuredClone(messages);
+    const last = messages.at(-1);
+    if (last?.role === 'system' && typeof last.content === 'string' && last.content.includes(COMPLETION_AUDIT)) {
       auditedRequests.push(nth);
-      auditedPrompts.push(messages[0]!.content as string);
+      auditedPrompts.push(last.content as string);
     }
     return toolResponse(nth);
   });
@@ -270,12 +374,12 @@ test('an approved segment receives another audit and another gate', async () => 
 
   await runAgent(session(), choice, host, [noop]);
 
-  assert.deepEqual(auditedRequests, [11, 21, 31, 41, 51, 61, 71, 81, 91, 101, 111]);
-  assert.match(auditedPrompts[0]!, /10 model turns completed.*50 model turns remain.*turn 60/);
-  assert.match(auditedPrompts[4]!, /50 model turns completed.*10 model turns remain/);
-  assert.match(auditedPrompts[4]!, /clearly report what remains unfinished/);
-  assert.match(auditedPrompts[5]!, /60 model turns completed.*60 model turns remain.*turn 120/);
-  assert.doesNotMatch(auditedPrompts[5]!, /clearly report what remains unfinished/);
+  assert.deepEqual(auditedRequests, [21, 41, 51, 61, 81, 101, 111]);
+  assert.match(auditedPrompts[0]!, /20 model turns completed.*40 model turns remain.*turn 60/);
+  assert.match(auditedPrompts[2]!, /50 model turns completed.*10 model turns remain/);
+  assert.match(auditedPrompts[2]!, /clearly report what remains unfinished/);
+  assert.match(auditedPrompts[3]!, /60 model turns completed.*60 model turns remain.*turn 120/);
+  assert.doesNotMatch(auditedPrompts[3]!, /clearly report what remains unfinished/);
   assert.equal(asked.length, 2);
   assert.equal(calls(), 120);
 });

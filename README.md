@@ -42,7 +42,8 @@ above its automatic allowance threshold ask you for approval. An explicitly save
   the agent automatically compacts at 80% projected usage. `/compact` can also
   run manually. Compaction keeps recent user prompts and summarizes older
   context; a failed summary preserves the conversation and stops the run.
-- Bounded work. The agent reviews progress privately every 10 model turns.
+- Bounded work. The agent reviews progress privately every 20 model turns,
+  with an extra warning when 10 turns remain before a boundary.
   Interactive runs ask to continue after each 60-turn segment. Print mode
   stops at its configured turn or time limit.
 
