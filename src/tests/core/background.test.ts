@@ -54,7 +54,7 @@ test('a background shell overlaps another command and preserves private logs aft
   const f = fixture(t);
   const running = await f.run('echo $$ > first.pid; echo "$HOME" > home.path; printf started; while ! test -f release; do sleep 0.01; done; printf finished');
   assert.ok('task' in running);
-  await waitFor(() => fs.existsSync(path.join(f.root, 'first.pid')));
+  await waitFor(() => fs.readFileSync(running.task.logPath, 'utf8') === 'started');
   const page = await f.tasks.output(running.task.id);
   assert.equal(page.task.status, 'running');
   assert.equal(page.output, 'started');
