@@ -30,7 +30,7 @@
   },
   "scripts": {
     "clean": "node --eval \"import {rmSync} from 'node:fs'; rmSync('dist', {recursive: true, force: true})\"",
-    "build": "npm run clean && tsc",
+    "build": "npm run clean && tsc && node src/build/embed-system-prompt.mjs",
     "prepare": "npm run build",
     "dev": "npm run build && node dist/cli.js",
     "start": "node dist/cli.js",

@@ -1,21 +1,39 @@
 import assert from 'node:assert/strict';
+import {copyFile, mkdtemp, readFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import test from 'node:test';
+import {pathToFileURL} from 'node:url';
 import {sandboxInstructions, systemPrompt} from '../../core/prompt.js';
 
-test('the base prompt keeps concise guidance with repository and permission requirements', () => {
+test('the build embeds the exact Markdown prompt without runtime source files', async (t) => {
+  const source = await readFile(new URL('../../../src/core/system-prompt.md', import.meta.url), 'utf8');
+  const directory = await mkdtemp(join(tmpdir(), 'acc-embedded-prompt-'));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const standalone = join(directory, 'system-prompt.mjs');
+  await copyFile(new URL('../../core/system-prompt.js', import.meta.url), standalone);
+  const embedded = await import(pathToFileURL(standalone).href);
+
+  assert.equal(embedded.default, source);
+  assert.ok(systemPrompt(process.cwd()).startsWith(`${source}\n\nSandbox:`));
+});
+
+test('the base prompt uses reusable guidance with accurate ACC runtime instructions', () => {
   const prompt = systemPrompt(process.cwd());
 
-  assert.match(prompt, /You are a coding agent/);
-  assert.match(prompt, /Follow applicable repository instructions/);
-  assert.match(prompt, /Preserve unrelated existing changes/);
-  assert.match(prompt, /Keep the implementation focused on the requested outcome/);
-  assert.match(prompt, /Preserve existing behavior unless the task calls for a change/);
-  assert.match(prompt, /Add features, options, or fallback behavior only when the task or repository shows a concrete need/);
+  assert.match(prompt, /You are an interactive agent that helps users with software engineering tasks/);
+  assert.match(prompt, /denied by the user or by ACC's permission checks/);
   assert.match(prompt, /Never use another tool to bypass a permission denial/);
+  assert.match(prompt, /Prefer the dedicated file\/search tools/);
+  assert.match(prompt, /ACC executes tool calls sequentially/);
   assert.match(prompt, /<environment>/);
   assert.ok(prompt.includes(`working directory: ${process.cwd()}`));
-  assert.doesNotMatch(prompt, /Understand the task:|Work:|Use tools:|Verify and finish:/);
-  assert.doesNotMatch(prompt, /Group independent|Before starting tool work|single-run|post-fix verification|Keep your final answer/);
+  assert.match(prompt, /^platform: .+$/m);
+  assert.match(prompt, /^git repository: (yes|no)$/m);
+  assert.doesNotMatch(prompt, /^files:$/m);
+  assert.doesNotMatch(prompt, /Runtime preview|\/TASK_WORKING_DIRECTORY|<configured maxSteps>|<task operating system/);
+  assert.doesNotMatch(prompt, /Follow applicable repository instructions|Preserve unrelated existing changes|Keep the implementation focused|Preserve existing behavior|Add features, options, or fallbacks|Once a candidate solution|Repeat or expand checks/);
+  assert.doesNotMatch(prompt, /Anthropic|Claude|Skill|MEMORY\.md|capture-config|<total_tokens>|Hooks may intercept|can run in parallel|it's clickable/);
 });
 
 test('the prompt describes only the selected sandbox mode', () => {
@@ -28,7 +46,7 @@ test('the prompt describes only the selected sandbox mode', () => {
   assert.match(on, /never falls back to Off/);
 });
 
-test('the base prompt is shared across permission modes and leaves tool preferences to descriptions', () => {
+test('the base prompt is shared across permission modes', () => {
   const prompt = systemPrompt(process.cwd(), 'auto');
 
   assert.equal(systemPrompt(process.cwd()), prompt);

@@ -3,50 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {DEFAULT_SANDBOX, type SandboxMode} from './sandbox/mode.js';
 import {DEFAULT_MODE, type Mode} from './permission/mode.js';
-
-const SKIP = new Set(['.git', 'node_modules', 'dist', 'build', '__pycache__', '.venv']);
-const MAX_ENTRIES = 120;
-const MAX_DEPTH = 2;
-
-const INSTRUCTIONS = `You are a coding agent working on the user's machine.
-
-Follow applicable repository instructions.
-Preserve unrelated existing changes.
-Keep the implementation focused on the requested outcome.
-Preserve existing behavior unless the task calls for a change.
-Add features, options, or fallback behavior only when the task or repository shows a concrete need.
-Never use another tool to bypass a permission denial.
-
-Once a candidate solution passes a relevant check, apply it to the target and verify the result.
-Repeat or expand checks only to resolve a specific remaining uncertainty.`;
-
-export function fileTree(root: string): string {
-  const lines: string[] = [];
-  const walk = (directory: string, prefix: string, depth: number) => {
-    if (depth > MAX_DEPTH || lines.length >= MAX_ENTRIES) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(directory, {withFileTypes: true});
-    } catch {
-      return;
-    }
-    const visible = entries
-      .filter((entry) => !entry.name.startsWith('.') && !SKIP.has(entry.name))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of visible) {
-      if (lines.length >= MAX_ENTRIES) {
-        lines.push(`${prefix}…`);
-        return;
-      }
-      lines.push(`${prefix}${entry.name}${entry.isDirectory() ? '/' : ''}`);
-      if (entry.isDirectory()) {
-        walk(path.join(directory, entry.name), `${prefix}  `, depth + 1);
-      }
-    }
-  };
-  walk(root, '', 0);
-  return lines.join('\n');
-}
+import INSTRUCTIONS from './system-prompt.js';
 
 export function environmentBlock(root: string): string {
   const isRepo = fs.existsSync(path.join(root, '.git'));
@@ -55,9 +12,6 @@ export function environmentBlock(root: string): string {
     `working directory: ${root}`,
     `platform: ${os.platform()} ${os.release()}`,
     `git repository: ${isRepo ? 'yes' : 'no'}`,
-    '',
-    'files:',
-    fileTree(root),
     '</environment>',
   ].join('\n');
 }
