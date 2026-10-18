@@ -1,3 +1,19 @@
+# Development priorities
+
+- Prioritize ACC's ability to complete real tasks correctly and efficiently.
+  Evaluate changes using task success rate, agent execution time, token usage,
+  API cost, and consistency across repeated runs.
+- Use evaluation evidence to choose improvements. Do not assume lower token
+  usage or shorter execution time is an improvement when task success declines.
+- Give interface polish lower priority unless it addresses a concrete usability
+  problem. Preserve functional behavior such as cancellation, permissions, and
+  recovery.
+- Keep benchmark comparisons tied to recorded source versions and settings. Do
+  not make task-specific changes solely to improve benchmark scores.
+- Keep actual scores, run counts, budgets, and evaluation plans in separate
+  records rather than in this file. These priorities do not authorize evaluation
+  runs or paid API calls; follow the approval requirements below.
+
 # Public repository safety
 
 - This repository is public. Never put credentials, private transcripts, or
@@ -38,30 +54,19 @@
 
 # End-to-end testing
 
-- After relevant unit checks pass, automatically delegate a focused real test
-  to the `acc-e2e` subagent in this chat when a feature, fix, or refactor affects
-  the agent loop or its connected behavior. Do this before reporting completion.
-  This includes tools, permissions, sandboxing, streaming, cancellation,
-  subagents, session persistence, rewind, and terminal interaction with the loop.
-- Give the subagent the change, expected behavior, and relevant source locations.
-  Start with one small task that reaches the changed behavior. For a fix,
-  exercise the original failure. Add another scenario only when needed; do not
-  turn this into a broad regression run.
-- Run the real acc CLI in a temporary workspace with only the needed files and
-  isolated app state. Observe the changed step and check the result; a final
-  answer alone does not prove that the changed behavior ran.
-- Run key-free checks without extra approval. Before any live API work, present
-  the scenario, provider/model, permission mode, overrides, estimated cost, and
-  spending limit. Obtain approval unless existing approval already covers it.
-- Use the spending limit in `.codex/agents/acc-e2e.toml` for the whole verification
-  task. Pass accumulated spend to each subagent invocation, including retries
-  and reruns after fixes. Obtain approval before increasing the limit.
-- The subagent reports evidence and cleans up; the parent fixes failures caused
-  by the change and reruns affected checks within the approved scope. Report
-  failures, skipped checks, and verification limits.
-- Save transcripts and selected evidence under `~/.acc/e2e-runs/`, with one
-  folder per verification task. Pass that folder to retries so each attempt
-  stays together. Link the saved transcript in the final report. Clean up the
-  temporary environment after saving; never automatically delete saved results.
-- Unit tests alone are enough for isolated internal changes they fully cover.
-  Documentation-only and wording-only changes normally do not need real tests.
+- When the user asks only to commit existing changes, do not rerun tests or
+  trigger a testing subagent unless the user explicitly requests testing.
+  Use existing verification results and report known gaps. Required secret and
+  sensitive-data checks still apply.
+- When implementing changes to the agent loop or its connected behavior,
+  delegate a focused real test to `acc-e2e` after relevant unit checks pass and
+  before reporting completion. Give it the change, expected behavior, and source
+  locations. Unit tests suffice for isolated internal changes they fully cover;
+  documentation-only and wording-only changes normally need no real tests.
+- Obtain approval for paid tests under the API rules above. Pass the approved
+  scope, accumulated spend, remaining budget, and any existing evidence folder
+  to the subagent. Use `.codex/agents/acc-e2e.toml` for the spending limit and
+  detailed test procedure; retries do not reset the budget.
+- Fix failures caused by the change and rerun affected checks within the
+  approved scope. Report failures, skipped or blocked checks, and verification
+  limits, with a link to the saved transcript.
