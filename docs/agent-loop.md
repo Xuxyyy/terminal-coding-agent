@@ -190,16 +190,30 @@ ordinary rate limits, and daily limits. Other errors retain their original messa
 Status is read from the error or its cause so a `StreamFailure` can still explain
 the underlying failure.
 
-Each `streamStep` attempt has a 120-second deadline. It aborts the request and
-reports `ModelTimeoutError` if the model does not finish. This deadline is separate
-from print mode's overall `--max-seconds` limit.
+Each `streamStep` attempt allows 120 seconds until meaningful output starts,
+then 60 seconds without meaningful output. Nonempty reasoning, answer text,
+and tool-call fragments reset the idle timer; empty chunks do not. A healthy
+stream can exceed 120 seconds overall. A valid completion ends generation,
+with a bounded 50ms opportunity to collect its usage trailer; missing usage is
+recorded as unavailable.
 
-`withRetry` retries supported connection errors, non-daily `429` responses, and
-`5xx` responses only before output is emitted. Three retries follow the first
-attempt, with 1s, 2s, and 4s backoff. Daily-limit responses, ordinary request or
-credential errors, cancellation, and `ModelTimeoutError` are not retried. After
-partial output, the loop reports the failure and preserves the partial text.
-The provider SDKs' own retries are disabled, leaving this policy in ACC.
+ACC owns up to three retries after the first attempt for temporary connection,
+overload, timeout, and rate-limit failures. Backoff is interruptible and honors
+provider waiting instructions. Authentication, credit exhaustion, unsupported
+configuration, cancellation, and the trial deadline do not trigger retries.
+The provider SDK's own retries remain disabled.
+
+Tools execute only after a complete response validates. Failed tool generations
+are recorded and retried from the previous completed conversation state; earlier
+tools never replay automatically. Partial text is marked incomplete and may use
+one automatic continuation per agent invocation. The allowance survives tool
+steps and cannot reset. Context-limit recovery may compact once per pending
+step without resetting its transport attempt counter. Compaction retains failed
+call/result pairs and uncertain effects.
+
+Tool failures return through normal tool messages. Their execution state says
+whether execution never started, returned a known result, or may have produced
+uncertain effects. The model decides what to inspect or repair next.
 
 ## Context pressure
 

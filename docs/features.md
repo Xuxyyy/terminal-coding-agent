@@ -179,11 +179,14 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 - Normal turns get a private progress review every 20 model turns, plus a warning
   with 10 turns left, and ask to keep going after 60. Each approval grants another
   bounded segment. Reviews are appended to conversation history and saved.
-- Before any output, supported connection errors, non-daily 429 responses, and
-  5xx responses get up to three retries after the first attempt, with 1s/2s/4s
-  backoff. Each attempt has a 120-second deadline. Daily limits, cancellation,
-  and deadline failures are not retried. After output, a failure is reported
-  without replaying the partial answer.
+- Temporary request failures allow three retries with interruptible backoff and
+  provider waiting instructions. Attempts use a 120-second startup timeout and a
+  60-second idle timeout after meaningful reasoning, text, or tool fragments.
+  Healthy streams may exceed 120 seconds overall. Authentication, exhausted
+  credits, unsupported settings, and cancellation stop explicitly.
+- Incomplete tool generations never execute. Retrying requests does not replay
+  completed tools. Partial text receives one automatic continuation per agent
+  invocation. Failed tools return their output and execution state to the model.
 - A failed session write warns once and the run continues.
 
 ## Print mode

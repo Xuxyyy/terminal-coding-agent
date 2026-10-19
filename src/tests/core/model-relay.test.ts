@@ -130,7 +130,7 @@ test('trial quotas and cleanup revoke the temporary model capability', async () 
     bindHost: '127.0.0.1', invoke: async () => answer});
   const send = () => fetch(endpoint(relay), {method: 'POST', body: JSON.stringify(request())});
   assert.equal((await send()).status, 200);
-  assert.equal((await send()).status, 429);
+  assert.equal((await send()).status, 403);
   await relay.close();
   await assert.rejects(send());
   await relay.close();
@@ -156,7 +156,7 @@ test('provider stream error events are sanitized too', async () => {
     const response = await fetch(endpoint(relay), {method: 'POST', body: JSON.stringify({...request(), stream: true})});
     const text = await response.text();
     assert.equal(text.includes(sentinel), false);
-    assert.ok(text.includes('"error":true'));
+    assert.ok(text.includes('"error":{'));
   } finally { await relay.close(); }
 });
 
@@ -201,5 +201,38 @@ test('relay access expires even if its owner forgets to close it', async () => {
   try {
     await new Promise((resolve) => setTimeout(resolve, 1100));
     await assert.rejects(fetch(endpoint(relay), {method: 'POST', body: JSON.stringify(request())}));
+  } finally { await relay.close(); }
+});
+
+test('relay preserves safe failure categories, provider delays, and request correlation', async () => {
+  for (const [status, category] of [[401, 'authentication'], [402, 'quota'], [429, 'rate_limit'], [503, 'temporary']] as const) {
+    let metadata: unknown;
+    const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
+      invoke: async (_body, _signal, info) => {
+        metadata = info;
+        throw Object.assign(new Error(sentinel), {status, headers: {'retry-after': '7'}});
+      }});
+    try {
+      const invoke = relayInvoke(endpoint(relay));
+      await assert.rejects(invoke(request(), undefined, {requestId: 'request-1', agentId: 'child-1', attempt: 2}), (error: unknown) => {
+        const value = error as Error & {category: string; status: number; headers: Record<string, string>};
+        assert.equal(value.category, category);
+        assert.equal(value.status, status);
+        assert.equal(value.headers['retry-after-ms'], '7000');
+        assert.equal(value.message.includes(sentinel), false);
+        return true;
+      });
+      assert.deepEqual(metadata, {requestId: 'request-1', agentId: 'child-1', attempt: 2});
+    } finally { await relay.close(); }
+  }
+});
+
+test('the relay cannot extend an already expired trial deadline', async () => {
+  let calls = 0;
+  const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 30, deadlineMs: Date.now() - 1,
+    bindHost: '127.0.0.1', invoke: async () => { calls++; return answer; }});
+  try {
+    await assert.rejects(relayInvoke(endpoint(relay))(request()));
+    assert.equal(calls, 0);
   } finally { await relay.close(); }
 });

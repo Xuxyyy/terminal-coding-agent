@@ -99,6 +99,7 @@ test('model usage is numbered and accumulated in provider units', () => {
   });
 
   assert.deepEqual(tokenUsage, {
+    attempts: [], complete: true,
     requests: [
       {
         request: 1,

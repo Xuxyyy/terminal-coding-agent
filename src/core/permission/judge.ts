@@ -1,3 +1,7 @@
+import {metadataHeaders} from '../deepseek.js';
+import {randomUUID} from 'node:crypto';
+import {withRetry, errorCategory} from '../retry.js';
+import type {AgentEvent} from '../host.js';
 import type OpenAI from 'openai';
 import {modelTokenUsage, type ModelChoice} from '../client.js';
 import type {ModelTokenUsage} from '../host.js';
@@ -164,14 +168,51 @@ export async function askJudge(
   messages: OpenAI.ChatCompletionMessageParam[],
   signal: AbortSignal,
   onModelUsage?: (usage: ModelTokenUsage) => void,
+  onEvent?: (event: AgentEvent) => void,
+  agentId = 'judge',
 ): Promise<'allow' | 'ask'> {
+  const requestId = randomUUID();
+  let attempt = 0;
   try {
-    const reply = await choice.client.chat.completions.create(
-      {model: choice.model, messages, stream: false, max_tokens: JUDGE_MAX_TOKENS},
-      {signal: AbortSignal.any([signal, AbortSignal.timeout(JUDGE_TIMEOUT)])},
-    );
-    if (reply.usage) onModelUsage?.(modelTokenUsage(reply.usage));
-    return judgeVerdict(reply.choices[0]?.message?.content ?? '');
+    return await withRetry(async () => {
+      attempt += 1;
+      const startedAt = new Date().toISOString();
+      const started = performance.now();
+      const timeout = AbortSignal.timeout(JUDGE_TIMEOUT);
+      const stop = AbortSignal.any([signal, timeout]);
+      let usage: ModelTokenUsage | null = null;
+      let failure: unknown;
+      let abort: () => void = () => {};
+      onEvent?.({type: 'model_attempt_start', requestId, agentId, attempt, startedAt});
+      try {
+        const interrupted = new Promise<never>((_resolve, reject) => {
+          abort = () => reject(timeout.aborted && !signal.aborted
+            ? Object.assign(new Error('Permission judge timeout'), {category: 'timeout'})
+            : signal.reason ?? new DOMException('Interrupted', 'AbortError'));
+          stop.addEventListener('abort', abort, {once: true});
+          if (stop.aborted) abort();
+        });
+        const reply = await Promise.race([choice.client.chat.completions.create(
+          {model: choice.model, messages, stream: false, max_tokens: JUDGE_MAX_TOKENS},
+          {signal: stop, headers: metadataHeaders({requestId, agentId, attempt})},
+        ), interrupted]);
+        if (reply.usage) {
+          usage = modelTokenUsage(reply.usage);
+          onModelUsage?.(usage);
+        }
+        return judgeVerdict(reply.choices[0]?.message?.content ?? '');
+      } catch (error) {
+        failure = timeout.aborted && !signal.aborted ? Object.assign(new Error('Permission judge timeout'), {category: 'timeout'}) : error;
+        throw failure;
+      } finally {
+        stop.removeEventListener('abort', abort);
+        onEvent?.({type: 'model_attempt', evidence: {
+          requestId, agentId, attempt, startedAt, elapsedMs: performance.now() - started,
+          outcome: failure ? 'failed' : 'completed', usage,
+          ...(failure ? {category: errorCategory(failure)} : {}),
+        }});
+      }
+    }, {signal, onRetry: (next, total, delayMs) => onEvent?.({type: 'model_retry', attempt: next, total, delayMs, requestId})});
   } catch {
     return 'ask';
   }

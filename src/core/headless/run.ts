@@ -1,3 +1,4 @@
+import {sourceVersion} from '../source-version.js';
 import type {SandboxMode} from '../sandbox/mode.js';
 import {modelSettings, type ModelSettings, type ModelChoice} from '../client.js';
 import type {AgentEvent, Usage} from '../host.js';
@@ -15,10 +16,11 @@ import {
   type RecordedPrompt,
 } from './host.js';
 
-export type StopReason = 'done' | 'denied' | 'timeout' | 'step_limit' | 'error';
+export type StopReason = 'done' | 'denied' | 'timeout' | 'step_limit' | 'error' | 'cancelled';
 
 export type HeadlessResult = {
   text: string;
+  execution?: {startedAt: string; elapsedMs: number; deadlineMs: number; permissionMode: string; policy: HeadlessPolicy; sandbox: SandboxMode; maxSteps: number; source: ReturnType<typeof sourceVersion>};
   modelSettings?: ModelSettings;
   events: AgentEvent[];
   prompts: RecordedPrompt[];
@@ -37,7 +39,15 @@ export async function runHeadless(options: {
   maxSteps?: number;
   sandbox?: SandboxMode;
   signal?: AbortSignal;
+  deadlineMs?: number;
+  onEvent?: (event: AgentEvent) => void;
 }): Promise<HeadlessResult> {
+  const startedAt = new Date().toISOString();
+  const started = performance.now();
+  if (!Number.isFinite(options.maxSeconds)) throw new Error('maxSeconds must be finite');
+  if (options.deadlineMs !== undefined && !Number.isFinite(options.deadlineMs)) throw new Error('deadlineMs must be finite');
+  const deadlineMs = Math.min(Date.now() + options.maxSeconds * 1000, options.deadlineMs ?? Infinity);
+  const monotonicDeadline = performance.now() + deadlineMs - Date.now();
   const maxSteps = validateMaxSteps(options.maxSteps ?? DEFAULT_MAX_STEPS);
   const session = createSession(
     options.root,
@@ -50,25 +60,29 @@ export async function runHeadless(options: {
   addTask(session, options.task);
 
   const controller = new AbortController();
-  const interrupt = () => controller.abort();
+  const interrupt = () => controller.abort(options.signal?.reason ?? new DOMException('Headless run interrupted', 'AbortError'));
   options.signal?.addEventListener('abort', interrupt, {once: true});
   if (options.signal?.aborted) interrupt();
   const {host, events, prompts, tokenUsage} = createHeadlessHost({
     policy: options.policy,
     signal: controller.signal,
+    deadlineMs, maxSteps, onEvent: options.onEvent,
   });
 
   let timedOut = false;
   let timer: NodeJS.Timeout | null = null;
-  if (options.maxSeconds <= 0) {
+  const remainingMs = monotonicDeadline - performance.now();
+  if (remainingMs <= 0) {
     timedOut = true;
-    controller.abort();
+    controller.abort(new DOMException('Trial deadline reached', 'TimeoutError'));
   } else {
     timer = setTimeout(() => {
       timedOut = true;
-      controller.abort();
-    }, options.maxSeconds * 1000);
+      controller.abort(new DOMException('Trial deadline reached', 'TimeoutError'));
+    }, Math.min(remainingMs, 2_147_483_647));
   }
+
+  host.onEvent({type: 'run_start', schemaVersion: 2, settings: {startedAt, deadlineMs, permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion(), model: modelSettings(options.choice)}});
 
   let outcome: 'step_limit' | void;
   const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
@@ -91,13 +105,19 @@ export async function runHeadless(options: {
   let error: string | undefined;
   for (const event of events) {
     if (event.type === 'text_delta') text += event.text;
+    if (event.type === 'model_attempt' && event.evidence.agentId === 'main' && event.evidence.outcome === 'failed' && event.evidence.partial?.toolCalls.length && event.evidence.partial.content) {
+      text = text.slice(0, Math.max(0, text.length - event.evidence.partial.content.length));
+    }
     if (event.type === 'error' && error === undefined) error = event.message;
   }
 
   const denied = prompts.some((prompt) => prompt.decision === 'deny');
   if (options.signal?.aborted) error ??= 'headless run interrupted';
+  if (timedOut) error ??= 'trial deadline reached';
   const stopped: StopReason = timedOut
     ? 'timeout'
+    : options.signal?.aborted
+      ? 'cancelled'
     : outcome === 'step_limit'
       ? 'step_limit'
       : denied
@@ -108,6 +128,7 @@ export async function runHeadless(options: {
 
   return {
     text,
+    execution: {startedAt, elapsedMs: performance.now() - started, deadlineMs, permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion()},
     modelSettings: modelSettings(options.choice),
     events,
     prompts,

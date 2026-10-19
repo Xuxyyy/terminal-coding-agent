@@ -5,6 +5,7 @@ import {createInterface} from 'node:readline';
 import {pathToFileURL} from 'node:url';
 import {z} from 'zod';
 import {deepseekInvoke, type Invoke} from './deepseek.js';
+import {errorCategory, retryDelay, rootError} from './retry.js';
 import {DEFAULT_MODEL} from './models.js';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -46,6 +47,7 @@ export async function startModelRelay(options: {
   apiKey: string;
   model: string;
   maxSeconds: number;
+  deadlineMs?: number;
   maxRequests?: number;
   bindHost?: string;
   invoke?: Invoke;
@@ -64,21 +66,32 @@ export async function startModelRelay(options: {
   const controllers = new Set<AbortController>();
   let requests = 0;
   let closed = false;
-  const deadline = Date.now() + options.maxSeconds * 1000;
+  const duration = Math.min(options.maxSeconds * 1000, (options.deadlineMs ?? Infinity) - Date.now());
+  const deadline = performance.now() + duration;
   const server = createServer(async (request, response) => {
     response.setHeader('cache-control', 'no-store');
     if (request.method !== 'POST' || request.url !== path) {
       response.writeHead(404).end();
       return;
     }
-    if (closed || Date.now() >= deadline || requests >= maxRequests || controllers.size >= 4) {
-      response.writeHead(429).end();
+    if (closed || performance.now() >= deadline || requests >= maxRequests || controllers.size >= 4) {
+      const category = controllers.size >= 4 ? 'temporary' : 'quota';
+      response.writeHead(category === 'temporary' ? 503 : 403, {'content-type': 'application/json'}).end(JSON.stringify({category}));
       return;
     }
     requests += 1;
     const controller = new AbortController();
     controllers.add(controller);
-    const timer = setTimeout(() => controller.abort(), Math.min(120_000, deadline - Date.now()));
+    let timer = setTimeout(() => controller.abort(), Math.min(120_000, deadline - performance.now()));
+    const progress = (event: unknown) => {
+      const chunk = event as {choices?: {delta?: {content?: string; reasoning_content?: string; tool_calls?: {id?: string; function?: {name?: string; arguments?: string}}[]}; finish_reason?: string}[]};
+      const choice = chunk?.choices?.[0];
+      const delta = choice?.delta;
+      if (choice?.finish_reason || delta?.content || delta?.reasoning_content || delta?.tool_calls?.some((part) => part.id || part.function?.name || part.function?.arguments)) {
+        clearTimeout(timer);
+        timer = setTimeout(() => controller.abort(), Math.min(60_000, deadline - performance.now()));
+      }
+    };
     response.on('close', () => controller.abort());
     try {
       const chunks: Buffer[] = [];
@@ -103,7 +116,8 @@ export async function startModelRelay(options: {
         response.writeHead(400).end();
         return;
       }
-      const result = await invoke(parsed.data, controller.signal);
+      const header = (name: string) => { const value = request.headers[`x-acc-${name}`]; return typeof value === 'string' && /^[a-zA-Z0-9_:/.-]{1,128}$/.test(value) ? value : undefined; };
+      const result = await invoke(parsed.data, controller.signal, {requestId: header('requestid'), agentId: header('agentid'), attempt: Number(header('attempt')) || undefined});
       if (!parsed.data.stream) {
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify(result));
@@ -112,6 +126,7 @@ export async function startModelRelay(options: {
       response.setHeader('content-type', 'application/x-ndjson');
       for await (const event of result as AsyncIterable<unknown>) {
         if (controller.signal.aborted) break;
+        progress(event);
         if (event && typeof event === 'object' && 'event_type' in event && event.event_type === 'error') {
           throw new Error('provider stream failed');
         }
@@ -121,9 +136,12 @@ export async function startModelRelay(options: {
       }
       if (!controller.signal.aborted) response.end('{"done":true}\n');
       else response.destroy();
-    } catch {
-      if (!response.headersSent) response.writeHead(502).end();
-      else if (!response.destroyed) response.end('{"error":true}\n');
+    } catch (error) {
+      const root = rootError(error);
+      const category = controller.signal.aborted ? 'timeout' : errorCategory(error);
+      const safe = {category, ...(typeof root.status === 'number' ? {status: root.status} : {}), retryAfterMs: retryDelay(error, 0)};
+      if (!response.headersSent) response.writeHead(502, {'content-type': 'application/json'}).end(JSON.stringify(safe));
+      else if (!response.destroyed) response.end(JSON.stringify({error: safe}) + '\n');
     } finally {
       clearTimeout(timer);
       controllers.delete(controller);
@@ -148,7 +166,7 @@ export async function startModelRelay(options: {
     });
     return closePromise;
   };
-  const expiry = setTimeout(() => { void close(); }, options.maxSeconds * 1000);
+  const expiry = setTimeout(() => { void close(); }, Math.max(0, duration));
   return {port: address.port, path, close};
 }
 

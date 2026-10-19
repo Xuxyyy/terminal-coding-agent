@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import type {ReasoningEffort} from '../models.js';
 import {agentsOf, type AgentDefinition} from '../agents.js';
@@ -53,12 +54,15 @@ export function childHost(host: Host): {host: Host; events: AgentEvent[]} {
   const events: AgentEvent[] = [];
   return {
     host: {
+      ...host,
+      agentId: randomUUID(),
       signal: host.signal,
       ...(host.onModelUsage
         ? {onModelUsage: (usage) => host.onModelUsage?.(usage)}
         : {}),
       onEvent(event) {
         events.push(event);
+        if (['model_attempt', 'model_attempt_start', 'model_retry', 'recovery', 'response_incomplete'].includes(event.type)) host.onDiagnostic?.(event);
       },
       confirm(request) {
         return host.confirm({...request, reason: `sub-agent: ${request.reason}`});

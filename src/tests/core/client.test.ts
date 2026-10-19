@@ -161,7 +161,7 @@ test('a dropped connection after output is not retried', async () => {
   assert.deepEqual(texts(events), ['half']);
 });
 
-test('a tool call that has started counts as output', async () => {
+test('a failed partial tool call is discarded and the request is retried', async () => {
   const {choice, calls} = fakeModel((nth) =>
     nth === 1
       ? streamOf(toolCallChunk('c1', 'read_file', '{"path":'), connectionError())
@@ -169,12 +169,11 @@ test('a tool call that has started counts as output', async () => {
   );
   const {host} = fakeHost();
 
-  const failure = await failureFrom(streamStep(choice, [], [], host, fast));
+  const response = await streamStep(choice, [], [], host, fast);
 
-  assert.equal(calls(), 1);
-  assert.deepEqual(failure.partial.toolCalls, [
-    {id: 'c1', name: 'read_file', args: '{"path":'},
-  ]);
+  assert.equal(calls(), 2);
+  assert.equal(response.content, 'whole');
+  assert.deepEqual(response.toolCalls, []);
 });
 
 test('a bad request is not retried', async () => {

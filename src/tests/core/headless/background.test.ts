@@ -106,7 +106,7 @@ test('a completion after a reply resumes the agent once and exposes failed outpu
   assert.equal(fs.readFileSync(log, 'utf8'), 'failed-test');
   assert.equal(log.startsWith(path.join(process.env.ACC_HOME!, 'runs')), true);
   const final = JSON.parse(jsonLines(result).at(-1)!);
-  assert.equal(final.schemaVersion, 1);
+  assert.equal(final.schemaVersion, 2);
   assert.equal(final.message, result.text);
 });
 
@@ -165,7 +165,7 @@ test('external cancellation stops process groups and does not wake the agent aga
     return reply('Pending.');
   });
   const result = await runHeadless({root: work, task: 'cancel', choice, policy: 'yes', maxSeconds: 5, signal: controller.signal});
-  assert.equal(result.stopped, 'error');
+  assert.equal(result.stopped, 'cancelled');
   assert.match(result.error!, /interrupted/);
   assert.equal(count(), 2);
   for (const file of ['shell.pid', 'child.pid']) {

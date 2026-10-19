@@ -17,15 +17,16 @@ export function plainLines(result: HeadlessResult): PlainOutput {
   return {out: result.text, err};
 }
 
-export function jsonLines(result: HeadlessResult): string[] {
-  const lines = result.events.map((event) => JSON.stringify(event));
+export function jsonLines(result: HeadlessResult, includeEvents = true): string[] {
+  const lines = includeEvents ? result.events.map((event) => JSON.stringify(event)) : [];
   const steps = result.events.filter(
     (event) => event.type === 'tool_start',
   ).length;
   lines.push(
     JSON.stringify({
       kind: 'result',
-      schemaVersion: 1,
+      schemaVersion: 2,
+      ...(result.execution ? {execution: result.execution} : {}),
       ...(result.modelSettings ? {modelSettings: result.modelSettings} : {}),
       stopped: result.stopped,
       message: result.text,

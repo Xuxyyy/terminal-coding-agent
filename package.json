@@ -2,7 +2,7 @@
   "name": "terminal-coding-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "acc — a small terminal coding agent that reads, edits, and runs code in the current directory.",
+  "description": "acc \u2014 a small terminal coding agent that reads, edits, and runs code in the current directory.",
   "license": "MIT",
   "author": "Xuxyyy",
   "repository": {
@@ -30,7 +30,7 @@
   },
   "scripts": {
     "clean": "node --eval \"import {rmSync} from 'node:fs'; rmSync('dist', {recursive: true, force: true})\"",
-    "build": "npm run clean && tsc && node src/build/embed-system-prompt.mjs",
+    "build": "npm run clean && tsc && node src/build/embed-system-prompt.mjs && node src/build/source-version.mjs",
     "prepare": "npm run build",
     "dev": "npm run build && node dist/cli.js",
     "start": "node dist/cli.js",

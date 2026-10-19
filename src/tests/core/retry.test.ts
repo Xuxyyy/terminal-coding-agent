@@ -121,7 +121,7 @@ test('an interrupt beats a retry', async () => {
         controller.abort();
       },
     }),
-    /status 500/,
+    /aborted/i,
   );
 
   assert.equal(attempt.calls(), 1);
@@ -133,8 +133,8 @@ test('a signal already aborted stops before the first retry', async () => {
 
   await assert.rejects(
     withRetry(attempt.run, {signal: AbortSignal.abort(), sleep: noSleep}),
-    /status 500/,
+    /aborted/i,
   );
 
-  assert.equal(attempt.calls(), 1);
+  assert.equal(attempt.calls(), 0);
 });

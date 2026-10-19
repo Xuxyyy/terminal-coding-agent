@@ -10,6 +10,7 @@ export type CliOptions = {
   json: boolean;
   yes: boolean;
   maxSeconds: number;
+  deadlineMs?: number;
   maxSteps: number;
   version: boolean;
   sandbox: SandboxMode;
@@ -37,6 +38,7 @@ export function parseArgs(
   args: string[],
   cwd: string = process.cwd(),
 ): CliOptions {
+  let deadlineMs: number | undefined;
   let print: string | null = null;
   let json = false;
   let yes = false;
@@ -80,6 +82,11 @@ export function parseArgs(
       maxStepsGiven = true;
       continue;
     }
+    if (arg === '--deadline-ms') {
+      deadlineMs = Number(valueFor(args, ++i, arg));
+      if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) throw new Error('--deadline-ms needs a positive Unix timestamp in milliseconds');
+      continue;
+    }
     if (arg === '--max-seconds') {
       i += 1;
       const raw = valueFor(args, i, arg);
@@ -105,6 +112,7 @@ export function parseArgs(
       json ? '--json' : null,
       yes ? '--yes' : null,
       maxSecondsGiven ? '--max-seconds' : null,
+      deadlineMs !== undefined ? '--deadline-ms' : null,
       maxStepsGiven ? '--max-steps' : null,
       sandboxGiven ? '--sandbox' : null,
     ].filter((flag): flag is string => flag !== null);
@@ -128,6 +136,7 @@ export function parseArgs(
       json ? '--json' : null,
       yes ? '--yes' : null,
       maxSecondsGiven ? '--max-seconds' : null,
+      deadlineMs !== undefined ? '--deadline-ms' : null,
       maxStepsGiven ? '--max-steps' : null,
     ].filter((flag): flag is string => flag !== null);
     if (stray.length > 0) {
@@ -146,5 +155,5 @@ export function parseArgs(
     throw new Error(`not a folder: ${workspaceRoot}`);
   }
 
-  return {workspaceRoot, print, json, yes, maxSeconds, maxSteps, version, sandbox};
+  return {workspaceRoot, print, json, yes, maxSeconds, maxSteps, version, sandbox, ...(deadlineMs !== undefined ? {deadlineMs} : {})};
 }

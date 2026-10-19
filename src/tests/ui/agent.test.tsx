@@ -666,11 +666,12 @@ test('auto compaction shows one notice, hides the summary, and keeps going', asy
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['user', 'assistant', 'assistant'],
+    ['user', 'assistant', 'assistant', 'tool', 'assistant'],
   );
   assert.equal(stored.messages[0]!.content, 'fix the cart');
   assert.ok(String(stored.messages[1]!.content).includes(SUMMARY));
-  assert.equal(stored.messages[2]!.content, 'done');
+  assert.equal(stored.messages.at(-1)!.content, 'done');
+  assert.match(String(stored.messages[3]!.content), /Error:/);
   assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
 });
 

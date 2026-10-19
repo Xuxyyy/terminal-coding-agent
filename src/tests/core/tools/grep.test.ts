@@ -139,7 +139,7 @@ test('a path that does not exist is an error, not no matches', async () => {
 
   const {text} = await search(root, {pattern: 'widget', path: 'nowhere'});
 
-  assert.equal(text, 'Error: path not found: nowhere');
+  assert.equal(text, 'Error: path not found: nowhere\n[execution: known_result; the result is known; earlier actions may still have produced effects]');
   assert.doesNotMatch(text, /no matches/);
 });
 

@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
-import {deepseekClient, DEEPSEEK_BASE_URL} from './deepseek.js';
+import {randomUUID} from 'node:crypto';
+import {deepseekClient, DEEPSEEK_BASE_URL, metadataHeaders, type RequestMetadata} from './deepseek.js';
 import {loadEnvFiles} from './env.js';
 import {relayInvoke} from './model-relay-client.js';
 import type {Host, ModelTokenUsage, Usage} from './host.js';
@@ -14,7 +15,7 @@ import {
   MODEL_IDS,
   PROVIDERS,
 } from './models.js';
-import {withRetry, type RetryOptions} from './retry.js';
+import {withRetry, isRetryable, errorCategory, type RetryOptions} from './retry.js';
 import {modelOf, reasoningOf} from './settings.js';
 import type {ToolDefinition} from './tools/registry.js';
 
@@ -48,10 +49,11 @@ export function chooseReasoning(
 
 export const MAX_OUTPUT_TOKENS = 32_000;
 export const MODEL_REQUEST_TIMEOUT_MS = 120_000;
+export const MODEL_IDLE_TIMEOUT_MS = 60_000;
 
 export class ModelTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`The model did not finish within ${Math.ceil(timeoutMs / 1_000)} seconds`);
+  constructor(timeoutMs: number, readonly phase: 'startup' | 'idle' = 'startup') {
+    super(`Model ${phase} timeout after ${Math.ceil(timeoutMs / 1_000)} seconds without meaningful output`);
     this.name = 'ModelTimeoutError';
   }
 }
@@ -72,6 +74,8 @@ export type ModelSettings = {
   thinking: 'enabled' | 'disabled';
   maxOutputTokens: number;
   requestTimeoutMs: number;
+  startupTimeoutMs: number;
+  idleTimeoutMs: number;
 };
 
 export function modelSettings(choice: Pick<ModelChoice, 'model' | 'reasoningEffort'>): ModelSettings {
@@ -84,6 +88,8 @@ export function modelSettings(choice: Pick<ModelChoice, 'model' | 'reasoningEffo
     thinking: reasoningEffort === 'none' ? 'disabled' : 'enabled',
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     requestTimeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+    startupTimeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+    idleTimeoutMs: MODEL_IDLE_TIMEOUT_MS,
   };
 }
 
@@ -129,6 +135,8 @@ export type AssistantResponse = {
   toolCalls: RawToolCall[];
   finishReason: string;
   usage: Usage;
+  reportedUsage?: ModelTokenUsage | null;
+  missingUsageFields?: string[];
 };
 
 type ProviderUsage = {
@@ -185,10 +193,15 @@ async function attemptStep(
   host: Host,
   signal: AbortSignal,
   isActive: () => boolean,
+  progress: () => void,
+  completed: () => void,
+  snapshot: (response: AssistantResponse) => void,
+  metadata: RequestMetadata,
 ): Promise<AssistantResponse> {
   let content = '';
   let reasoningContent: string | undefined;
-  let finishReason = 'stop';
+  let finishReason = '';
+  let missingUsageFields: string[] = [];
   let emitted = false;
   let providerUsage: ModelTokenUsage | null = null;
   const calls: RawToolCall[] = [];
@@ -206,7 +219,10 @@ async function attemptStep(
     toolCalls: calls.filter(Boolean),
     finishReason,
     usage,
+    reportedUsage: providerUsage,
+    missingUsageFields,
   });
+  snapshot(soFar());
 
   try {
     const stream = await choice.client.chat.completions.create(
@@ -226,7 +242,7 @@ async function attemptStep(
         stream_options: {include_usage: true},
         max_tokens: MAX_OUTPUT_TOKENS,
       } as unknown as OpenAI.ChatCompletionCreateParamsStreaming,
-      {signal},
+      {signal, headers: metadataHeaders(metadata)},
     );
     if (!isActive()) throw new DOMException('The request was interrupted', 'AbortError');
 
@@ -237,41 +253,70 @@ async function attemptStep(
         usage.completion = chunk.usage.completion_tokens ?? 0;
         usage.total = chunk.usage.total_tokens ?? 0;
         providerUsage = modelTokenUsage(chunk.usage as ProviderUsage);
+        missingUsageFields = ['prompt_tokens', 'completion_tokens', 'total_tokens'].filter((key) => typeof (chunk.usage as unknown as Record<string, unknown>)[key] !== 'number');
+        const raw = chunk.usage as ProviderUsage;
+        if (typeof raw.prompt_cache_hit_tokens !== 'number' && typeof raw.prompt_tokens_details?.cached_tokens !== 'number') missingUsageFields.push('cacheHitInputTokens');
+        snapshot(soFar());
       }
       const choiceChunk = chunk.choices[0];
       if (!choiceChunk) continue;
       if (choiceChunk.finish_reason) finishReason = choiceChunk.finish_reason;
-      const delta = choiceChunk.delta;
-      if (!delta) continue;
+      const delta = choiceChunk.delta ?? {};
       const reasoning = (delta as {reasoning_content?: unknown}).reasoning_content;
-      if (typeof reasoning === 'string') {
+      if (typeof reasoning === 'string' && reasoning.length > 0) {
+        progress();
         reasoningContent = (reasoningContent ?? '') + reasoning;
         emitted = true;
       }
       if (delta.content) {
+        progress();
         content += delta.content;
         emitted = true;
+        snapshot(soFar());
         host.onEvent({type: 'text_delta', text: delta.content});
       }
       for (const part of delta.tool_calls ?? []) {
         const call = (calls[part.index] ??= {id: '', name: '', args: ''});
-        emitted = true;
+        if (part.id || part.function?.name || part.function?.arguments) { emitted = true; progress(); }
         if (part.id) call.id = part.id;
         if (part.function?.name) call.name = part.function.name;
         if (part.function?.arguments) call.args += part.function.arguments;
       }
+      snapshot(soFar());
+      if (finishReason) {
+        validateResponse(soFar());
+        completed();
+      }
     }
+    validateResponse(soFar());
   } catch (error) {
-    if (providerUsage) host.onModelUsage?.(providerUsage);
+    snapshot(soFar());
+    if (['stop', 'tool_calls', 'length'].includes(finishReason)) {
+      try { validateResponse(soFar()); return soFar(); } catch {}
+    }
     if (!emitted) throw error;
     const message =
       (error as Error)?.message || 'the stream ended before the answer did';
     throw new StreamFailure(message, soFar(), error);
   }
 
-  if (providerUsage) host.onModelUsage?.(providerUsage);
-
   return soFar();
+}
+
+export class IncompleteResponseError extends Error {
+  readonly code = 'INCOMPLETE_RESPONSE';
+}
+
+function validateResponse(response: AssistantResponse): void {
+  const {finishReason, toolCalls} = response;
+  if (!['stop', 'tool_calls', 'length'].includes(finishReason)) throw new IncompleteResponseError('Model stream ended without a valid completion');
+  if (toolCalls.length) {
+    if (finishReason !== 'tool_calls' || toolCalls.some((call) => !call.id || !call.name) || new Set(toolCalls.map((call) => call.id)).size !== toolCalls.length) {
+      throw new IncompleteResponseError('Model returned incomplete tool calls; no tool was executed');
+    }
+  } else if (finishReason === 'tool_calls') {
+    throw new IncompleteResponseError('Model completed a tool response without tool calls');
+  }
 }
 
 export async function streamStep(
@@ -279,58 +324,85 @@ export async function streamStep(
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
-  retry: Partial<RetryOptions> & {timeoutMs?: number} = {},
+  retry: Partial<RetryOptions> & {timeoutMs?: number; idleTimeoutMs?: number; requestId?: string} = {},
 ): Promise<AssistantResponse> {
-  const {timeoutMs = MODEL_REQUEST_TIMEOUT_MS, ...retryOptions} = retry;
-  return withRetry(() => {
+  const {timeoutMs = MODEL_REQUEST_TIMEOUT_MS, idleTimeoutMs = MODEL_IDLE_TIMEOUT_MS, requestId = randomUUID(), ...retryOptions} = retry;
+  const budget = retryOptions.budget ?? {attempts: 0};
+  return withRetry(async () => {
     const controller = new AbortController();
     const signal = AbortSignal.any([host.signal, controller.signal]);
+    const started = performance.now();
+    const startedAt = new Date().toISOString();
+    const agentId = host.agentId ?? 'main';
+    const attempt = budget.attempts;
+    host.onEvent({type: 'model_attempt_start', requestId, agentId, attempt, startedAt});
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let abortTimer: ReturnType<typeof setTimeout> | undefined;
-    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    let onAbort: (() => void) | undefined;
-    const deadline = new Promise<never>((_resolve, reject) => {
-      onAbort = () => {
-        abortTimer = setTimeout(
-          () => reject(new DOMException('The request was interrupted', 'AbortError')),
-          50,
-        );
-      };
-      if (host.signal.aborted) {
-        onAbort();
-        return;
-      }
-      host.signal.addEventListener('abort', onAbort, {once: true});
-      timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-        timeoutTimer = setTimeout(() => reject(new ModelTimeoutError(timeoutMs)), 50);
-      }, timeoutMs);
-    });
-    return Promise.race([attemptStep(choice, messages, toolDefs, host, signal, () => active), deadline])
-      .catch((error: unknown) => {
-        if (!timedOut) throw error;
-        const timeout = new ModelTimeoutError(timeoutMs);
-        if (error instanceof StreamFailure) {
-          throw new StreamFailure(timeout.message, error.partial, timeout);
-        }
-        throw timeout;
-      })
-      .finally(() => {
-        active = false;
-        if (timer) clearTimeout(timer);
-        if (abortTimer) clearTimeout(abortTimer);
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-        if (onAbort) host.signal.removeEventListener('abort', onAbort);
-      });
+    let completionTimer: ReturnType<typeof setTimeout> | undefined;
+    let phase: 'startup' | 'idle' = 'startup';
+    let partial: AssistantResponse = {content: '', toolCalls: [], finishReason: '', usage: {prompt: 0, completion: 0, total: 0}, reportedUsage: null};
+    let rejectAttempt: (error: unknown) => void;
+    let resolveComplete: (response: AssistantResponse) => void;
+    let failure: unknown;
+    const stopped = new Promise<never>((_resolve, reject) => { rejectAttempt = reject; });
+    const completion = new Promise<AssistantResponse>((resolve) => { resolveComplete = resolve; });
+    const fail = (error: unknown) => {
+      failure = error;
+      active = false;
+      controller.abort(error);
+      rejectAttempt(partial.content || partial.toolCalls.length || partial.continuation
+        ? new StreamFailure((error as Error).message, partial, error) : error);
+    };
+    const abort = () => fail(host.signal.reason ?? new DOMException('Interrupted', 'AbortError'));
+    const arm = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fail(new ModelTimeoutError(ms, phase)), ms);
+    };
+    host.signal.addEventListener('abort', abort, {once: true});
+    arm(timeoutMs);
+    if (host.signal.aborted) abort();
+    let result: AssistantResponse | undefined;
+    try {
+      result = await Promise.race([
+        attemptStep(choice, messages, toolDefs, host, signal, () => active,
+          () => { if (!completionTimer) { phase = 'idle'; arm(idleTimeoutMs); } },
+          () => {
+            clearTimeout(timer);
+            if (!completionTimer) completionTimer = setTimeout(() => resolveComplete(partial), 50);
+          },
+          (value) => { partial = value; }, {requestId, agentId, attempt}),
+        stopped, completion,
+      ]);
+      return result;
+    } catch (error) {
+      failure = error instanceof StreamFailure ? error.cause ?? error : error;
+      throw error;
+    } finally {
+      active = false;
+      clearTimeout(timer);
+      clearTimeout(completionTimer);
+      host.signal.removeEventListener('abort', abort);
+      controller.abort();
+      const usage = partial.reportedUsage ?? null;
+      if (usage) host.onModelUsage?.(usage);
+      host.onEvent({type: 'model_attempt', evidence: {
+        requestId, agentId, attempt, startedAt, elapsedMs: performance.now() - started,
+        outcome: result ? (result.finishReason === 'length' ? 'incomplete' : 'completed') : 'failed',
+        ...(failure ? {category: errorCategory(failure)} : {}),
+        ...(failure instanceof ModelTimeoutError ? {timeoutPhase: failure.phase} : {}),
+        usage, missingUsageFields: partial.missingUsageFields,
+        ...(!result || result.finishReason === 'length' ? {partial: {content: partial.content, toolCalls: partial.toolCalls, reasoning: partial.continuation?.content}} : {}),
+      }});
+    }
   }, {
-    signal: host.signal,
-    ...retryOptions,
-    onRetry: (attempt, total) => {
-      host.onEvent({type: 'model_retry', attempt, total});
-      retryOptions.onRetry?.(attempt, total);
+    ...retryOptions, budget, signal: host.signal,
+    shouldRetry: (error) => {
+      if (error instanceof StreamFailure && error.partial.content && !error.partial.toolCalls.length) return false;
+      return isRetryable(error);
+    },
+    onRetry: (attempt, total, delayMs) => {
+      host.onEvent({type: 'model_retry', attempt, total, delayMs, requestId});
+      retryOptions.onRetry?.(attempt, total, delayMs);
     },
   });
 }

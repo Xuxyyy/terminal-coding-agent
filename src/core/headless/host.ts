@@ -4,6 +4,7 @@ import type {
   ConfirmRequest,
   Host,
   ModelTokenUsage,
+  RequestEvidence,
 } from '../host.js';
 
 export type HeadlessPolicy = 'deny' | 'yes';
@@ -18,6 +19,8 @@ export type RequestTokenUsage = ModelTokenUsage & {request: number};
 export type HeadlessTokenUsage = {
   requests: RequestTokenUsage[];
   totals: ModelTokenUsage;
+  attempts?: RequestEvidence[];
+  complete?: boolean;
 };
 
 export type HeadlessHost = {
@@ -56,18 +59,32 @@ function decide(
 export function createHeadlessHost(options: {
   policy: HeadlessPolicy;
   signal: AbortSignal;
+  deadlineMs?: number;
+  maxSteps?: number;
+  onEvent?: (event: AgentEvent) => void;
 }): HeadlessHost {
   const events: AgentEvent[] = [];
   const prompts: RecordedPrompt[] = [];
   const tokenUsage: HeadlessTokenUsage = {
     requests: [],
     totals: emptyTokenUsage(),
+    attempts: [],
+    complete: true,
   };
   const host: Host = {
     signal: options.signal,
+    agentId: 'main',
+    deadlineMs: options.deadlineMs,
+    maxSteps: options.maxSteps,
     onEvent(event) {
       events.push(event);
+      if (event.type === 'model_attempt') {
+        tokenUsage.attempts!.push(event.evidence);
+        if (!event.evidence.usage || event.evidence.missingUsageFields?.length) tokenUsage.complete = false;
+      }
+      options.onEvent?.(event);
     },
+    onDiagnostic(event) { host.onEvent(event); },
     onModelUsage(usage) {
       tokenUsage.requests.push({
         request: tokenUsage.requests.length + 1,

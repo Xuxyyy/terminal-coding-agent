@@ -29,7 +29,7 @@ test('coding settings are explicit and reasoning overrides are validated', () =>
   assert.throws(() => parseReasoning('{"reasoning_effort":5}', 'settings', true), /must be/);
   assert.deepEqual(modelSettings(choice(async () => null)), {
     provider: 'deepseek', baseURL: 'https://api.deepseek.com', model: 'deepseek-flash',
-    reasoningEffort: 'high', thinking: 'enabled', maxOutputTokens: 32_000, requestTimeoutMs: 120_000,
+    reasoningEffort: 'high', thinking: 'enabled', maxOutputTokens: 32_000, requestTimeoutMs: 120_000, startupTimeoutMs: 120_000, idleTimeoutMs: 60_000,
   });
 });
 
@@ -158,4 +158,19 @@ test('the official SDK carries explicit settings and parses DeepSeek SSE usage',
   assert.equal(result.content, 'answer');
   assert.equal(result.continuation?.content, 'private reasoning');
   assert.deepEqual(modelUsage, [{inputTokens: 20, outputTokens: 5, totalTokens: 25, cacheHitInputTokens: 12, cacheMissInputTokens: 8}]);
+});
+
+test('SDK timeout leaves room for socket overhead and ACC owns cancellation', async () => {
+  const controller = new AbortController();
+  let observed: {signal?: AbortSignal; agent?: {options?: {timeout?: number}}; headers?: Record<string, string>} | undefined;
+  const invoke = deepseekInvoke('fake-key', (async (_url: unknown, options: typeof observed) => {
+    observed = options;
+    return new Response(JSON.stringify({choices: [{message: {content: 'done'}}]}), {headers: {'content-type': 'application/json'}});
+  }) as unknown as Parameters<typeof deepseekInvoke>[1]);
+  await invoke({model: DEFAULT_MODEL, messages: [], stream: false}, controller.signal);
+  assert.ok(observed?.signal);
+  const timeout = observed?.agent?.options?.timeout;
+  assert.ok(timeout && timeout > 120_000 && timeout <= 2_147_483_647);
+  controller.abort();
+  assert.equal(observed.signal.aborted, true);
 });

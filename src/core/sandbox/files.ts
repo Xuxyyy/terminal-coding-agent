@@ -11,6 +11,7 @@ const WORKER = `
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 let input = '';
+let execution = 'known_result';
 for await (const chunk of process.stdin) input += chunk;
 try {
   const op = JSON.parse(input);
@@ -36,12 +37,13 @@ try {
       if (count > 1) throw new Error('old_string appears ' + count + ' times in ' + op.display + '; include more surrounding text so it matches once');
       after = before.replace(op.old, () => op.replacement);
     }
+    execution = 'uncertain';
     fs.mkdirSync(path.dirname(op.target), {recursive: true});
     fs.writeFileSync(op.target, after, 'utf8');
     console.log(JSON.stringify({before, after}));
   }
 } catch (error) {
-  console.log(JSON.stringify({error: error.message}));
+  console.log(JSON.stringify({error: error.message, execution}));
 }
 `;
 
@@ -61,8 +63,8 @@ export async function fileOperation(operation: Operation, ctx: ToolContext): Pro
   }
   const output = JSON.parse(result.stdout);
   if (output.error) {
-    if (ctx.sandbox === 'on' && /EPERM|EACCES/.test(output.error)) throw new Error(`sandbox blocked file access: ${output.error}`);
-    throw new Error(output.error);
+    if (ctx.sandbox === 'on' && /EPERM|EACCES/.test(output.error)) throw Object.assign(new Error(`sandbox blocked file access: ${output.error}`), {execution: output.execution});
+    throw Object.assign(new Error(output.error), {execution: output.execution});
   }
   return output;
 }

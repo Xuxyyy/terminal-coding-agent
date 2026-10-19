@@ -144,8 +144,8 @@ test('auto rejects dedicated reads and searches and can read through bash', asyn
 
   assert.equal(result.stopped, 'done');
   assert.deepEqual(result.events.filter((event) => event.type === 'tool_end').map((event) => event.result), [
-    "Error: unknown tool 'read_file'",
-    "Error: unknown tool 'grep'",
+    "Error: unknown tool 'read_file'\n[execution: not_started; the tool did not execute]",
+    "Error: unknown tool 'grep'\n[execution: not_started; the tool did not execute]",
     '[exit 0]\nthe note contents\n',
   ]);
   assert.deepEqual(result.prompts, []);
@@ -178,9 +178,9 @@ test('no time at all stops before the model is ever called', async () => {
   assert.equal(result.stopped, 'timeout');
   assert.equal(calls(), 0);
   assert.equal(result.text, '');
-  assert.deepEqual(result.events, []);
+  assert.deepEqual(result.events.map((event) => event.type), ['run_start']);
   assert.deepEqual(result.usage, {prompt: 0, completion: 0, total: 0});
-  assert.deepEqual(result.tokenUsage, {
+  assert.deepEqual({requests: result.tokenUsage.requests, totals: result.tokenUsage.totals}, {
     requests: [],
     totals: {
       inputTokens: 0,
@@ -214,7 +214,7 @@ test('usage records every request and adds up provider totals', async () => {
   const result = await headless({root: tempDir(), choice, policy: 'yes'});
 
   assert.deepEqual(result.usage, {prompt: 40, completion: 7, total: 47});
-  assert.deepEqual(result.tokenUsage, {
+  assert.deepEqual({requests: result.tokenUsage.requests, totals: result.tokenUsage.totals}, {
     requests: [
       {
         request: 1,
@@ -254,7 +254,7 @@ test('every event of the run is kept in the order it was emitted', async () => {
   const result = await headless({root: work, choice, policy: 'yes'});
 
   assert.deepEqual(
-    result.events.map((event) => event.type),
+    result.events.filter((event) => !['run_start', 'model_attempt', 'model_attempt_start'].includes(event.type)).map((event) => event.type),
     ['model_request_start', 'tool_start', 'tool_end', 'model_request_start', 'text_delta', 'text_delta', 'turn_end'],
   );
   assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
@@ -285,7 +285,7 @@ test('request boundaries group multiple tools and separate tool-only responses',
     {type: 'model_request_start', request: 2},
     {type: 'model_request_start', request: 3},
   ]);
-  assert.deepEqual(result.events.map((event) => event.type), [
+  assert.deepEqual(result.events.filter((event) => !['run_start', 'model_attempt', 'model_attempt_start'].includes(event.type)).map((event) => event.type), [
     'model_request_start', 'tool_start', 'tool_end', 'tool_start', 'tool_end',
     'model_request_start', 'tool_start', 'tool_end',
     'model_request_start', 'text_delta', 'turn_end',

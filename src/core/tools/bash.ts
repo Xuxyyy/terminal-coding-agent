@@ -65,7 +65,7 @@ export const bash: Tool = {
       timeoutMs: TIMEOUT_MS,
       access: ctx.sandboxAccess,
     });
-    return {text: formatResult(result, ctx.sandbox, TIMEOUT_MS)};
+    return {text: formatResult(result, ctx.sandbox, TIMEOUT_MS), failure: result.code !== 0 || result.timedOut || result.interrupted, execution: result.timedOut || result.interrupted ? 'uncertain' : 'known_result'};
   },
 };
 
@@ -106,7 +106,7 @@ export const backgroundBash: Tool = {
       background: parsed.run_in_background === true, timeout: parsed.timeout,
     });
     if ('result' in result) {
-      return {text: formatResult(result.result, ctx.sandbox, parsed.timeout ?? TIMEOUT_MS, true)};
+      return {text: formatResult(result.result, ctx.sandbox, parsed.timeout ?? TIMEOUT_MS, true), failure: result.result.code !== 0 || result.result.timedOut || result.result.interrupted, execution: result.result.timedOut || result.result.interrupted ? 'uncertain' : 'known_result'};
     }
     const notice = result.moved
       ? `Command did not complete within its ${(parsed.timeout ?? TIMEOUT_MS) / 1000}s foreground wait and was moved to the background.`

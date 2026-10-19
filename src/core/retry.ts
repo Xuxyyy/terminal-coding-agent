@@ -1,85 +1,112 @@
+export type RetryBudget = {attempts: number};
+
 export type RetryOptions = {
   retries: number;
   sleep: (ms: number) => Promise<void>;
   signal?: AbortSignal;
-  onRetry?: (nextAttempt: number, totalAttempts: number) => void;
+  budget?: RetryBudget;
+  shouldRetry?: (error: unknown) => boolean;
+  onRetry?: (nextAttempt: number, totalAttempts: number, delayMs: number) => void;
 };
 
 export const RETRIES = 3;
 
-const FIRST_BACKOFF_MS = 1_000;
-
-const ABORT_NAMES = new Set(['AbortError', 'APIUserAbortError']);
-
-const CONNECTION_NAMES = new Set([
-  'APIConnectionError',
-  'APIConnectionTimeoutError',
-]);
-
-const CONNECTION_CODES = new Set([
-  'ECONNRESET',
-  'ECONNREFUSED',
-  'ECONNABORTED',
-  'EPIPE',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'EAI_AGAIN',
-  'ERR_STREAM_PREMATURE_CLOSE',
-]);
-
-type ErrorFields = {name?: unknown; code?: unknown; status?: unknown};
-
-function fieldsOf(error: unknown): ErrorFields {
-  return typeof error === 'object' && error !== null
-    ? (error as ErrorFields)
-    : {};
+export class RecoveryExhaustedError extends Error {
+  constructor(readonly attempts: number, cause: unknown) {
+    super(`Model request recovery exhausted after ${attempts} attempts: ${errorFields(cause).message ?? 'request failed'}`, {cause});
+    this.name = 'RecoveryExhaustedError';
+  }
 }
 
-export function backoff(attempt: number): number {
-  return FIRST_BACKOFF_MS * 2 ** attempt;
+export function errorFields(error: unknown): {
+  name?: string; code?: string; status?: number; message?: string;
+  cause?: unknown; headers?: Headers | Record<string, string>; category?: string; type?: string;
+} {
+  return typeof error === 'object' && error !== null ? error : {};
+}
+
+export function rootError(error: unknown): ReturnType<typeof errorFields> {
+  let value = errorFields(error);
+  const seen = new Set<unknown>();
+  while (value.cause && !seen.has(value.cause)) {
+    seen.add(value.cause);
+    const child = errorFields(value.cause);
+    value = {...value, ...child, cause: child.cause};
+  }
+  return value;
+}
+
+export function errorCategory(error: unknown): string {
+  const value = rootError(error);
+  if (value.category) return value.category;
+  if (['AbortError', 'APIUserAbortError'].includes(value.name ?? '')) return 'cancelled';
+  if (value.name === 'ModelTimeoutError' || value.name === 'APIConnectionTimeoutError') return 'timeout';
+  if (value.status === 401 || value.status === 403) return 'authentication';
+  if (value.status === 402 || /insufficient[ _](balance|quota)|billing|credits? exhausted|requests? per day|\bdaily\b|\bRPD\b/i.test(value.message ?? '') || /insufficient_quota/.test(value.code ?? '')) return 'quota';
+  if (value.code === 'context_length_exceeded' || /context.{0,30}(limit|length|exceed|window)|maximum context/i.test(value.message ?? '')) return 'context_limit';
+  if (value.status === 429 || /^(rate_limit_exceeded|rate_limit_error|too_many_requests)$/i.test(value.code ?? value.type ?? '')) return 'rate_limit';
+  if (/^(authentication_error|invalid_api_key|permission_denied)$/i.test(value.code ?? value.type ?? '')) return 'authentication';
+  if (/^(server_error|internal_error|server_overloaded|overloaded_error|service_unavailable)$/i.test(value.code ?? value.type ?? '')) return 'temporary';
+  if (/^(request_timeout|timeout_error)$/i.test(value.code ?? value.type ?? '')) return 'timeout';
+  if ([408, 409, 500, 502, 503, 504, 529].includes(value.status ?? 0)) return 'temporary';
+  if (['APIConnectionError', 'TypeError'].includes(value.name ?? '') && (value.name !== 'TypeError' || /fetch failed|terminated/i.test(value.message ?? ''))) return 'connection';
+  if (['ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ERR_STREAM_PREMATURE_CLOSE'].includes(value.code ?? '')) return 'connection';
+  if (value.code === 'INCOMPLETE_RESPONSE') return 'incomplete_response';
+  return 'permanent';
 }
 
 export function isRetryable(error: unknown): boolean {
-  const {name, code, status} = fieldsOf(error);
-  if (typeof name === 'string' && ABORT_NAMES.has(name)) return false;
-  if (typeof name === 'string' && CONNECTION_NAMES.has(name)) return true;
-  if (typeof code === 'string' && CONNECTION_CODES.has(code)) return true;
-  if (typeof status !== 'number') return false;
-  if (status === 429 && /requests? per day|\bdaily\b|\bRPD\b/i.test((error as Error).message ?? '')) {
-    return false;
-  }
-  return status === 429 || status >= 500;
+  return ['timeout', 'rate_limit', 'temporary', 'connection', 'incomplete_response'].includes(errorCategory(error));
 }
 
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', done);
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    signal?.addEventListener('abort', done, {once: true});
+export function backoff(attempt: number): number {
+  return 1_000 * 2 ** attempt;
+}
+
+export function retryDelay(error: unknown, attempt: number, now = Date.now()): number {
+  const headers = rootError(error).headers;
+  const get = (key: string) => headers instanceof Headers ? headers.get(key) : headers?.[key];
+  const millis = get('retry-after-ms');
+  if (millis && Number.isFinite(Number(millis)) && Number(millis) >= 0) return Number(millis);
+  const after = get('retry-after');
+  if (after) {
+    const value = Number.isFinite(Number(after)) ? Number(after) * 1000 : Date.parse(after) - now;
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return backoff(attempt);
+}
+
+export function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout>;
+    const clean = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); };
+    const abort = () => { clean(); reject(signal?.reason ?? new DOMException('Interrupted', 'AbortError')); };
+    if (signal?.aborted) { abort(); return; }
+    timer = setTimeout(() => { clean(); resolve(); }, Math.min(ms, 2_147_483_647));
+    signal?.addEventListener('abort', abort, {once: true});
   });
 }
 
-export async function withRetry<T>(
-  run: () => Promise<T>,
-  options: Partial<RetryOptions> = {},
-): Promise<T> {
+export async function withRetry<T>(run: () => Promise<T>, options: Partial<RetryOptions> = {}): Promise<T> {
   const {retries = RETRIES, signal} = options;
+  const budget = options.budget ?? {attempts: 0};
   const sleep = options.sleep ?? ((ms: number) => delay(ms, signal));
-
-  for (let attempt = 0; ; attempt += 1) {
+  for (;;) {
+    signal?.throwIfAborted();
+    if (budget.attempts > retries) throw new Error('model request recovery exhausted');
+    budget.attempts += 1;
     try {
       return await run();
     } catch (error) {
-      if (attempt >= retries) throw error;
-      if (signal?.aborted) throw error;
-      if (!isRetryable(error)) throw error;
-      options.onRetry?.(attempt + 2, retries + 1);
-      await sleep(backoff(attempt));
-      if (signal?.aborted) throw error;
+      if (signal?.aborted || !(options.shouldRetry ?? isRetryable)(error)) throw error;
+      if (budget.attempts > retries) {
+        if (retries === 0) throw error;
+        throw new RecoveryExhaustedError(budget.attempts, error);
+      }
+      const wait = retryDelay(error, budget.attempts - 1);
+      options.onRetry?.(budget.attempts + 1, retries + 1, wait);
+      await sleep(wait);
+      signal?.throwIfAborted();
     }
   }
 }

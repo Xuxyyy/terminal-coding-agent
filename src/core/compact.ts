@@ -17,6 +17,7 @@ export function compactionPrompt(strict = false): string {
     'Cover what the user is trying to do, what has been done so far,',
     'which files were touched and how, and what is still left.',
     'Keep every fact a later turn would need: paths, names, decisions.',
+    'Retain unresolved tool failures, attempted repairs, and uncertain effects. Never assume a failed command had no effects.',
     'Write plain prose, not JSON, and address nothing to the user.',
   ];
   if (strict) {
@@ -102,6 +103,7 @@ export function summaryFrom(text: string): string | null {
 
 export function withoutText(host: Host): Host {
   return {
+    ...host,
     signal: host.signal,
     confirm: (request) => host.confirm(request),
     ...(host.onModelUsage
@@ -159,7 +161,13 @@ export async function compactSession(
   ) ?? {role: 'system', content: session.systemPrompt};
   const retainedUsers = retainRecentUserPrompts(session.messages);
   const summary = assistantMessage(SUMMARY_PREFIX + text, [], continuation);
-  const replacement = [...retainedUsers, summary, ...postSummaryMessages];
+  const failureContext = session.messages.flatMap((message, index) => {
+    if (message.role !== 'assistant' || !message.tool_calls) return [];
+    const results = session.messages.slice(index + 1, index + 1 + message.tool_calls.length);
+    if (!results.some((result) => result.role === 'tool' && typeof result.content === 'string' && /^(?:Error:|\[exit [1-9])|\n\[execution: (?:not_started|known_result|uncertain);/.test(result.content))) return [];
+    return [message, ...results.filter((result) => result.role === 'tool')];
+  });
+  const replacement = [...retainedUsers, summary, ...failureContext, ...postSummaryMessages];
 
   session.messages = [system, ...replacement];
   setMeasured(session, 0);

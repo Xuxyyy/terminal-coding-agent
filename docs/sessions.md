@@ -47,21 +47,18 @@ adding `Host.onLimit` avoids another callback and needs no new UI state.
 
 ## Retry
 
-The provider SDKs' built-in retries are disabled. ACC owns the retry policy so it can
-stop retrying once output has reached the screen. Each model request attempt also has
-a 120-second deadline; a deadline failure stops with `ModelTimeoutError`.
+The provider SDK's built-in retries are disabled. ACC allows four attempts
+for eligible temporary request failures, including timeouts. Attempts use a
+120-second startup timeout and a 60-second idle timeout after meaningful output.
+Reasoning, text, and tool fragments count as progress; empty chunks do not.
 
-> Retry a turn only if nothing has been emitted yet — `content === ''` and no tool call
-> deltas have arrived.
-
-If the stream dies after any output, do **not** retry. Emit the error, keep the partial
-assistant message in `session.messages`, and let the user decide. Replaying would print the
-first half of the answer twice, and the user cannot tell which half is real.
-
-Up to three retries follow the first attempt, with 1s / 2s / 4s backoff, for supported
-connection errors, non-daily 429 responses, and 5xx responses (`retry.ts`). Daily-limit
-responses, 400 or 401 errors, and `ModelTimeoutError` are not retried. Cancellation also
-ends retrying; Esc interrupts both a request and its backoff.
+Incomplete tool generations are diagnostic evidence, never executable messages.
+Retries preserve the previous completed step and do not replay completed tools.
+Partial text is marked incomplete and receives at most one automatic continuation
+per agent invocation. Cancellation stops requests and backoff immediately.
+Authentication, exhausted credits, and unsupported configuration stop explicitly.
+Tool errors stay in the conversation, including their execution state and output.
+Compaction preserves failed call/result pairs and uncertain effects.
 
 ## What a session stores
 

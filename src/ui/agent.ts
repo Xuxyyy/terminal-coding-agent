@@ -149,7 +149,20 @@ export function useAgent(
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
-        if (event.type === 'model_request_start') return;
+        if (event.type === 'model_request_start' || event.type === 'model_attempt_start' || event.type === 'run_start') return;
+        if (event.type === 'model_attempt') {
+          if (event.evidence.outcome === 'failed' && event.evidence.partial?.toolCalls.length) {
+            flushText();
+            commit([{kind: 'notice', text: 'Incomplete model response discarded; no tools executed.'}]);
+          }
+          return;
+        }
+        if (event.type === 'response_incomplete') {
+          flushText();
+          commit([{kind: 'notice', text: 'The preceding answer is incomplete.'}]);
+          return;
+        }
+        if (event.type === 'recovery') return;
         if (event.type === 'context_threshold_reached') {
           flushText();
           commit([{kind: 'notice', text: COMPACTION_NOTICE}]);

@@ -1,13 +1,18 @@
 import OpenAI, {type ClientOptions} from 'openai';
-export type Invoke = (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
+export type RequestMetadata = {requestId?: string; agentId?: string; attempt?: number};
+export type Invoke = (request: Record<string, unknown>, signal?: AbortSignal, metadata?: RequestMetadata) => Promise<unknown>;
+
+export function metadataHeaders(metadata?: RequestMetadata): Record<string, string> {
+  return Object.fromEntries(Object.entries(metadata ?? {}).filter(([, value]) => value !== undefined).map(([key, value]) => [`x-acc-${key.toLowerCase()}`, String(value)]));
+}
 
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 
 export function deepseekInvoke(apiKey: string, fetch?: ClientOptions['fetch']): Invoke {
-  const client = new OpenAI({apiKey, baseURL: DEEPSEEK_BASE_URL, maxRetries: 0, timeout: 120_000, ...(fetch ? {fetch} : {})});
-  return (request, signal) => client.chat.completions.create(
+  const client = new OpenAI({apiKey, baseURL: DEEPSEEK_BASE_URL, maxRetries: 0, timeout: 2_147_000_000, ...(fetch ? {fetch} : {})});
+  return (request, signal, metadata) => client.chat.completions.create(
     request as unknown as OpenAI.ChatCompletionCreateParamsNonStreaming,
-    {signal},
+    {signal, headers: metadataHeaders(metadata)},
   );
 }
 
@@ -17,7 +22,7 @@ async function* checkedStream(source: AsyncIterable<OpenAI.ChatCompletionChunk>)
   for await (const chunk of source) {
     if (chunk.choices[0]?.delta.tool_calls?.length) toolCall = true;
     const reason = chunk.choices[0]?.finish_reason;
-    if (reason === 'length' && toolCall) throw new Error('DeepSeek hit its output limit during a tool call; no tool was executed');
+    if (reason === 'length' && toolCall) throw Object.assign(new Error('DeepSeek hit its output limit during a tool call; no tool was executed'), {code: 'INCOMPLETE_RESPONSE'});
     if (reason) {
       if (!['stop', 'tool_calls', 'length'].includes(reason)) {
         throw new Error(`DeepSeek stopped with status ${reason}`);
@@ -26,19 +31,19 @@ async function* checkedStream(source: AsyncIterable<OpenAI.ChatCompletionChunk>)
     }
     yield chunk;
   }
-  if (!finished) throw new Error('DeepSeek stream ended without a completion');
+  if (!finished) throw Object.assign(new Error('DeepSeek stream ended without a completion'), {code: 'INCOMPLETE_RESPONSE'});
 }
 
 export function deepseekClient(apiKey: string, invoke?: Invoke): OpenAI {
   const call = invoke ?? deepseekInvoke(apiKey);
-  const create = async (body: Record<string, unknown>, options?: {signal?: AbortSignal}): Promise<unknown> => {
+  const create = async (body: Record<string, unknown>, options?: {signal?: AbortSignal; headers?: Record<string, string>}): Promise<unknown> => {
     const request = {
       max_tokens: 32_000,
       reasoning_effort: 'high',
       thinking: {type: 'enabled'},
       ...body,
     };
-    const response = await call(request, options?.signal);
+    const response = await call(request, options?.signal, {requestId: options?.headers?.['x-acc-requestid'], agentId: options?.headers?.['x-acc-agentid'], attempt: options?.headers?.['x-acc-attempt'] ? Number(options.headers['x-acc-attempt']) : undefined});
     return body.stream ? checkedStream(response as AsyncIterable<OpenAI.ChatCompletionChunk>) : response;
   };
   return {chat: {completions: {create}}} as unknown as OpenAI;

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {render} from 'ink';
+import {writeSync} from 'node:fs';
 import {createClient} from './core/client.js';
 import {exitCode, jsonLines, plainLines} from './core/headless/output.js';
 import {runHeadless} from './core/headless/run.js';
@@ -32,12 +33,14 @@ try {
       maxSteps: options.maxSteps,
       sandbox: options.sandbox,
       signal: controller.signal,
+      deadlineMs: options.deadlineMs,
+      ...(options.json ? {onEvent: (event) => writeSync(1, `${JSON.stringify(event)}\n`)} : {}),
     }).finally(() => {
       process.removeListener('SIGINT', interrupt);
       process.removeListener('SIGTERM', interrupt);
     });
     if (options.json) {
-      for (const line of jsonLines(result)) {
+      for (const line of jsonLines(result, false)) {
         process.stdout.write(`${line}\n`);
       }
     } else {

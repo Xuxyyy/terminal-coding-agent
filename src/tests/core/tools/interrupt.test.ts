@@ -165,7 +165,8 @@ test('a tool that throws after the signal aborts reports the interrupt, not the 
 
   const output = await runTool([tool], 'bash', DESTRUCTIVE, context(root, {host}));
 
-  assert.equal(output.text, INTERRUPTED);
+  assert.match(output.text, /interrupted by the user/);
+  assert.equal(output.execution, 'uncertain');
 });
 
 test('a tool that throws with the signal untouched still reports the error', async () => {
@@ -175,5 +176,6 @@ test('a tool that throws with the signal untouched still reports the error', asy
 
   const output = await runTool([tool], 'bash', DESTRUCTIVE, context(root, {host}));
 
-  assert.equal(output.text, 'Error: the disk is full');
+  assert.match(output.text, /^Error: the disk is full/);
+  assert.equal(output.execution, 'uncertain');
 });

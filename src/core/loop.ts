@@ -1,3 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {errorCategory, isRetryable} from './retry.js';
 import {
   createJudgeClient,
   MAX_OUTPUT_TOKENS,
@@ -12,7 +14,7 @@ import {assistantMessage} from './messages.js';
 import {
   projectedTokens,
   recordToolUsage,
-  recordUsage,
+  setMeasured,
   overThreshold,
   type Session,
 } from './session.js';
@@ -91,6 +93,8 @@ function judgeFor(session: Session, host: Host): Judge | undefined {
       }),
       host.signal,
       host.onModelUsage,
+      host.onEvent,
+      `${host.agentId ?? 'main'}/judge`,
     );
   };
 }
@@ -109,10 +113,23 @@ export async function runAgent(
   store?: SessionStore,
   options: {maxSteps?: number; backgroundTasks?: BackgroundTasks; waitForBackground?: boolean} = {},
 ): Promise<'step_limit' | void> {
-  const {maxSteps, backgroundTasks} = options;
+  const {backgroundTasks} = options;
+  const maxSteps = options.maxSteps ?? host.maxSteps;
   const definitions = toolDefinitions(registry);
-  const judge = judgeFor(session, host);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
+  const outerHost = host;
+  host = {...host, agentId: host.agentId ?? randomUUID(), onEvent(event) {
+    if (event.type === 'model_attempt' && event.evidence.usage) {
+      const reported = event.evidence.usage;
+      const usage = {prompt: reported.inputTokens, completion: reported.outputTokens, total: reported.totalTokens};
+      addUsage(total, usage);
+      recordToolUsage(session, usage);
+    }
+    outerHost.onEvent(event);
+  }};
+  const judge = judgeFor(session, host);
+  let continuationUsed = false;
+  let nextRequestId = randomUUID();
   let warned = false;
   let reportedThreshold = false;
 
@@ -225,8 +242,7 @@ export async function runAgent(
           host.onEvent({type: 'turn_end', usage: total});
           return;
         }
-        addUsage(total, result.usage);
-        addUsage(session.usage, result.usage);
+
       }
 
       const reminder = reminderForStep(step, maxSteps);
@@ -246,19 +262,44 @@ export async function runAgent(
 
       if (reminder) save(NO_USAGE);
       host.onEvent({type: 'model_request_start', request: step + 1});
-      const result = await streamStep(choice, session.messages, definitions, host);
-      addUsage(total, result.usage);
+      const requestId = nextRequestId;
+      nextRequestId = randomUUID();
+      const budget = {attempts: 0};
+      let compacted = false;
+      let result: Awaited<ReturnType<typeof streamStep>>;
+      for (;;) {
+        try {
+          result = await streamStep(choice, session.messages, definitions, host, {budget, requestId});
+          break;
+        } catch (error) {
+          if (host.signal.aborted) throw error;
+          if (error instanceof StreamFailure && error.partial.content && !error.partial.toolCalls.length && isRetryable(error)) {
+            result = {...error.partial, finishReason: 'length'};
+            break;
+          }
+          if (errorCategory(error) !== 'context_limit' || compacted || budget.attempts >= 4) throw error;
+          compacted = true;
+          host.onEvent({type: 'recovery', kind: 'context', requestId, agentId: host.agentId!, recoveryId: randomUUID(), startedAt: new Date().toISOString()});
+          host.onEvent({type: 'compact_start'});
+          const compact = await compactSession(session, choice, withoutText(host), store);
+          host.onEvent({type: 'compact_end', replaced: compact?.replaced ?? 0, before: compact?.before ?? 0, after: compact?.after ?? 0});
+          if (!compact || compact.after >= compact.before || projectedTokens(session, registry) + MAX_OUTPUT_TOKENS > session.contextWindow) throw new Error('context recovery exhausted: compaction could not make the request fit');
+        }
+      }
       session.messages.push(
         assistantMessage(result.content, result.toolCalls, result.continuation),
       );
-      recordUsage(session, result.usage);
+      if (result.usage.total) setMeasured(session, result.usage.total);
 
       if (result.toolCalls.length === 0) {
         if (result.finishReason === 'length') {
-          host.onEvent({
-            type: 'error',
-            message: 'the model hit its output limit; ask it to continue',
-          });
+          host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: 'text generation incomplete'});
+          session.messages.push({role: 'user', content: '[runtime: the preceding answer is incomplete. Continue from where it stopped. Do not repeat completed work.]'});
+          save(result.usage);
+          if (continuationUsed) throw new Error('text continuation exhausted: response remains incomplete');
+          continuationUsed = true;
+          host.onEvent({type: 'recovery', kind: 'continuation', requestId: nextRequestId, fromRequestId: requestId, agentId: host.agentId!, recoveryId: randomUUID(), startedAt: new Date().toISOString()});
+          continue;
         }
         save(result.usage);
         if (result.finishReason !== 'length' && options.waitForBackground && backgroundTasks?.hasPending()) {
@@ -318,13 +359,15 @@ export async function runAgent(
           name: call.name,
           result: output.text,
           diff: output.diff ?? null,
+          execution: output.execution,
         });
       }
       save(result.usage);
     }
   } catch (error) {
     const partial = error instanceof StreamFailure ? error.partial : null;
-    if (partial?.content) {
+    if (partial?.content && partial.toolCalls.length === 0) {
+      host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: aborted(error, host) ? 'interrupted' : 'generation failed'});
       session.messages.push(
         assistantMessage(partial.content, [], partial.continuation),
       );

@@ -478,10 +478,11 @@ test('an interrupted step is saved complete', async () => {
 
 test('an interrupted stream keeps what arrived', async () => {
   const {host, events, controller} = fakeHost();
-  const {choice} = fakeModel(() => {
+  const {choice} = fakeModel(() => (async function* () {
+    yield textChunk('half an answer');
     controller.abort();
-    return streamOf(textChunk('half an answer'), abortError());
-  });
+    throw abortError();
+  })());
   const saved: OpenAI.ChatCompletionMessageParam[][] = [];
   const store = fakeStore({
     appendStep(messages) {
@@ -507,10 +508,11 @@ test('an interrupted stream keeps what arrived', async () => {
 
 test('an interrupted stream ends with the marker after the partial text', async () => {
   const {host, controller} = fakeHost();
-  const {choice} = fakeModel(() => {
+  const {choice} = fakeModel(() => (async function* () {
+    yield textChunk('half an answer');
     controller.abort();
-    return streamOf(textChunk('half an answer'), abortError());
-  });
+    throw abortError();
+  })());
   const active = session();
 
   await runAgent(active, choice, host, [noop]);
@@ -768,7 +770,7 @@ test('without a session nothing is captured and the write still lands', async ()
   assert.equal(fs.readFileSync(path.join(work, 'note.txt'), 'utf8'), 'two\n');
 });
 
-test('a dropped connection after output keeps the partial answer', async () => {
+test('a dropped connection after output preserves text and bounds continuation', async () => {
   const {choice, calls} = fakeModel((nth) =>
     nth === 1
       ? streamOf(textChunk('half an answer'), connectionError())
@@ -779,9 +781,10 @@ test('a dropped connection after output keeps the partial answer', async () => {
 
   await runAgent(active, choice, host, [noop]);
 
-  assert.equal(calls(), 1);
+  assert.equal(calls(), 2);
   const last: OpenAI.ChatCompletionMessageParam =
     active.messages[active.messages.length - 1]!;
-  assert.deepEqual(last, {role: 'assistant', content: 'half an answer'});
-  assert.equal(errors(events).length, 1);
+  assert.deepEqual(last, {role: 'assistant', content: 'done'});
+  assert.ok(active.messages.some((message) => message.role === 'assistant' && message.content === 'half an answer'));
+  assert.equal(errors(events).length, 0);
 });

@@ -124,7 +124,7 @@ test('interactive DeepSeek timeout shows an error and returns to the prompt', as
     on() {}, off() {}, removeListener() {},
   } as unknown as NodeJS.WriteStream;
   const {stdin, press} = input();
-  const client = deepseekClient('test-key', async () => { throw new ModelTimeoutError(120_000); });
+  const client = deepseekClient('test-key', async () => { throw Object.assign(new ModelTimeoutError(120_000), {headers: {'retry-after-ms': '0'}}); });
   const instance = render(
     <App workspaceRoot={root} choice={{
       client, model: 'deepseek-flash', label: 'DeepSeek V4.1 Flash', contextWindow: 1_048_576,
@@ -135,7 +135,7 @@ test('interactive DeepSeek timeout shows an error and returns to the prompt', as
     press('hello');
     await new Promise((resolve) => setTimeout(resolve, 60));
     press('\r');
-    await until(() => frames.some((frame) => frame.includes('The model did not finish within 120 seconds')),
+    await until(() => frames.some((frame) => frame.includes('Model startup timeout after 120 seconds')),
       'timeout error was not shown');
     assert.ok(frames.some((frame) => frame.includes('check your DeepSeek connection')));
     assert.ok(frames.at(-1)?.includes('❯'), 'the prompt did not return');

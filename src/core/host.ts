@@ -22,11 +22,23 @@ export type ModelTokenUsage = {
   cacheMissInputTokens: number;
 };
 
+export type RequestEvidence = {
+  requestId: string; agentId: string; attempt: number;
+  startedAt: string; elapsedMs: number; outcome: string; category?: string;
+  timeoutPhase?: string; usage: ModelTokenUsage | null; missingUsageFields?: string[];
+  partial?: {reasoning?: string; content: string; toolCalls: {id: string; name: string; args: string}[]};
+};
+
 export type AgentEvent =
+  | {type: 'run_start'; schemaVersion: 2; settings: Record<string, unknown>}
+  | {type: 'model_attempt'; evidence: RequestEvidence}
+  | {type: 'model_attempt_start'; requestId: string; agentId: string; attempt: number; startedAt: string}
+  | {type: 'recovery'; kind: 'continuation' | 'context'; requestId?: string; agentId: string; recoveryId: string; startedAt: string; fromRequestId?: string}
+  | {type: 'response_incomplete'; agentId: string; reason: string}
   | {type: 'background_task'; action: 'started' | 'completed'; task: BackgroundTaskInfo}
   | {type: 'model_request_start'; request: number}
   | {type: 'text_delta'; text: string}
-  | {type: 'model_retry'; attempt: number; total: number}
+  | {type: 'model_retry'; attempt: number; total: number; delayMs?: number; requestId?: string}
   | {type: 'tool_start'; id: string; name: string; args: unknown}
   | {
       type: 'tool_end';
@@ -34,6 +46,7 @@ export type AgentEvent =
       name: string;
       result: string;
       diff: DiffPayload | null;
+      execution?: string;
     }
   | {type: 'turn_end'; usage: Usage}
   | {type: 'context_threshold_reached'}
@@ -70,4 +83,8 @@ export interface Host {
   onEvent(event: AgentEvent): void;
   onModelUsage?(usage: ModelTokenUsage): void;
   signal: AbortSignal;
+  agentId?: string;
+  deadlineMs?: number;
+  maxSteps?: number;
+  onDiagnostic?(event: AgentEvent): void;
 }

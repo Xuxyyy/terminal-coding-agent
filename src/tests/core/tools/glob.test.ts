@@ -199,5 +199,5 @@ test('glob reports a timeout rather than an empty match', {timeout: 40_000}, asy
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'rg'), '#!/bin/sh\nexec /bin/sleep 60\n', {mode: 0o755});
   process.env.PATH = bin;
-  assert.equal(await search(context(root).ctx, {pattern: '**/*'}), 'Error: search timed out after 30s; narrow pattern or path');
+  assert.equal(await search(context(root).ctx, {pattern: '**/*'}), 'Error: search timed out after 30s; narrow pattern or path\n[execution: known_result; the result is known; earlier actions may still have produced effects]');
 });

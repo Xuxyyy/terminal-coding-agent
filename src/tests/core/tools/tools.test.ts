@@ -98,7 +98,7 @@ test('an unknown tool name is reported to the model', async () => {
   const {host} = hostThatAnswers('once');
   const output = await runTool(registry, 'search', '{}', context(root, host));
 
-  assert.equal(output.text, "Error: unknown tool 'search'");
+  assert.equal(output.text, "Error: unknown tool 'search'\n[execution: not_started; the tool did not execute]");
 });
 
 test('edit_file refuses a string that is not in the file', async () => {
@@ -112,7 +112,7 @@ test('edit_file refuses a string that is not in the file', async () => {
     context(root, host),
   );
 
-  assert.equal(output.text, 'Error: old_string not found in a.ts');
+  assert.equal(output.text, 'Error: old_string not found in a.ts\n[execution: known_result; the result is known; earlier actions may still have produced effects]');
 });
 
 test('edit_file refuses a string that appears more than once', async () => {
@@ -181,7 +181,7 @@ test('a path outside the workspace stays unread when the prompt is denied', asyn
   );
 
   assert.equal(asked.length, 1);
-  assert.equal(output.text, `Error: ${DENIED}`);
+  assert.equal(output.text, `Error: ${DENIED}\n[execution: not_started; the tool did not execute]`);
   assert.doesNotMatch(output.text, /hello/);
 });
 
@@ -420,7 +420,7 @@ test('declining a command does not execute it', async () => {
   assert.equal(asked[0]?.command, 'rm -rf /');
   assert.equal(asked[0]?.suppressible, false);
   assert.equal(ran.length, 0);
-  assert.equal(output.text, `Error: ${DENIED}`);
+  assert.equal(output.text, `Error: ${DENIED}\n[execution: not_started; the tool did not execute]`);
 });
 
 test('a change inside the project is reviewed once', async () => {

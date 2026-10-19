@@ -167,11 +167,12 @@ sessions and are not automatically deleted or restarted.
 
 The event stream adds `background_task` events with `started` and `completed`
 actions, owner, task ID, status, log path, and exit information. Final result
-fields and `schemaVersion: 1` remain unchanged; assistant text still joins all
-text deltas in order. The programmatic runner accepts an optional abort signal.
+records use `schemaVersion: 2`; successful text and incomplete text retained for
+continuation remain in the result, while discarded tool generations remain in
+diagnostic events. The programmatic runner accepts an optional abort signal.
 CLI `SIGINT` and `SIGTERM`, deadline expiry, step exhaustion, and fatal failure
 stop owned process groups and clean temporary command environments before exit.
-External cancellation reports `stopped: 'error'` with an interruption message.
+External cancellation reports `stopped: 'cancelled'` with an interruption message.
 Usage already recorded before cancellation remains included.
 
 ## stdout is the answer, stderr is everything else
@@ -243,3 +244,24 @@ runs and subagents. The final JSON result includes `modelSettings` with the
 provider, base URL, model ID, reasoning effort, thinking switch, 32,000-token
 output limit, and 120-second request timeout. This is an additive field; existing
 result fields are unchanged. Auto mode uses DeepSeek for permission judging.
+
+## Recovery evidence and inherited deadlines
+
+`--deadline-ms <Unix milliseconds>` supplies an absolute execution deadline.
+The earlier of this deadline and `--max-seconds` wins. The shared abort signal
+covers retry waits, compaction, continuations, permission judging, subagents,
+and foreground/background tools; these operations never restart the trial clock.
+
+JSON events are written during execution, followed by exactly one final result.
+A `run_start` event records effective settings and source identity even if the
+process cannot write a final result. `model_attempt_start` and `model_attempt`
+correlate requests, attempts, agents, timing, reported usage, timeout phases, and
+partial responses. `model_retry`, `response_incomplete`, and `recovery` distinguish
+transport retries from the one text continuation and context recovery.
+
+`tokenUsage.attempts` includes missing usage as `null`; `tokenUsage.complete`
+indicates whether totals include complete reports for every attempt and field.
+Numeric totals sum available reports and must not be treated as complete costs
+when reports are missing. Relay and CLI usage records describe the same calls
+and must not be added together. Tool execution status is independent of any
+benchmark verifier reward. Schema 1 records remain readable by the Harbor adapter.

@@ -1,3 +1,4 @@
+import {RecoveryExhaustedError, rootError} from './retry.js';
 import {MODELS, providerLabelOf} from './models.js';
 import {ModelTimeoutError} from './client.js';
 
@@ -18,6 +19,7 @@ function messageOf(error: unknown): string {
 
 export function explainError(error: unknown, model: string): ExplainedError {
   const raw = messageOf(error);
+  if (error instanceof RecoveryExhaustedError) return {message: raw, ...(rootError(error).name === 'ModelTimeoutError' ? {hint: 'check your DeepSeek connection'} : {})};
   if (error instanceof ModelTimeoutError ||
     (error as Error)?.cause instanceof ModelTimeoutError) {
     return {message: raw, hint: 'try again, or check your DeepSeek connection'};

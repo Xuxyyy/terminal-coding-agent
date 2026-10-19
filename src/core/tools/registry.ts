@@ -32,7 +32,7 @@ export type ToolContext = {
   backgroundTasks?: BackgroundTasks;
 };
 
-export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage};
+export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage; failure?: boolean; execution?: 'not_started' | 'known_result' | 'uncertain'};
 
 export type Tool = {
   name: string;
@@ -167,28 +167,30 @@ export async function runTool(
   rawArguments: string,
   ctx: ToolContext,
 ): Promise<ToolOutput> {
+  const failed = (text: string, execution: ToolOutput['execution']): ToolOutput => ({
+    text: `Error: ${text}\n[execution: ${execution}; ${execution === 'not_started' ? 'the tool did not execute' : execution === 'uncertain' ? 'effects may have occurred; inspect the outcome before repeating' : 'the result is known; earlier actions may still have produced effects'}]`,
+    failure: true, execution,
+  });
   const tool = tools.find((candidate) => candidate.name === name);
   if (!tool) {
-    return {text: `Error: unknown tool '${name}'`};
+    return failed(`unknown tool '${name}'`, 'not_started');
   }
   let args: unknown;
   try {
     args = JSON.parse(rawArguments || '{}');
   } catch (error) {
-    return {
-      text:
-        `Error: the arguments were not valid JSON (${(error as Error).message}). ` +
-        'Send the arguments again as a single JSON object.',
-    };
+    return failed(`the arguments were not valid JSON (${(error as Error).message}). Send a single JSON object.`, 'not_started');
   }
   const parsed = tool.schema.safeParse(args);
   if (!parsed.success) {
-    return {text: `Error: invalid arguments: ${issues(parsed.error)}`};
+    return failed(`invalid arguments: ${issues(parsed.error)}`, 'not_started');
   }
+  let started = false;
+  let readOnly = false;
   try {
     const permission = await permitted(tool, parsed.data, ctx);
-    if (permission.interrupted) return {text: INTERRUPTED};
-    if (permission.denied) return {text: `Error: ${permission.denied}`};
+    if (permission.interrupted) return {text: INTERRUPTED, failure: true, execution: 'not_started'};
+    if (permission.denied) return failed(permission.denied, 'not_started');
     const execution = {...ctx, sandboxAccess: permission.access};
     if (ctx.backup && tool.request) {
       const request = tool.request(parsed.data);
@@ -197,9 +199,19 @@ export async function runTool(
         try { ctx.backup(request.path, snapshot.bytes === null ? null : Buffer.from(snapshot.bytes, 'base64')); } catch {}
       }
     }
-    return await tool.run(permission.args, execution);
+    ctx.host.signal.throwIfAborted();
+    readOnly = tool.request?.(parsed.data).kind === 'read';
+    started = true;
+    const output = await tool.run(permission.args, execution);
+    if (output.failure || output.text.startsWith('Error:')) {
+      const state = output.execution ?? 'known_result';
+      const detail = failed(output.text.replace(/^Error: ?/, ''), state);
+      return {...output, ...detail, text: output.text.startsWith('[exit ') ? output.text + detail.text.slice(detail.text.indexOf('\n[execution:')) : detail.text};
+    }
+    return output;
   } catch (error) {
-    if (ctx.host.signal.aborted) return {text: INTERRUPTED};
-    return {text: `Error: ${(error as Error).message}`};
+    if (ctx.host.signal.aborted) return failed(INTERRUPTED, started ? 'uncertain' : 'not_started');
+    const known = (error as {execution?: ToolOutput['execution']})?.execution;
+    return failed((error as Error).message, known ?? (started ? readOnly ? 'known_result' : 'uncertain' : 'not_started'));
   }
 }
