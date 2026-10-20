@@ -3,7 +3,7 @@ import test from 'node:test';
 import {setImmediate as flush} from 'node:timers/promises';
 import {z} from 'zod';
 import {streamStep, ModelTimeoutError, StreamFailure} from '../../core/client.js';
-import {errorCategory, isRetryable, retryDelay, withRetry} from '../../core/retry.js';
+import {errorCategory, isRetryable, RecoveryExhaustedError, retryDelay, withRetry} from '../../core/retry.js';
 import {runAgent} from '../../core/loop.js';
 import {createSession} from '../../core/session.js';
 import {compactSession} from '../../core/compact.js';
@@ -12,6 +12,80 @@ import {runTool, type Tool} from '../../core/tools/registry.js';
 import {connectionError, fakeHost, fakeModel, finishChunk, reasoningChunk, statusError, streamOf, textChunk, toolCallChunk, usageChunk} from '../fakes.js';
 
 const fast = {sleep: async () => {}};
+
+function interruptedConnection(): Error {
+  return new Error('SDK request failed', {cause: new TypeError('terminated', {
+    cause: Object.assign(new Error('other side closed'), {code: 'UND_ERR_SOCKET'}),
+  })});
+}
+
+test('nested socket interruptions before output use bounded request recovery', async () => {
+  for (const phase of ['request', 'stream'] as const) {
+    const error = Object.assign(interruptedConnection(), {headers: {'retry-after-ms': '25'}});
+    const {choice, calls} = fakeModel((nth) => nth === 1
+      ? phase === 'request' ? error : streamOf(error)
+      : streamOf(textChunk('done'), finishChunk('stop')));
+    const {host, events} = fakeHost();
+    const waits: number[] = [];
+    const result = await streamStep(choice, [], [], host, {sleep: async (ms) => { waits.push(ms); }});
+
+    assert.equal(result.content, 'done');
+    assert.equal(calls(), 2);
+    assert.deepEqual(waits, [25]);
+    assert.deepEqual(events.filter((event) => event.type === 'model_attempt').map((event) => [event.evidence.attempt, event.evidence.outcome, event.evidence.category]), [
+      [1, 'failed', 'connection'], [2, 'completed', undefined],
+    ]);
+    const starts = events.filter((event) => event.type === 'model_attempt_start');
+    assert.equal(starts[0]!.requestId, starts[1]!.requestId);
+    assert.deepEqual(events.filter((event) => event.type === 'model_retry').map((event) => [event.attempt, event.total, event.delayMs]), [[2, 4, 25]]);
+  }
+});
+
+test('repeated nested socket interruptions exhaust four attempts', async () => {
+  const error = interruptedConnection();
+  const {choice, calls} = fakeModel(() => streamOf(toolCallChunk('discard', 'bash', '{'), error));
+  const {host, events} = fakeHost();
+  const waits: number[] = [];
+  await assert.rejects(streamStep(choice, [], [], host, {sleep: async (ms) => { waits.push(ms); }}), (caught) => {
+    assert.ok(caught instanceof RecoveryExhaustedError);
+    assert.equal(caught.attempts, 4);
+    assert.ok(caught.cause instanceof StreamFailure);
+    assert.equal(caught.cause.cause, error);
+    assert.equal(errorCategory(caught), 'connection');
+    return true;
+  });
+  assert.equal(calls(), 4);
+  assert.deepEqual(waits, [1000, 2000, 4000]);
+  assert.deepEqual(events.filter((event) => event.type === 'model_attempt').map((event) => event.evidence.category), Array(4).fill('connection'));
+  assert.equal(events.filter((event) => event.type === 'model_retry').length, 3);
+});
+
+test('cancelling nested socket recovery prevents another model attempt', async () => {
+  const {choice, calls} = fakeModel(() => interruptedConnection());
+  const {host, controller, events} = fakeHost();
+  await assert.rejects(streamStep(choice, [], [], host, {
+    onRetry() { queueMicrotask(() => controller.abort()); },
+  }), /aborted/i);
+  assert.equal(calls(), 1);
+  assert.equal(events.filter((event) => event.type === 'model_attempt_start').length, 1);
+});
+
+test('partial text from a nested socket interruption uses continuation without replay', async () => {
+  const session = createSession('/tmp', 'rules', 1_000_000);
+  const {choice, calls} = fakeModel((nth, body) => {
+    if (nth === 1) return streamOf(textChunk('first part'), interruptedConnection());
+    const messages = (body as {messages: {role: string; content: string}[]}).messages;
+    assert.ok(messages.some((message) => message.role === 'assistant' && message.content === 'first part'));
+    assert.match(messages.at(-1)!.content, /Continue from where it stopped/);
+    return streamOf(textChunk('second part'), finishChunk('stop'));
+  });
+  const {host, events} = fakeHost();
+  await runAgent(session, choice, host, []);
+  assert.equal(calls(), 2);
+  assert.equal(events.filter((event) => event.type === 'model_retry').length, 0);
+  assert.equal(events.filter((event) => event.type === 'recovery' && event.kind === 'continuation').length, 1);
+  assert.deepEqual(session.messages.filter((message) => message.role === 'assistant').map((message) => message.content), ['first part', 'second part']);
+});
 
 function channel() {
   let receive: ((value: IteratorResult<unknown>) => void) | undefined;
@@ -104,7 +178,7 @@ test('a complete invalid tool argument is returned to the model without executio
   assert.equal(executions, 0);
 });
 
-test('failed tools preserve uncertain effects and completed tools are not replayed after a request retry', async (t) => {
+test('failed tools preserve uncertain effects and completed tools are not replayed after a nested socket retry', async (t) => {
   t.mock.timers.enable({apis: ['setTimeout']});
   let executions = 0;
   const tool: Tool = {name: 'change', description: '', schema: z.object({}), async run() { executions++; throw new Error('failed after changing a file'); }};
@@ -113,7 +187,7 @@ test('failed tools preserve uncertain effects and completed tools are not replay
     if (nth === 1) return streamOf(toolCallChunk('completed', 'change', '{}'), finishChunk('tool_calls'));
     const messages = (body as {messages: {role: string; content: string; tool_call_id?: string}[]}).messages;
     assert.ok(messages.some((message) => message.tool_call_id === 'completed' && /uncertain/.test(message.content)));
-    if (nth === 2) return streamOf(toolCallChunk('incomplete', 'change', '{'), connectionError());
+    if (nth === 2) return streamOf(toolCallChunk('incomplete', 'change', '{'), interruptedConnection());
     assert.ok(!messages.some((message) => message.tool_call_id === 'incomplete'));
     return streamOf(textChunk('I inspected the error'), finishChunk('stop'));
   });
@@ -126,13 +200,13 @@ test('failed tools preserve uncertain effects and completed tools are not replay
   assert.equal(executions, 1);
 });
 
-test('text continuation is separate from transport retries and cannot reset after tools', async () => {
+test('text continuation for nested socket errors is separate from transport retries and cannot reset after tools', async () => {
   let executions = 0;
   const tool: Tool = {name: 'inspect', description: '', schema: z.object({}), async run() { executions++; return {text: 'seen'}; }};
   const session = createSession('/tmp', 'rules', 1_000_000);
   const {choice, calls} = fakeModel((nth) => nth === 2
     ? streamOf(toolCallChunk('one', 'inspect', '{}'), finishChunk('tool_calls'))
-    : streamOf(textChunk('partial'), connectionError()));
+    : streamOf(textChunk('partial'), interruptedConnection()));
   const {host, events} = fakeHost();
   await runAgent(session, choice, host, [tool]);
   assert.equal(calls(), 3);

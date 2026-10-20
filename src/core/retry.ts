@@ -22,37 +22,50 @@ export function errorFields(error: unknown): {
   name?: string; code?: string; status?: number; message?: string;
   cause?: unknown; headers?: Headers | Record<string, string>; category?: string; type?: string;
 } {
-  return typeof error === 'object' && error !== null ? error : {};
+  if (typeof error !== 'object' || error === null) return {};
+  const {name, code, status, message, cause, headers, category, type} = error as ReturnType<typeof errorFields>;
+  return Object.fromEntries(Object.entries({name, code, status, message, cause, headers, category, type})
+    .filter(([, value]) => value !== undefined));
+}
+
+function errorChain(error: unknown): ReturnType<typeof errorFields>[] {
+  const chain: ReturnType<typeof errorFields>[] = [];
+  const seen = new Set<unknown>();
+  while (typeof error === 'object' && error !== null && !seen.has(error)) {
+    seen.add(error);
+    const fields = errorFields(error);
+    chain.push(fields);
+    error = fields.cause;
+  }
+  return chain;
 }
 
 export function rootError(error: unknown): ReturnType<typeof errorFields> {
-  let value = errorFields(error);
-  const seen = new Set<unknown>();
-  while (value.cause && !seen.has(value.cause)) {
-    seen.add(value.cause);
-    const child = errorFields(value.cause);
-    value = {...value, ...child, cause: child.cause};
-  }
-  return value;
+  return errorChain(error).reduce((value, child) => ({...value, ...child, cause: child.cause}), {});
 }
 
-export function errorCategory(error: unknown): string {
-  const value = rootError(error);
-  if (value.category) return value.category;
+function categoryOf(value: ReturnType<typeof errorFields>): string | undefined {
   if (['AbortError', 'APIUserAbortError'].includes(value.name ?? '')) return 'cancelled';
-  if (value.name === 'ModelTimeoutError' || value.name === 'APIConnectionTimeoutError') return 'timeout';
   if (value.status === 401 || value.status === 403) return 'authentication';
   if (value.status === 402 || /insufficient[ _](balance|quota)|billing|credits? exhausted|requests? per day|\bdaily\b|\bRPD\b/i.test(value.message ?? '') || /insufficient_quota/.test(value.code ?? '')) return 'quota';
   if (value.code === 'context_length_exceeded' || /context.{0,30}(limit|length|exceed|window)|maximum context/i.test(value.message ?? '')) return 'context_limit';
-  if (value.status === 429 || /^(rate_limit_exceeded|rate_limit_error|too_many_requests)$/i.test(value.code ?? value.type ?? '')) return 'rate_limit';
   if (/^(authentication_error|invalid_api_key|permission_denied)$/i.test(value.code ?? value.type ?? '')) return 'authentication';
+  if (value.status === 429 || /^(rate_limit_exceeded|rate_limit_error|too_many_requests)$/i.test(value.code ?? value.type ?? '')) return 'rate_limit';
+  if (value.name === 'ModelTimeoutError' || value.name === 'APIConnectionTimeoutError') return 'timeout';
   if (/^(server_error|internal_error|server_overloaded|overloaded_error|service_unavailable)$/i.test(value.code ?? value.type ?? '')) return 'temporary';
   if (/^(request_timeout|timeout_error)$/i.test(value.code ?? value.type ?? '')) return 'timeout';
   if ([408, 409, 500, 502, 503, 504, 529].includes(value.status ?? 0)) return 'temporary';
+  if (value.status !== undefined && value.status >= 400) return 'permanent';
   if (['APIConnectionError', 'TypeError'].includes(value.name ?? '') && (value.name !== 'TypeError' || /fetch failed|terminated/i.test(value.message ?? ''))) return 'connection';
-  if (['ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ERR_STREAM_PREMATURE_CLOSE'].includes(value.code ?? '')) return 'connection';
+  if (['ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ERR_STREAM_PREMATURE_CLOSE', 'UND_ERR_SOCKET'].includes(value.code ?? '')) return 'connection';
   if (value.code === 'INCOMPLETE_RESPONSE') return 'incomplete_response';
-  return 'permanent';
+  return undefined;
+}
+
+export function errorCategory(error: unknown): string {
+  const categories = errorChain(error).map((value) => value.category || categoryOf(value));
+  return categories.find((category) => ['cancelled', 'authentication', 'quota', 'context_limit', 'permanent'].includes(category ?? ''))
+    ?? categories.find((category) => category !== undefined) ?? 'permanent';
 }
 
 export function isRetryable(error: unknown): boolean {
