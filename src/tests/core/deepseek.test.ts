@@ -99,13 +99,45 @@ test('off and max reach the provider and tool-free requests omit tools', async (
 test('truncated streams and failed finishes cannot execute partial tools', async () => {
   for (const parts of [
     [textChunk('partial')],
-    [toolCallChunk('x', 'bash', '{"command":"pwd"}'), finishChunk('length')],
     [finishChunk('insufficient_system_resource')],
     [finishChunk('aborted')],
   ]) {
     const model = choice(async () => streamOf(...parts));
     await assert.rejects(streamStep(model, [{role: 'user', content: 'run'}], [], fakeHost().host));
   }
+});
+
+test('output-limited tools become unexecuted drafts without replaying the request', async () => {
+  let requests = 0;
+  const draft = {id: 'draft', name: 'write_file', args: '{"path":"result.txt","content":"part'};
+  const model = choice(async () => {
+    requests++;
+    return streamOf(
+      reasoningChunk('keep the useful plan'),
+      textChunk('I will write the result.'),
+      toolCallChunk(draft.id, draft.name, '{"path":"result.txt",'),
+      {choices: [{index: 0, delta: {tool_calls: [{index: 0, function: {arguments: '"content":"part'}}]}, finish_reason: 'length'}]},
+      usageChunk(20, 32_000),
+    );
+  });
+  const {host, events} = fakeHost();
+
+  const response = await streamStep(model, [{role: 'user', content: 'write the result'}], [], host);
+
+  assert.equal(requests, 1);
+  assert.equal(response.finishReason, 'length');
+  assert.equal(response.content, 'I will write the result.');
+  assert.equal(response.continuation?.content, 'keep the useful plan');
+  assert.deepEqual(response.toolCalls, []);
+  assert.deepEqual(response.toolCallDrafts, [draft]);
+  assert.equal(response.usage.completion, 32_000);
+  assert.equal(events.some((event) => event.type === 'model_retry'), false);
+  const attempt = events.find((event) => event.type === 'model_attempt');
+  assert.equal(attempt?.evidence.outcome, 'incomplete');
+  assert.deepEqual(attempt?.evidence.partial, {
+    content: 'I will write the result.', toolCalls: [draft], reasoning: 'keep the useful plan',
+  });
+  assert.equal(attempt?.evidence.usage?.outputTokens, 32_000);
 });
 
 test('DeepSeek sessions retain reasoning and legacy sessions cannot resume', () => {

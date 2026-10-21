@@ -18,11 +18,8 @@ export function deepseekInvoke(apiKey: string, fetch?: ClientOptions['fetch']): 
 
 async function* checkedStream(source: AsyncIterable<OpenAI.ChatCompletionChunk>): AsyncGenerator<OpenAI.ChatCompletionChunk> {
   let finished = false;
-  let toolCall = false;
   for await (const chunk of source) {
-    if (chunk.choices[0]?.delta.tool_calls?.length) toolCall = true;
     const reason = chunk.choices[0]?.finish_reason;
-    if (reason === 'length' && toolCall) throw Object.assign(new Error('DeepSeek hit its output limit during a tool call; no tool was executed'), {code: 'INCOMPLETE_RESPONSE'});
     if (reason) {
       if (!['stop', 'tool_calls', 'length'].includes(reason)) {
         throw new Error(`DeepSeek stopped with status ${reason}`);

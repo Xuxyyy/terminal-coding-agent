@@ -10,7 +10,7 @@ import {
 import {INTERRUPTED, INTERRUPTED_TURN, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
 import {compactSession, withoutText} from './compact.js';
-import {assistantMessage} from './messages.js';
+import {assistantDraftMessage, assistantMessage} from './messages.js';
 import {
   projectedTokens,
   recordToolUsage,
@@ -287,14 +287,18 @@ export async function runAgent(
         }
       }
       session.messages.push(
-        assistantMessage(result.content, result.toolCalls, result.continuation),
+        result.toolCallDrafts?.length
+          ? assistantDraftMessage(result.content, result.toolCallDrafts, result.continuation)
+          : assistantMessage(result.content, result.toolCalls, result.continuation),
       );
       if (result.usage.total) setMeasured(session, result.usage.total);
 
       if (result.toolCalls.length === 0) {
         if (result.finishReason === 'length') {
-          host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: 'text generation incomplete'});
-          session.messages.push({role: 'user', content: '[runtime: the preceding answer is incomplete. Continue from where it stopped. Do not repeat completed work.]'});
+          host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: result.toolCallDrafts?.length ? 'tool call generation incomplete' : 'text generation incomplete'});
+          session.messages.push({role: 'user', content: result.toolCallDrafts?.length
+            ? '[runtime: the preceding response hit the output limit. No tool-call draft from that response was executed. Use the saved reasoning and drafts to choose the next action. Send a complete valid tool call with all required arguments if needed. Do not append argument fragments or assume any draft tool ran.]'
+            : '[runtime: the preceding answer is incomplete. Continue from where it stopped. Do not repeat completed work.]'});
           save(result.usage);
           if (continuationUsed) throw new Error('text continuation exhausted: response remains incomplete');
           continuationUsed = true;

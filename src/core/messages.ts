@@ -42,3 +42,18 @@ export function assistantContinuation(
   if (typeof content !== 'string') return undefined;
   return {kind: 'reasoning_content', content};
 }
+
+export function assistantDraftMessage(
+  content: string,
+  calls: Call[],
+  continuation?: AssistantContinuation,
+): OpenAI.ChatCompletionMessageParam {
+  return assistantMessage(
+    (content ? content + '\n\n' : '') +
+      '[runtime: output-limit interruption. The following tool-call drafts were not executed. ' +
+      'Their arguments may be incomplete. Treat them only as draft material.]\n' +
+      JSON.stringify(calls),
+    [],
+    continuation,
+  );
+}

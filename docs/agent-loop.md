@@ -203,11 +203,18 @@ provider waiting instructions. Authentication, credit exhaustion, unsupported
 configuration, cancellation, and the trial deadline do not trigger retries.
 The provider SDK's own retries remain disabled.
 
-Tools execute only after a complete response validates. Failed tool generations
-are recorded and retried from the previous completed conversation state; earlier
-tools never replay automatically. Partial text is marked incomplete and may use
-one automatic continuation per agent invocation. The allowance survives tool
-steps and cannot reset. Context-limit recovery may compact once per pending
+Tools execute only after a complete response validates. An output-limit finish
+during tool generation preserves reasoning, text, and every tool-call draft.
+None of those drafts execute, even if some arguments appear complete. The next
+request receives the drafts as explicitly unexecuted assistant text, without
+tool calls or tool results, and asks for a complete valid next action rather
+than appended argument fragments. Original drafts remain in attempt evidence.
+Other failed tool generations are recorded and retried from the previous
+completed conversation state; earlier tools never replay automatically.
+Partial text and output-limited tool drafts share one automatic continuation
+per agent invocation. The allowance survives tool steps and cannot reset.
+When it is exhausted, the latest partial work is saved before the run stops.
+Context-limit recovery may compact once per pending
 step without resetting its transport attempt counter. Compaction retains failed
 call/result pairs and uncertain effects.
 

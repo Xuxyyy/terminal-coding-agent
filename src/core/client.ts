@@ -133,6 +133,7 @@ export type AssistantResponse = {
   content: string;
   continuation?: AssistantContinuation;
   toolCalls: RawToolCall[];
+  toolCallDrafts?: RawToolCall[];
   finishReason: string;
   usage: Usage;
   reportedUsage?: ModelTokenUsage | null;
@@ -216,7 +217,10 @@ async function attemptStep(
             content: reasoningContent,
           },
         }),
-    toolCalls: calls.filter(Boolean),
+    toolCalls: finishReason === 'length' ? [] : calls.filter(Boolean),
+    ...(finishReason === 'length' && calls.length
+      ? {toolCallDrafts: calls.filter(Boolean)}
+      : {}),
     finishReason,
     usage,
     reportedUsage: providerUsage,
@@ -391,7 +395,7 @@ export async function streamStep(
         ...(failure ? {category: errorCategory(failure)} : {}),
         ...(failure instanceof ModelTimeoutError ? {timeoutPhase: failure.phase} : {}),
         usage, missingUsageFields: partial.missingUsageFields,
-        ...(!result || result.finishReason === 'length' ? {partial: {content: partial.content, toolCalls: partial.toolCalls, reasoning: partial.continuation?.content}} : {}),
+        ...(!result || result.finishReason === 'length' ? {partial: {content: partial.content, toolCalls: partial.toolCallDrafts ?? partial.toolCalls, reasoning: partial.continuation?.content}} : {}),
       }});
     }
   }, {
