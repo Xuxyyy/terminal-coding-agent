@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {errorCategory, isRetryable} from './retry.js';
+import {decideRecovery} from './recovery.js';
 import {
   createJudgeClient,
   MAX_OUTPUT_TOKENS,
@@ -269,15 +269,19 @@ export async function runAgent(
       let result: Awaited<ReturnType<typeof streamStep>>;
       for (;;) {
         try {
-          result = await streamStep(choice, session.messages, definitions, host, {budget, requestId});
+          result = await streamStep(choice, session.messages, definitions, host, {
+            budget, requestId, recovery: {continuationUsed, contextRecovered: compacted},
+          });
           break;
         } catch (error) {
-          if (host.signal.aborted) throw error;
-          if (error instanceof StreamFailure && error.partial.content && !error.partial.toolCalls.length && isRetryable(error)) {
-            result = {...error.partial, finishReason: 'length'};
+          const recovery = decideRecovery({kind: 'failure', error, partial: error instanceof StreamFailure ? error.partial : undefined}, {
+            continuationUsed, contextRecovered: compacted, attempts: budget.attempts, aborted: host.signal.aborted,
+          });
+          if ('partial' in recovery) {
+            result = {...recovery.partial, finishReason: 'length'};
             break;
           }
-          if (errorCategory(error) !== 'context_limit' || compacted || budget.attempts >= 4) throw error;
+          if (recovery.action !== 'context') throw error;
           compacted = true;
           host.onEvent({type: 'recovery', kind: 'context', requestId, agentId: host.agentId!, recoveryId: randomUUID(), startedAt: new Date().toISOString()});
           host.onEvent({type: 'compact_start'});
@@ -286,6 +290,9 @@ export async function runAgent(
           if (!compact || compact.after >= compact.before || projectedTokens(session, registry) + MAX_OUTPUT_TOKENS > session.contextWindow) throw new Error('context recovery exhausted: compaction could not make the request fit');
         }
       }
+      const recovery = decideRecovery({kind: 'response', response: result}, {
+        continuationUsed, contextRecovered: compacted, attempts: budget.attempts, aborted: host.signal.aborted,
+      });
       session.messages.push(
         result.toolCallDrafts?.length
           ? assistantDraftMessage(result.content, result.toolCallDrafts, result.continuation)
@@ -294,13 +301,13 @@ export async function runAgent(
       if (result.usage.total) setMeasured(session, result.usage.total);
 
       if (result.toolCalls.length === 0) {
-        if (result.finishReason === 'length') {
+        if ('partial' in recovery) {
           host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: result.toolCallDrafts?.length ? 'tool call generation incomplete' : 'text generation incomplete'});
           session.messages.push({role: 'user', content: result.toolCallDrafts?.length
             ? '[runtime: the preceding response hit the output limit. No tool-call draft from that response was executed. Use the saved reasoning and drafts to choose the next action. Send a complete valid tool call with all required arguments if needed. Do not append argument fragments or assume any draft tool ran.]'
             : '[runtime: the preceding answer is incomplete. Continue from where it stopped. Do not repeat completed work.]'});
           save(result.usage);
-          if (continuationUsed) throw new Error('text continuation exhausted: response remains incomplete');
+          if (recovery.action === 'stop') throw new Error('text continuation exhausted: response remains incomplete');
           continuationUsed = true;
           host.onEvent({type: 'recovery', kind: 'continuation', requestId: nextRequestId, fromRequestId: requestId, agentId: host.agentId!, recoveryId: randomUUID(), startedAt: new Date().toISOString()});
           continue;

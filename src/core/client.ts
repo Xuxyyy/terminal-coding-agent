@@ -15,7 +15,8 @@ import {
   MODEL_IDS,
   PROVIDERS,
 } from './models.js';
-import {withRetry, isRetryable, errorCategory, type RetryOptions} from './retry.js';
+import {withRetry, RecoveryExhaustedError, errorCategory, type RetryOptions} from './retry.js';
+import {decideRecovery, type RecoveryAllowances} from './recovery.js';
 import {modelOf, reasoningOf} from './settings.js';
 import type {ToolDefinition} from './tools/registry.js';
 
@@ -328,9 +329,9 @@ export async function streamStep(
   messages: OpenAI.ChatCompletionMessageParam[],
   toolDefs: ToolDefinition[],
   host: Host,
-  retry: Partial<RetryOptions> & {timeoutMs?: number; idleTimeoutMs?: number; requestId?: string} = {},
+  retry: Partial<RetryOptions> & {timeoutMs?: number; idleTimeoutMs?: number; requestId?: string; recovery?: RecoveryAllowances} = {},
 ): Promise<AssistantResponse> {
-  const {timeoutMs = MODEL_REQUEST_TIMEOUT_MS, idleTimeoutMs = MODEL_IDLE_TIMEOUT_MS, requestId = randomUUID(), ...retryOptions} = retry;
+  const {timeoutMs = MODEL_REQUEST_TIMEOUT_MS, idleTimeoutMs = MODEL_IDLE_TIMEOUT_MS, requestId = randomUUID(), recovery = {continuationUsed: false, contextRecovered: false}, ...retryOptions} = retry;
   const budget = retryOptions.budget ?? {attempts: 0};
   return withRetry(async () => {
     const controller = new AbortController();
@@ -401,8 +402,13 @@ export async function streamStep(
   }, {
     ...retryOptions, budget, signal: host.signal,
     shouldRetry: (error) => {
-      if (error instanceof StreamFailure && error.partial.content && !error.partial.toolCalls.length) return false;
-      return isRetryable(error);
+      const decision = decideRecovery({kind: 'failure', error, partial: error instanceof StreamFailure ? error.partial : undefined}, {
+        ...recovery, attempts: budget.attempts, retries: retryOptions.retries, aborted: host.signal.aborted,
+      });
+      if (decision.action === 'stop' && decision.reason === 'attempts_exhausted') {
+        throw new RecoveryExhaustedError(budget.attempts, error);
+      }
+      return decision.action === 'retry';
     },
     onRetry: (attempt, total, delayMs) => {
       host.onEvent({type: 'model_retry', attempt, total, delayMs, requestId});

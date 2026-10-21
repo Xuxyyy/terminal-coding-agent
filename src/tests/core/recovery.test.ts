@@ -60,6 +60,102 @@ test('repeated nested socket interruptions exhaust four attempts', async () => {
   assert.equal(events.filter((event) => event.type === 'model_retry').length, 3);
 });
 
+test('reasoning-only interruptions and mixed partial tool output retry the unchanged request', async () => {
+  for (const parts of [
+    [reasoningChunk('unfinished plan')],
+    [reasoningChunk('unfinished plan'), textChunk('preparing a change'), toolCallChunk('draft', 'write_file', '{"path":')],
+  ]) {
+    const sent: unknown[] = [];
+    const messages = [{role: 'user' as const, content: 'make the change'}];
+    const {choice} = fakeModel((nth, body) => {
+      sent.push(structuredClone(body));
+      return nth === 1
+        ? streamOf(...parts, interruptedConnection())
+        : streamOf(textChunk('done'), finishChunk('stop'));
+    });
+    const {host, events} = fakeHost();
+
+    const result = await streamStep(choice, messages, [], host, fast);
+
+    assert.equal(result.content, 'done');
+    assert.equal(sent.length, 2);
+    assert.deepEqual(sent[1], sent[0]);
+    assert.deepEqual(messages, [{role: 'user', content: 'make the change'}]);
+    assert.equal(events.filter((event) => event.type === 'model_retry').length, 1);
+    assert.equal(events.some((event) => event.type === 'recovery' || event.type === 'tool_start'), false);
+    const attempt = events.find((event) => event.type === 'model_attempt');
+    assert.equal(attempt?.evidence.partial?.reasoning, 'unfinished plan');
+  }
+});
+
+test('disabling transport retries preserves the original failure without an exhaustion wrapper', async () => {
+  const error = interruptedConnection();
+  const {choice, calls} = fakeModel(() => error);
+  const {host, events} = fakeHost();
+
+  await assert.rejects(streamStep(choice, [], [], host, {...fast, retries: 0}), (caught) => caught === error);
+
+  assert.equal(calls(), 1);
+  assert.equal(events.some((event) => event.type === 'model_retry'), false);
+});
+
+test('reasoning-only transport retries leave the invocation continuation available', async () => {
+  const {choice, calls} = fakeModel((nth) => nth === 1
+    ? streamOf(reasoningChunk('unfinished reasoning'), Object.assign(interruptedConnection(), {headers: {'retry-after-ms': '0'}}))
+    : nth === 2
+      ? streamOf(textChunk('unfinished answer'), finishChunk('length'))
+      : streamOf(textChunk('done'), finishChunk('stop')));
+  const session = createSession('/tmp', 'rules', 1_000_000);
+  const {host, events} = fakeHost();
+
+  await runAgent(session, choice, host, []);
+
+  assert.equal(calls(), 3);
+  assert.equal(events.filter((event) => event.type === 'model_retry').length, 1);
+  assert.equal(events.filter((event) => event.type === 'recovery' && event.kind === 'continuation').length, 1);
+  assert.equal(events.some((event) => event.type === 'error'), false);
+  assert.ok(session.messages.some((message) => message.role === 'assistant' && message.content === 'unfinished answer'));
+  assert.equal(session.messages.some((message) => (message as {reasoning_content?: string}).reasoning_content === 'unfinished reasoning'), false);
+});
+
+test('a context error after the fourth transport attempt stops without compaction', async () => {
+  const {choice, calls} = fakeModel((nth) => nth < 4
+    ? Object.assign(interruptedConnection(), {headers: {'retry-after-ms': '0'}})
+    : Object.assign(statusError(400, 'context length exceeded'), {code: 'context_length_exceeded'}));
+  const {host, events} = fakeHost();
+
+  await runAgent(createSession('/tmp', 'rules', 1_000_000), choice, host, []);
+
+  assert.equal(calls(), 4);
+  assert.equal(events.filter((event) => event.type === 'model_retry').length, 3);
+  assert.equal(events.some((event) => event.type === 'compact_start' || event.type === 'recovery'), false);
+  assert.ok(events.some((event) => event.type === 'error' && /context length exceeded/.test(event.message)));
+});
+
+test('a context failure after partial text uses context recovery rather than continuation', async () => {
+  const {choice, calls} = fakeModel((nth, body) => {
+    if (nth === 1) return streamOf(textChunk('attempt text'), Object.assign(statusError(400, 'context length exceeded'), {code: 'context_length_exceeded'}));
+    const messages = (body as {messages: {role: string; content: string}[]}).messages;
+    assert.equal(messages.some((message) => message.role === 'assistant' && message.content === 'attempt text'), false);
+    return nth === 2
+      ? streamOf(textChunk('The requested change remains pending. No file was changed. Inspect the current files before starting the implementation. '.repeat(2)), finishChunk('stop'))
+      : streamOf(textChunk('done'), finishChunk('stop'));
+  });
+  const session = createSession('/tmp', 'rules', 1_000_000);
+  session.messages.push({role: 'assistant', content: 'old details '.repeat(5000)});
+  const {host, events} = fakeHost();
+
+  await runAgent(session, choice, host, []);
+
+  assert.equal(calls(), 3);
+  assert.equal(events.filter((event) => event.type === 'recovery' && event.kind === 'context').length, 1);
+  assert.equal(events.some((event) => event.type === 'recovery' && event.kind === 'continuation'), false);
+  assert.equal(events.some((event) => event.type === 'error' || event.type === 'model_retry'), false);
+  const starts = events.filter((event) => event.type === 'model_attempt_start');
+  assert.equal(starts[0]!.requestId, starts[2]!.requestId);
+  assert.deepEqual([starts[0]!.attempt, starts[2]!.attempt], [1, 2]);
+});
+
 test('cancelling nested socket recovery prevents another model attempt', async () => {
   const {choice, calls} = fakeModel(() => interruptedConnection());
   const {host, controller, events} = fakeHost();
