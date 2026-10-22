@@ -313,6 +313,14 @@ export async function runAgent(
           continue;
         }
         save(result.usage);
+        const unverified = options.waitForBackground ? backgroundTasks?.unverifiedServices() ?? [] : [];
+        if (result.finishReason !== 'length' && unverified.length > 0) {
+          session.messages.push({role: 'user', content: '[runtime: retained services still need readiness verification]\n' +
+            unverified.map((task) => JSON.stringify(task)).join('\n') +
+            '\nUse task_handoff to check the user-requested behavior, or task_stop if the service should not remain. ACC cannot hand off an unverified service.'});
+          save(NO_USAGE);
+          continue;
+        }
         if (result.finishReason !== 'length' && options.waitForBackground && backgroundTasks?.hasPending()) {
           if (maxSteps === undefined || step + 1 < maxSteps) await backgroundTasks.wait();
           continue;

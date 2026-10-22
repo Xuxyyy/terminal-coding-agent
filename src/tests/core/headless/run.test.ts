@@ -108,8 +108,8 @@ test('headless startup uses auto-edits by default and preserves saved permission
       assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode, true)));
       const offered = request!.tools as {function: {name: string}}[];
       assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
-        ? ['edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'agent']
-        : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'agent']);
+        ? ['edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'task_handoff', 'agent']
+        : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'task_output', 'task_stop', 'task_handoff', 'agent']);
       assert.equal(fs.existsSync(path.join(home, 'settings.json')), saved !== undefined);
     }
   } finally {

@@ -13,9 +13,12 @@ export type SandboxResult = {
   stderr: string;
   interrupted: boolean;
   timedOut: boolean;
+  outputIncomplete?: boolean;
+  cleanupUncertain?: boolean;
 };
 
 export const OUTPUT_LIMIT = 32 * 1024 * 1024;
+const STOP_TIMEOUT_MS = 1000;
 const READY_MARKER = '\u001eacc-sandbox-ready\u001f';
 const quote = (value: string) => JSON.stringify(value);
 const subpath = (value: string) => `(subpath ${quote(value)})`;
@@ -85,6 +88,8 @@ export type RunOptions = {
   input?: string;
   timeoutMs?: number | null;
   captureOutput?: boolean;
+  outputFd?: number;
+  onExit?: (code: number | null) => void;
   onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
 };
 
@@ -92,6 +97,8 @@ export type RunningCommand = {
   pid: number | undefined;
   ready: Promise<void>;
   result: Promise<SandboxResult>;
+  temporary: string;
+  detach: () => void;
   stop: (reason?: 'interrupted' | 'timeout') => void;
 };
 
@@ -115,7 +122,7 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
   try {
     const policy = isolated ? makePolicy(options.root, temporary, options.access) : null;
     const wrapper = [
-      '--noprofile', '--norc', '-c', `printf '%s' '${READY_MARKER}' >&2; exec "$@"`,
+      '--noprofile', '--norc', '-c', `printf '%s' '${READY_MARKER}' >&${options.outputFd === undefined ? 2 : 3}; ${options.outputFd === undefined ? '' : 'exec 3>&-; '}exec "$@"`,
       'acc-sandbox', options.program, ...options.args,
     ];
     const command = policy
@@ -125,7 +132,7 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
       cwd: policy?.root ?? options.root,
       env: cleanEnvironment(temporary),
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: options.outputFd === undefined ? ['pipe', 'pipe', 'pipe'] : ['pipe', options.outputFd, options.outputFd, ...(isolated ? ['pipe' as const] : [])],
     });
     let resolveReady!: () => void;
     let rejectReady!: (error: Error) => void;
@@ -142,16 +149,35 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
     let timedOut = false;
     let interrupted = false;
     let initialized = false;
+    let settled = false;
+    let detached = false;
+    let drainTimer: NodeJS.Timeout | undefined;
+    let outputIncomplete = false;
+    let stopTimer: NodeJS.Timeout | undefined;
     let failure: Error | undefined;
     const decoders = {stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8')};
     const kill = () => {
       if (!child.pid) return;
       try { process.kill(-child.pid, 'SIGKILL'); } catch {}
     };
+    const terminate = () => {
+      if (settled || detached) return;
+      if (drainTimer) clearTimeout(drainTimer);
+      kill();
+      stopTimer ??= setTimeout(() => {
+        failure = new Error(`${failure ? `${failure.message}; ` : ''}command cleanup did not finish within ${STOP_TIMEOUT_MS}ms after stopping; output may be incomplete and some processes may still be running`);
+        child.stdin!.destroy();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
+        finish(child.exitCode, child.signalCode);
+      }, STOP_TIMEOUT_MS);
+    };
     const stop = (reason: 'interrupted' | 'timeout' = 'interrupted') => {
+      if (settled || detached) return;
       if (reason === 'timeout') timedOut = true;
       else interrupted = true;
-      kill();
+      terminate();
     };
     const timer = options.timeoutMs === null ? null : setTimeout(() => stop('timeout'), options.timeoutMs ?? 120_000);
     const abort = () => stop();
@@ -178,7 +204,7 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
       emit(text, stream);
     };
     const collect = (chunk: Buffer, stream: 'stdout' | 'stderr') => {
-      if (failure) return;
+      if (failure || settled) return;
       const available = OUTPUT_LIMIT - size;
       size += chunk.length;
       try {
@@ -187,23 +213,46 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
         failure = error as Error;
       }
       if (size > OUTPUT_LIMIT) failure = new Error('command exceeded the 32 MiB output limit');
-      if (failure) kill();
+      if (failure) terminate();
     };
-    child.stdout!.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
-    child.stderr!.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
+    child.stdout?.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
+    child.stderr?.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
+    if (isolated && options.outputFd !== undefined) {
+      child.stdio[3]?.on('data', (chunk: Buffer) => {
+        startupError += chunk.toString('utf8');
+        if (startupError.includes(READY_MARKER)) { initialized = true; resolveReady(); }
+      });
+    }
     child.stdin!.on('error', () => {});
     child.stdin!.end(options.input);
     child.on('spawn', () => {
+      if (settled) return;
       if (!isolated) { initialized = true; resolveReady(); }
     });
     child.on('error', (error) => {
+      if (settled) return;
       failure = new Error(`${isolated ? 'sandbox' : 'command'} could not start: ${error.message}; the command was not run`);
       rejectReady(failure);
-      kill();
+      terminate();
     });
-    child.on('exit', kill);
-    child.on('close', (code, signal) => {
+    child.on('exit', (code, signal) => {
+      if (settled || detached) return;
+      options.onExit?.(code);
+      kill();
+      if (!stopTimer) drainTimer = setTimeout(() => {
+        outputIncomplete = true;
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
+        finish(code, signal);
+      }, STOP_TIMEOUT_MS);
+    });
+    const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (settled || detached) return;
+      settled = true;
       if (timer) clearTimeout(timer);
+      if (stopTimer) clearTimeout(stopTimer);
+      if (drainTimer) clearTimeout(drainTimer);
       options.signal.removeEventListener('abort', abort);
       kill();
       try {
@@ -220,9 +269,19 @@ export function startCommand(options: RunOptions & {sandbox?: SandboxMode}): Run
       }
       if (!initialized) rejectReady(failure ?? new Error('command stopped before startup'));
       if (failure) rejectResult(failure);
-      else resolveResult({code: interrupted ? 130 : timedOut ? 124 : code ?? 1, stdout, stderr, interrupted, timedOut});
-    });
-    return {pid: child.pid, ready, result, stop};
+      else resolveResult({code: interrupted ? 130 : timedOut ? 124 : code ?? 1, stdout, stderr, interrupted, timedOut, ...(outputIncomplete ? {outputIncomplete: true, cleanupUncertain: true} : {})});
+    };
+    child.on('close', finish);
+    const detach = () => {
+      if (settled || child.exitCode !== null || child.signalCode !== null) throw new Error('service exited before handoff');
+      if (options.outputFd === undefined) throw new Error('service handoff requires independent log output');
+      detached = true;
+      child.stdin?.destroy();
+      if (timer) clearTimeout(timer);
+      options.signal.removeEventListener('abort', abort);
+      child.unref();
+    };
+    return {pid: child.pid, ready, result, stop, detach, temporary};
   } catch (error) {
     fs.rmSync(temporary, {recursive: true, force: true});
     throw error;

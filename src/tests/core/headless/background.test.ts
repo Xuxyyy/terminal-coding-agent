@@ -264,3 +264,80 @@ test('the agent can stop a long-lived command through task_stop and finish norma
   assert.equal(count(), 3);
   assert.equal(result.text, 'Stopped the server.');
 });
+
+test('temporary services do not hold the final answer open and are stopped on normal completion', async (t) => {
+  const work = root(t);
+  const {choice, calls: count} = fakeModel((nth) => nth === 1
+    ? calls(shell('exec sleep 20', {run_in_background: true, lifetime: 'temporary_service'}))
+    : reply('Temporary service is no longer needed.'));
+  const result = await runHeadless({root: work, task: 'use a temporary service', choice, policy: 'yes', sandbox: 'off', maxSeconds: 5});
+  assert.equal(result.stopped, 'done');
+  assert.equal(count(), 2);
+  assert.equal(lifecycle(result).at(-1)!.task.status, 'stopped');
+});
+
+test('unverified retained services prompt for readiness instead of an idle background wait', async (t) => {
+  const work = root(t);
+  let id = '';
+  const {choice, calls: count} = fakeModel((nth, body) => {
+    if (nth === 1) return calls(shell('exec sleep 20', {run_in_background: true, lifetime: 'retained_service', required_by_task: 'User needs a service left running'}));
+    const messages = (body as Request).messages;
+    if (nth === 2) {
+      id = JSON.parse(messages.filter((message) => message.role === 'tool').at(-1)!.content.split('\n')[1]!).id;
+      return reply('Finished.');
+    }
+    if (nth === 3) {
+      assert.match(messages.at(-1)!.content, /retained services still need readiness verification/);
+      return calls({name: 'task_stop', args: {task_id: id}});
+    }
+    return reply('Stopped the unverified service.');
+  });
+  const result = await runHeadless({root: work, task: 'leave a service available', choice, policy: 'yes', sandbox: 'off', maxSeconds: 5});
+  assert.equal(result.stopped, 'done');
+  assert.equal(count(), 4);
+  assert.equal(lifecycle(result).at(-1)!.task.status, 'stopped');
+});
+
+for (const ending of ['done', 'error', 'step_limit', 'cancelled', 'timeout'] as const) {
+  test(`verified retained service is handed off only for normal completion: ${ending}`, async (t) => {
+    const work = root(t);
+    const controller = new AbortController();
+    let id = '';
+    const {choice} = fakeModel((nth, body) => {
+      if (nth === 1) return calls(shell('touch service-started; exec sleep 20', {
+        run_in_background: true, lifetime: 'retained_service', required_by_task: 'User needs the service after exit',
+      }));
+      const messages = (body as Request).messages;
+      if (nth === 2) {
+        id = JSON.parse(messages.filter((message) => message.role === 'tool').at(-1)!.content.split('\n')[1]!).id;
+        return calls({name: 'task_handoff', args: {task_id: id, command: 'while ! test -f service-started; do sleep 0.01; done; printf ready', description: 'check fixture startup'}});
+      }
+      assert.equal(nth, 3);
+      assert.match(messages.filter((message) => message.role === 'tool').at(-1)!.content, /Readiness verified/);
+      if (ending === 'error') return new Error('scripted fatal failure');
+      if (ending === 'cancelled') controller.abort();
+      if (ending === 'timeout') return new Promise(() => {});
+      if (ending === 'step_limit') return calls(shell('true'));
+      return reply('Service ready.');
+    });
+    const result = await runHeadless({root: work, task: 'leave the service running', choice, policy: 'yes', sandbox: 'off',
+      maxSeconds: ending === 'timeout' ? 0.3 : 5, maxSteps: ending === 'step_limit' ? 3 : 5, signal: controller.signal});
+    assert.equal(result.stopped, ending);
+    const last = lifecycle(result).at(-1)!;
+    if (ending === 'done') {
+      try {
+        assert.equal(last.action, 'handed_off');
+        process.kill(last.task.pid!, 0);
+        assert.equal(last.task.id, id);
+        assert.equal(JSON.parse(jsonLines(result, false).at(-1)!).services[0].id, id);
+        assert.equal(JSON.parse(fs.readFileSync(last.task.handoff!.recordPath, 'utf8')).status, 'handed_off');
+      } finally {
+        try { process.kill(-last.task.pid!, 'SIGKILL'); } catch {}
+        fs.rmSync(last.task.handoff!.runtimePath, {recursive: true, force: true});
+      }
+    } else {
+      assert.equal(last.task.status, 'stopped');
+      assert.equal(last.task.handoff, undefined);
+    }
+  });
+}

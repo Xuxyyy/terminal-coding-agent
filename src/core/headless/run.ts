@@ -84,7 +84,7 @@ export async function runHeadless(options: {
 
   host.onEvent({type: 'run_start', schemaVersion: 2, settings: {startedAt, deadlineMs, permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion(), model: modelSettings(options.choice)}});
 
-  let outcome: 'step_limit' | void;
+  let outcome: 'step_limit' | void = undefined;
   const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
   try {
     outcome = await runAgent(
@@ -93,7 +93,14 @@ export async function runHeadless(options: {
     );
   } finally {
     try {
-      await backgroundTasks.close(timedOut ? 'benchmark deadline reached' : 'headless run ended');
+      const normalCompletion = !controller.signal.aborted && outcome !== 'step_limit' &&
+        !events.some((event) => event.type === 'error') && !prompts.some((prompt) => prompt.decision === 'deny') &&
+        events.some((event) => event.type === 'turn_end');
+      try {
+        await backgroundTasks.close(timedOut ? 'run deadline reached' : 'headless run ended', normalCompletion);
+      } catch (error) {
+        host.onEvent({type: 'error', message: (error as Error).message});
+      }
     } finally {
       if (timer) clearTimeout(timer);
       options.signal?.removeEventListener('abort', interrupt);

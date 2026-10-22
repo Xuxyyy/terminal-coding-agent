@@ -217,7 +217,10 @@ are shared. Headless runs also enable managed background Bash commands.
 - Bash can run in the background while the agent uses other tools. Foreground
   wait expiry moves the same process into the background. Completion resumes
   the agent within the original budgets; `task_output` reads results and
-  `task_stop` stops owned commands. Interactive Bash remains foreground-only.
+  `task_stop` stops owned commands. Explicit lifetimes separate finite work,
+  temporary services, and retained services. `task_handoff` verifies readiness
+  before a main-agent service can survive successful normal completion, with
+  private logs and a recorded stop command. Interactive Bash remains foreground-only.
 - No resumable session is written, and a print run cannot be reopened with
   `/resume`. Command logs and final task metadata remain in the private
   `runs/<run-id>/tasks/` directory under `ACC_HOME` (default `~/.acc`).

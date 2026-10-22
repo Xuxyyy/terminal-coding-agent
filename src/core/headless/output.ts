@@ -5,6 +5,7 @@ export type PlainOutput = {out: string; err: string[]};
 export function plainLines(result: HeadlessResult): PlainOutput {
   const err: string[] = [];
   for (const event of result.events) {
+    if (event.type === 'background_task' && event.action === 'handed_off') err.push(`service retained: ${JSON.stringify(event.task)}`);
     if (event.type === 'tool_start') err.push(`tool: ${event.name}`);
   }
   for (const prompt of result.prompts) {
@@ -28,6 +29,9 @@ export function jsonLines(result: HeadlessResult, includeEvents = true): string[
       schemaVersion: 2,
       ...(result.execution ? {execution: result.execution} : {}),
       ...(result.modelSettings ? {modelSettings: result.modelSettings} : {}),
+      ...(result.events.some((event) => event.type === 'background_task' && event.action === 'handed_off')
+        ? {services: result.events.filter((event) => event.type === 'background_task' && event.action === 'handed_off')
+          .map((event) => event.type === 'background_task' ? event.task : undefined)} : {}),
       stopped: result.stopped,
       message: result.text,
       usage: result.usage,

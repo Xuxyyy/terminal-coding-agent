@@ -10,12 +10,17 @@ import {OUTPUT_LIMIT, runCommand} from '../../core/sandbox/run.js';
 import {backgroundBash} from '../../core/tools/bash.js';
 import {taskOutput, taskStop} from '../../core/tools/tasks.js';
 import {toolsFor, toolDefinitions} from '../../core/tools/index.js';
-import {runTool, type ToolContext} from '../../core/tools/registry.js';
+import {runTool, type ToolContext, type ToolOutput} from '../../core/tools/registry.js';
 import {fakeHost} from '../fakes.js';
 import {childTools} from '../../core/tools/subagent.js';
 
 const quote = (text: string) => `'${text.replaceAll("'", "'\"'\"'")}'`;
 const node = (script: string) => `${quote(process.execPath)} -e ${quote(script)}`;
+const detachedPipeCommand = () => node("const {spawn}=require('node:child_process');" +
+  "const child=spawn(process.execPath,['-e','setTimeout(()=>{},5000)']," +
+  "{detached:true,stdio:['ignore',1,2]});" +
+  "require('node:fs').writeFileSync('detached.pid',String(child.pid));" +
+  "child.unref();process.stdout.write('setup finished');");
 
 function fixture(t: TestContext) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-background-test-'));
@@ -134,6 +139,82 @@ test('failures, explicit stops, and background runtime expiry retain their exit 
   assert.match(notice!.reason!, /runtime limit/);
 });
 
+test('task_stop returns when a detached child retains the command output pipes', {timeout: 10_000}, async (t) => {
+  const f = fixture(t);
+  let stopping: Promise<ToolOutput> | undefined;
+  let outcome: string | undefined;
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const running = await f.run(detachedPipeCommand(), false, 100);
+    assert.ok('task' in running);
+    assert.equal(running.moved, true);
+    await waitFor(() => fs.existsSync(path.join(f.root, 'detached.pid')));
+    const page = await f.tasks.output(running.task.id);
+    assert.equal(page.output, 'setup finished');
+    stopping = taskStop.run({task_id: running.task.id}, f.ctx);
+    outcome = await Promise.race([
+      stopping.then(() => 'returned'),
+      new Promise<string>((resolve) => { timer = setTimeout(() => resolve('still waiting'), 2500); }),
+    ]);
+    if (outcome === 'returned') {
+      const result = await stopping;
+      assert.equal(result.failure, true);
+      assert.equal(result.execution, 'uncertain');
+      const status = JSON.parse(result.text);
+      assert.equal(status.status, 'failed');
+      assert.match(status.reason, /cleanup did not finish.*some processes may still be running/);
+      assert.equal(status.code, null);
+      assert.equal((await f.tasks.output(running.task.id)).output, 'setup finished');
+      assert.equal(JSON.stringify(await f.tasks.stop(running.task.id)), result.text);
+      assert.equal(f.tasks.drain().length, 1);
+      assert.equal(f.tasks.hasPending(), false);
+      process.kill(Number(fs.readFileSync(path.join(f.root, 'detached.pid'), 'utf8')), 0);
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
+    const pidFile = path.join(f.root, 'detached.pid');
+    if (fs.existsSync(pidFile)) {
+      const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+      try { process.kill(pid, 'SIGKILL'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; }
+    }
+    await stopping;
+  }
+  assert.equal(outcome, 'returned', 'task_stop remained blocked until the detached pipe holder was killed externally');
+});
+
+for (const mode of ['abort', 'timeout', 'close'] as const) {
+  test(`${mode} finishes tracking when a detached child retains output pipes`, {timeout: 10_000}, async (t) => {
+    const f = fixture(t);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const running = await f.run(detachedPipeCommand(), true, mode === 'timeout' ? 500 : undefined);
+      assert.ok('task' in running);
+      await waitFor(() => fs.existsSync(path.join(f.root, 'detached.pid')) &&
+        fs.readFileSync(running.task.logPath, 'utf8') === 'setup finished');
+      if (mode === 'abort') f.controller.abort();
+      const completed = mode === 'timeout' ? f.tasks.wait() : f.tasks.close('test shutdown');
+      const outcome = await Promise.race([
+        completed.then(() => 'returned'),
+        new Promise<string>((resolve) => { timer = setTimeout(() => resolve('still waiting'), 2500); }),
+      ]);
+      assert.equal(outcome, 'returned');
+      const page = await f.tasks.output(running.task.id);
+      assert.equal(page.task.status, 'failed');
+      assert.match(page.task.reason!, /cleanup did not finish.*some processes may still be running/);
+      assert.equal(page.output, 'setup finished');
+      assert.equal(f.events.filter((event) => event.type === 'background_task' && event.action === 'completed').length, 1);
+    } finally {
+      if (timer) clearTimeout(timer);
+      const pidFile = path.join(f.root, 'detached.pid');
+      if (fs.existsSync(pidFile)) {
+        try { process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL'); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; }
+      }
+    }
+  });
+}
+
 test('32 MiB is a combined output limit and its failure is saved', async (t) => {
   const f = fixture(t);
   const result = await f.run(node(`process.stdout.write(Buffer.alloc(${OUTPUT_LIMIT / 2},120),()=>process.stderr.write(Buffer.alloc(${OUTPUT_LIMIT / 2 + 1},121)));`));
@@ -204,7 +285,7 @@ test('interactive tool definitions keep their original Bash interface', () => {
     assert.equal(interactive.some((tool) => tool.name === 'task_output' || tool.name === 'task_stop'), false);
     const schema = interactive.find((tool) => tool.name === 'bash')!.schema.parse({command: 'true', run_in_background: true, timeout: 1});
     assert.deepEqual(schema, {command: 'true'});
-    assert.deepEqual(toolsFor(mode, true).filter((tool) => tool.name.startsWith('task_')).map((tool) => tool.name), ['task_output', 'task_stop']);
+    assert.deepEqual(toolsFor(mode, true).filter((tool) => tool.name.startsWith('task_')).map((tool) => tool.name), ['task_output', 'task_stop', 'task_handoff']);
   }
 });
 

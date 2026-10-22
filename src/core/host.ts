@@ -35,7 +35,7 @@ export type AgentEvent =
   | {type: 'model_attempt_start'; requestId: string; agentId: string; attempt: number; startedAt: string}
   | {type: 'recovery'; kind: 'continuation' | 'context'; requestId?: string; agentId: string; recoveryId: string; startedAt: string; fromRequestId?: string}
   | {type: 'response_incomplete'; agentId: string; reason: string}
-  | {type: 'background_task'; action: 'started' | 'completed'; task: BackgroundTaskInfo}
+  | {type: 'background_task'; action: 'started' | 'completed' | 'handed_off'; task: BackgroundTaskInfo}
   | {type: 'model_request_start'; request: number}
   | {type: 'text_delta'; text: string}
   | {type: 'model_retry'; attempt: number; total: number; delayMs?: number; requestId?: string}
@@ -59,7 +59,16 @@ export type BackgroundTaskInfo = {
   owner: string;
   command: string;
   description?: string;
-  status: 'running' | 'completed' | 'failed' | 'stopped' | 'timed_out' | 'output_limit';
+  lifetime?: 'finite' | 'temporary_service' | 'retained_service';
+  requiredByTask?: string;
+  startedAt?: string;
+  pid?: number;
+  processExited?: boolean;
+  readiness?: {command: string; verifiedAt: string; output: string};
+  handoff?: {at: string; recordPath: string; stopCommand: string; runtimePath: string};
+  outputIncomplete?: boolean;
+  cleanupUncertain?: boolean;
+  status: 'running' | 'handed_off' | 'completed' | 'failed' | 'stopped' | 'timed_out' | 'output_limit';
   logPath: string;
   code: number | null;
   reason?: string;

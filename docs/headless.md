@@ -125,8 +125,8 @@ Callers can save stdout or the JSON event stream when they need a record.
 
 ## Background Bash commands
 
-Print mode offers `bash.run_in_background`, `bash.timeout`, `task_output`, and
-`task_stop` in every permission mode. A background launch returns a task ID and
+Print mode offers `bash.run_in_background`, `bash.timeout`, `bash.lifetime`,
+`task_output`, `task_stop`, and `task_handoff` in every permission mode. A background launch returns a task ID and
 log path while the same command keeps running. A foreground command also moves
 to the background when its wait expires; it is never restarted or run twice.
 
@@ -145,15 +145,58 @@ There is no fixed count limit on simultaneous commands. The original
 Completion produces one runtime notice between complete model/tool steps.
 If the assistant has already replied, the run waits without model polling,
 then resumes the same loop when a command finishes. Continuations share the
-original step count and usage totals. Long-lived commands such as dev servers
-must be stopped with `task_stop` when no longer needed so the run can finish.
+original step count and usage totals. Scheduling and lifetime are separate:
+
+| `bash.lifetime` | Completion behavior |
+|---|---|
+| `finite` (default) | Wait for completion and inspect the required result. |
+| `temporary_service` | Keep running during work; stop during run cleanup. |
+| `retained_service` | Preserve after successful normal completion only after readiness verification. |
+
+Services require `run_in_background: true`. The main agent must explicitly
+choose retention from the user's task and provide `required_by_task`; ACC does
+not infer it from command names. Subagents keep their existing cleanup ownership
+and cannot start retained services.
+
+Start a retained service in the foreground of its managed shell, preferably
+with `exec`. Do not daemonize or append shell `&`: ACC owns the managed process
+group, not an arbitrary escaped descendant. Retained service stdout and stderr
+write directly to a private log file. Run
+`task_handoff(task_id, command, description, access?)` with a readiness command
+that checks the requested behavior, such as the response from an actual HTTP
+endpoint. PID existence alone is insufficient. The check has a 10 second limit
+and goes through the ordinary command permissions and sandbox access rules.
+A failed recheck removes earlier readiness eligibility. The model chooses the
+behavioral check; an exit-zero check is not independent proof of task success.
+
+Unverified retained services prompt the model for a check instead of entering
+an idle wait. Verified services do not block the final reply. On successful
+normal completion, ACC saves a handoff record, detaches the service, and exits.
+The record includes the task and owner IDs, command, PID, start time, readiness
+evidence, log path, private runtime directory, and a shell stop command. The
+final JSON result includes a `services` array; plain output writes service
+records to stderr. The final reply should identify the record and logs.
+
+Before handoff, cancellation, timeout, step exhaustion, fatal failure, and
+`task_stop` still stop services. After handoff, the environment owns their
+lifetime and log growth. Use the recorded stop command to stop the process
+group and remove its private runtime directory; logs remain available. The
+record is a snapshot at handoff, not a continuing health monitor. Verify process
+identity before using an old PID record. The existing POSIX Bash/process-group
+runtime requirements apply.
+
 The agent must inspect required results before dependent work or success claims.
 
 `task_output(task_id, offset?, limit?)` returns the task status, exit code or
 stop reason, output, and `next_offset`. Offsets count characters from zero;
 each page includes at most 30,000 output characters. It never waits for a task.
 `task_stop(task_id)` stops that task's process group and waits for cleanup.
-Both tools accept only tasks owned by the calling agent. A foreground subagent
+After shell exit, ACC drains output for at most one second. If inherited output
+connections remain open, it preserves collected output and the shell exit code,
+marks `outputIncomplete` and `cleanupUncertain`, and finishes tracking. Explicit
+stop, abort, and timeout retain the earlier one-second forced-cleanup fallback
+and report cleanup failure when it cannot be confirmed.
+Task tools accept only tasks owned by the calling agent. A foreground subagent
 inherits background support but stops its remaining commands when it finishes,
 reporting unfinished work to its parent rather than handing over ownership.
 
@@ -162,10 +205,13 @@ Logs and final task metadata are retained under
 Directories are private and files use mode `0600`. Output streams to disk
 instead of being accumulated in memory. The 32 MiB limit includes output
 written before a command moves into the background; exceeding it stops the
-command and produces an `output_limit` result. Saved logs are not resumable
+command and produces an `output_limit` result. For directly logged retained
+services, ACC checks file size every 100 ms while it owns the service, so a fast
+writer can exceed the limit between checks. After handoff ACC no longer enforces
+the runtime or log-size limit. Saved logs are not resumable
 sessions and are not automatically deleted or restarted.
 
-The event stream adds `background_task` events with `started` and `completed`
+The event stream adds `background_task` events with `started`, `completed`, and `handed_off`
 actions, owner, task ID, status, log path, and exit information. Final result
 records use `schemaVersion: 2`; successful text and incomplete text retained for
 continuation remain in the result, while discarded tool generations remain in

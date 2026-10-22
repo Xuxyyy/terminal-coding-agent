@@ -28,12 +28,13 @@ export function capOutput(text: string): string {
 }
 
 function formatResult(result: SandboxResult, sandbox: SandboxMode | undefined, timeout: number, capped = false): string {
+  const capture = result.outputIncomplete ? '\n[shell exited; output capture is incomplete and descendant cleanup is uncertain]' : '';
   const note = result.interrupted ? '\nstopped by the user' : result.timedOut ? `\ncommand timed out after ${timeout / 1000}s` : '';
   const output = result.stdout + result.stderr;
   const blocked = sandbox === 'on' && /Operation not permitted|Permission denied/.test(output)
     ? '\n[sandbox blocked access; request a specific path or network grant if needed. Earlier parts of the command may already have run.]'
     : '';
-  return `[exit ${result.code}]\n${capped ? output : capOutput(output)}${note}${blocked}`;
+  return `[exit ${result.code}]\n${capped ? output : capOutput(output)}${note}${capture}${blocked}`;
 }
 
 export const bash: Tool = {
@@ -65,15 +66,24 @@ export const bash: Tool = {
       timeoutMs: TIMEOUT_MS,
       access: ctx.sandboxAccess,
     });
-    return {text: formatResult(result, ctx.sandbox, TIMEOUT_MS), failure: result.code !== 0 || result.timedOut || result.interrupted, execution: result.timedOut || result.interrupted ? 'uncertain' : 'known_result'};
+    return {text: formatResult(result, ctx.sandbox, TIMEOUT_MS), failure: result.code !== 0 || result.timedOut || result.interrupted, execution: result.timedOut || result.interrupted || result.outputIncomplete ? 'uncertain' : 'known_result'};
   },
 };
 
 const backgroundSchema = schema.extend({
+  lifetime: z.enum(['finite', 'temporary_service', 'retained_service']).optional()
+    .describe('Independent of scheduling: finite work must finish and be checked; temporary_service is cleaned up; retained_service must survive successful completion because the user task requires it.'),
+  required_by_task: z.string().trim().min(1).optional().describe('For retained_service, explain the explicit user requirement to keep it available after ACC exits.'),
   run_in_background: z.boolean().optional().describe('Return a task ID while this command continues running. No shell & is needed.'),
   timeout: z.number().int().min(1).max(7_200_000).optional()
     .describe('Milliseconds: foreground wait defaults to 120000, max 600000; explicit background runtime defaults to 1800000, max 7200000.'),
 }).superRefine((args, ctx) => {
+  if (args.lifetime && args.lifetime !== 'finite' && !args.run_in_background) {
+    ctx.addIssue({code: z.ZodIssueCode.custom, path: ['run_in_background'], message: 'services require run_in_background true'});
+  }
+  if (args.lifetime === 'retained_service' && !args.required_by_task) {
+    ctx.addIssue({code: z.ZodIssueCode.custom, path: ['required_by_task'], message: 'explain the explicit user requirement for retention'});
+  }
   if (!args.run_in_background && args.timeout !== undefined && args.timeout > 600_000) {
     ctx.addIssue({code: z.ZodIssueCode.custom, path: ['timeout'], message: 'foreground timeout must not exceed 600000 ms'});
   }
@@ -85,7 +95,13 @@ export const BACKGROUND_INSTRUCTIONS =
   'Completion automatically sends a runtime notice; the main agent resumes even after a reply. Do not poll repeatedly. ' +
   'Use task_output to read status and paged output, and task_stop to stop a command. ' +
   'Wait for required results before dependent work and verify exit status before claiming success. ' +
-  'Stop long-lived servers when no longer needed: the run stays open while background commands remain. ' +
+  'Use lifetime finite (default) for work whose result must be checked. Use temporary_service for servers needed only during the run; they are cleaned up on exit. ' +
+  'Only the main agent may start retained_service, and only when required by the user task: set required_by_task explicitly. ' +
+  'Run retained services in the foreground of their managed shell (prefer exec); do not daemonize or use shell &. Their output goes directly to private log files. ' +
+  'Call task_handoff with a readiness command that checks the requested behavior, such as an actual endpoint response; process existence alone is insufficient. ' +
+  'Only a successful readiness check makes retention eligible. Handoff occurs on successful normal completion, lets ACC exit, and records identity, logs, and a stop command. ' +
+  'Cancellation, deadlines, errors, step limits, and explicit task_stop still stop owned services, including those ready for handoff. ' +
+  'Readiness checks use their own approved sandbox access. After handoff the environment owns the service and its log growth; include the service record in your final reply. ' +
   'The overall deadline and step budget still apply. Commands stop after 32 MiB of output. ' +
   'Subagent commands stop when their owning subagent finishes.';
 
@@ -103,10 +119,11 @@ export const backgroundBash: Tool = {
       args: ['--noprofile', '--norc', '-c', parsed.command],
       command: parsed.command, description: parsed.description,
       signal: ctx.host.signal, access: ctx.sandboxAccess,
+      lifetime: parsed.lifetime, requiredByTask: parsed.required_by_task,
       background: parsed.run_in_background === true, timeout: parsed.timeout,
     });
     if ('result' in result) {
-      return {text: formatResult(result.result, ctx.sandbox, parsed.timeout ?? TIMEOUT_MS, true), failure: result.result.code !== 0 || result.result.timedOut || result.result.interrupted, execution: result.result.timedOut || result.result.interrupted ? 'uncertain' : 'known_result'};
+      return {text: formatResult(result.result, ctx.sandbox, parsed.timeout ?? TIMEOUT_MS, true), failure: result.result.code !== 0 || result.result.timedOut || result.result.interrupted, execution: result.result.timedOut || result.result.interrupted || result.result.outputIncomplete ? 'uncertain' : 'known_result'};
     }
     const notice = result.moved
       ? `Command did not complete within its ${(parsed.timeout ?? TIMEOUT_MS) / 1000}s foreground wait and was moved to the background.`

@@ -72,8 +72,12 @@ Headless runs pass a background-task manager into the same loop. Managed Bash
 can return a task ID before its process ends. Completion notices enter the
 conversation only between complete tool batches, as runtime-generated user
 messages rather than additional tool replies. After a reply, the main loop
-waits for pending work without model polling and continues under its original
-budget. Subagents do not wait after their final reply; their owner stops any
+waits for finite work without model polling and continues under its original
+budget. Temporary services do not block completion. Explicit retained services
+require a behavioral readiness check through `task_handoff`; verified services
+are detached only during successful normal run cleanup. Unverified services
+prompt the model for readiness instead of entering an idle wait. Shell exit and
+output closure are tracked separately, with a one-second output drain bound. Subagents do not wait after their final reply; their owner stops any
 unfinished shells. See `headless.md` for task tools, limits, logs, and cleanup.
 
 **A tool may report tokens it spent.** `ToolOutput` carries an optional `usage`, and
