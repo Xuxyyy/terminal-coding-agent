@@ -104,7 +104,7 @@ test('headless startup uses auto-edits by default and preserves saved permission
       assert.equal(result.stopped, 'done');
       const mode = saved ?? 'auto-edits';
       assert.ok(request?.messages[0]?.content.startsWith(systemPrompt(root, mode)));
-      assert.match(request!.messages[0]!.content, /at most 60 model turns, including the final answer/);
+      assert.match(request!.messages[0]!.content, /at most 120 model turns, including the final answer/);
       assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode, true)));
       const offered = request!.tools as {function: {name: string}}[];
       assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
@@ -292,14 +292,14 @@ test('request boundaries group multiple tools and separate tool-only responses',
   ]);
 });
 
-test('print mode defaults to sixty turns and reports budget exhaustion', async () => {
+test('print mode defaults to 120 turns and reports budget exhaustion', async () => {
   const {choice, calls} = fakeModel((nth) => callResponse('bash', {command: 'cat note.txt'}));
   const work = tempDir();
   fs.writeFileSync(path.join(work, 'note.txt'), 'one\n');
 
   const result = await headless({root: work, choice, policy: 'yes'});
 
-  assert.equal(calls(), 60);
+  assert.equal(calls(), 120);
   assert.equal(result.stopped, 'step_limit');
   assert.deepEqual(result.prompts, []);
   assert.match(result.error!, /step budget exhausted/);

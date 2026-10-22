@@ -210,9 +210,9 @@ are shared. Headless runs also enable managed background Bash commands.
   edit is allowed without a confirm, exactly as in the terminal app, so a print
   run can write without `--yes`. A `deny` rule or `ask-edits` is what makes a
   run read-only.
-- Bounded on both axes: `--max-steps` limits model turns (default 60), including
+- Bounded on both axes: `--max-steps` limits model turns (default 120), including
   the final answer, and `--max-seconds` (default 300) aborts in-flight work.
-  Both modes share 10-turn reviews and a default 60-turn boundary. Interactive
+  Both modes review progress every 20 turns. Headless runs default to 120 turns. Interactive
   runs ask to continue; headless runs stop at their configured budget. Exhaustion reports `step_limit`, separately from denial.
 - Bash can run in the background while the agent uses other tools. Foreground
   wait expiry moves the same process into the background. Completion resumes

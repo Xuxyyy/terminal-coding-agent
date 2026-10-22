@@ -78,7 +78,7 @@ which is rarely the intent behind `edit(**)`.
 
 Two caps, and both are on:
 
-- **60 model turns by default**, changed with `--max-steps`. The final answer
+- **120 model turns by default**, changed with `--max-steps`. The final answer
   counts as a turn; one turn may contain multiple tool calls. A larger budget
   allows the run to continue beyond turn 60. The model is told the budget and
   receives private progress reviews every 20 turns, plus a warning with 10 turns
@@ -143,7 +143,7 @@ line carries a `kind` instead, so the two never blur together.
 | `-p`, `--print <task>` | Runs `<task>` as one turn and exits. Everything else here needs it. |
 | `--json` | Puts the event stream on stdout instead of the answer. |
 | `--yes` | Approves each permission prompt once. Never remembers one. |
-| `--max-steps <n>` | Model-turn cap, including the final answer. Default 60. Must be a positive safe integer. |
+| `--max-steps <n>` | Model-turn cap, including the final answer. Default 120. Must be a positive safe integer. |
 | `--max-seconds <n>` | Wall-clock cap. Default 300. Must be a positive number. |
 
 `acc --version` prints the installed ACC package version. It works outside a

@@ -63,7 +63,7 @@ test('parseArgs reads the task after -p into print', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
-    maxSteps: 60,
+    maxSteps: 120,
     version: false,
     sandbox: 'off',
   });
@@ -138,7 +138,7 @@ test('parseArgs defaults every print field when no flags are given', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
-    maxSteps: 60,
+    maxSteps: 120,
     version: false,
     sandbox: 'off',
   });
@@ -160,7 +160,7 @@ test('parseArgs takes -p, --json and --yes together', () => {
     json: true,
     yes: true,
     maxSeconds: 300,
-    maxSteps: 60,
+    maxSteps: 120,
     version: false,
     sandbox: 'off',
   });
@@ -173,7 +173,7 @@ test('parseArgs accepts --version without a project workspace', () => {
     json: false,
     yes: false,
     maxSeconds: 300,
-    maxSteps: 60,
+    maxSteps: 120,
     version: true,
     sandbox: 'off',
   });
@@ -203,8 +203,8 @@ test('sandbox rejects missing and invalid values and version combinations', () =
 });
 
 
-test('parseArgs accepts a headless step budget and defaults to sixty', () => {
-  assert.equal(parseArgs(['-p', 'hi']).maxSteps, 60);
+test('parseArgs accepts a headless step budget and defaults to 120', () => {
+  assert.equal(parseArgs(['-p', 'hi']).maxSteps, 120);
   assert.equal(parseArgs(['--max-steps', '90', '-p', 'hi']).maxSteps, 90);
 });
 

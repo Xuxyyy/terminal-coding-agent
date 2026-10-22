@@ -41,7 +41,7 @@ its parsed options into core.
 
 An unattended run has nobody watching it, so it is bounded on **both** axes.
 
-**Model turns.** `--max-steps N` sets a positive integer budget, default 60.
+**Model turns.** `--max-steps N` sets a positive integer budget, default 120.
 `runHeadless` also accepts `maxSteps` directly. This includes the final answer;
 a model turn may contain several tool calls. Headless runs use this ceiling
 instead of the interactive continuation checkpoint. A budget above 60 can pass
@@ -56,7 +56,8 @@ saved history; earlier messages stay unchanged. They are not displayed as chat
 replies. Exhaustion returns
 `stopped: 'step_limit'`, emits an error and accumulated usage, and exits 1.
 Interactive runs use the same review schedule and a 60-turn checkpoint, where
-the user can approve another segment. Both defaults come from `step-policy.ts`.
+the user can approve another segment. The headless default comes from
+`core/headless/budget.ts`; interactive checkpoints come from `step-policy.ts`.
 
 ```sh
 acc -p "complete the task and verify it" --max-steps 60 --max-seconds 900

@@ -93,13 +93,14 @@ shared client preserves it on assistant messages for later tool-enabled
 requests, sessions, compaction, and model switches, but never sends it through
 the UI event stream. The core loop has no provider-name branches.
 
-`NORMAL_STEP_POLICY` shares defaults between interactive and headless runs:
-a private progress review every 20 completed model turns and a 60-turn boundary.
+`NORMAL_STEP_POLICY` sets a private progress review every 20 completed model
+turns. Interactive runs have a
+60-turn continuation checkpoint; headless runs default to a 120-turn limit.
 Reviews show completed and remaining turns and focus on essential work and
 verification. An extra review with 10 turns left produces reminders at turns 20,
 40, and 50 before the first interactive checkpoint. Interactive approval grants
 another bounded 60-turn segment; headless runs stop at their selected budget,
-which defaults to 60. Reviews are appended system messages, saved before their
+which defaults to 120. Reviews are appended system messages, saved before their
 model requests and restored in order. Earlier messages remain unchanged, keeping
 the conversation prefix available for caching until existing compaction replaces
 older history.

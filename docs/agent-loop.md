@@ -90,9 +90,9 @@ them against the parent's context would show a bar climbing toward a compaction
 that nothing in the conversation justifies. The money is real and is counted; the
 context is not and is not.
 
-`NORMAL_STEP_POLICY` in `step-policy.ts` shares defaults between interactive and
-headless runs: a soft review every 20 completed model turns and a hard boundary
-at 60. A model turn may contain several tool calls. The next model request
+`NORMAL_STEP_POLICY` in `step-policy.ts` sets a soft review every 20 completed
+model turns and an interactive continuation checkpoint every 60 turns.
+Headless runs use a separate default budget of 120 turns. A model turn may contain several tool calls. The next model request
 receives an appended system-message review with the completed count, remaining
 turns, and next boundary. It asks the model to finish when required work is
 verified, otherwise prioritize essential work over optional improvements.
@@ -108,8 +108,7 @@ reviews after turns 20, 40, and 50. Approval at 60 allows the turn-60 review to 
 the new boundary at 120, followed by reviews at 80, 100, and 110. `'deny'` stops
 with a message. Esc returns silently; the UI reports the stop.
 
-Headless runs pass an explicit `maxSteps` budget, defaulting to the shared hard
-boundary. They stop at that budget and return `step_limit`, without interactive
+Headless runs pass an explicit `maxSteps` budget, defaulting to 120 turns. They stop at that budget and return `step_limit`, without interactive
 continuation checkpoints. A final answer on the last permitted turn completes
 normally. Reviews recur every 20 turns and also warn with ten turns left for a
 custom budget, or after the first turn for budgets of ten or fewer when another
