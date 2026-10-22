@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import {render} from 'ink';
-import {writeSync} from 'node:fs';
 import {createClient} from './core/client.js';
 import {exitCode, jsonLines, plainLines} from './core/headless/output.js';
 import {runHeadless} from './core/headless/run.js';
+import {createLineOutput} from './core/headless/writer.js';
 import {evictSessions} from './core/projects.js';
 import {loadSettings, settingsFiles} from './core/settings.js';
 import {App} from './ui/app.js';
@@ -21,38 +21,47 @@ try {
   if (!options.version && options.print !== null) {
     const choice = createClient();
     const controller = new AbortController();
+    const output = options.json
+      ? createLineOutput(process.stdout, (error) => controller.abort(error))
+      : undefined;
     const interrupt = () => controller.abort();
     process.on('SIGINT', interrupt);
     process.on('SIGTERM', interrupt);
-    const result = await runHeadless({
-      root: options.workspaceRoot,
-      task: options.print,
-      choice,
-      policy: options.yes ? 'yes' : 'deny',
-      maxSeconds: options.maxSeconds,
-      maxSteps: options.maxSteps,
-      sandbox: options.sandbox,
-      signal: controller.signal,
-      deadlineMs: options.deadlineMs,
-      ...(options.json ? {onEvent: (event) => writeSync(1, `${JSON.stringify(event)}\n`)} : {}),
-    }).finally(() => {
-      process.removeListener('SIGINT', interrupt);
-      process.removeListener('SIGTERM', interrupt);
-    });
-    if (options.json) {
-      for (const line of jsonLines(result, false)) {
-        process.stdout.write(`${line}\n`);
+    try {
+      const result = await runHeadless({
+        root: options.workspaceRoot,
+        task: options.print,
+        choice,
+        policy: options.yes ? 'yes' : 'deny',
+        maxSeconds: options.maxSeconds,
+        maxSteps: options.maxSteps,
+        sandbox: options.sandbox,
+        signal: controller.signal,
+        deadlineMs: options.deadlineMs,
+        ...(output ? {onEvent: (event) => output.write(JSON.stringify(event))} : {}),
+      });
+      if (output) {
+        for (const line of jsonLines(result, false)) {
+          output.write(line);
+        }
+      } else {
+        const {out, err} = plainLines(result);
+        for (const line of err) {
+          process.stderr.write(`${line}\n`);
+        }
+        if (out) {
+          process.stdout.write(out.endsWith('\n') ? out : `${out}\n`);
+        }
       }
-    } else {
-      const {out, err} = plainLines(result);
-      for (const line of err) {
-        process.stderr.write(`${line}\n`);
-      }
-      if (out) {
-        process.stdout.write(out.endsWith('\n') ? out : `${out}\n`);
+      process.exitCode = exitCode(result);
+    } finally {
+      try {
+        await output?.finish();
+      } finally {
+        process.removeListener('SIGINT', interrupt);
+        process.removeListener('SIGTERM', interrupt);
       }
     }
-    process.exitCode = exitCode(result);
   } else if (!options.version) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       throw new Error('interactive mode requires a terminal');
