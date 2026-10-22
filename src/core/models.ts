@@ -16,6 +16,7 @@ export const MODELS: Record<string, ModelInfo> = {
 
 export const DEFAULT_MODEL = 'deepseek-flash';
 export const JUDGE_MODEL = DEFAULT_MODEL;
+export const MAX_OUTPUT_TOKENS = 64_000;
 export const REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
 export type ReasoningEffort = typeof REASONING_EFFORTS[number];
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';

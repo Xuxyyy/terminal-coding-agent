@@ -235,6 +235,7 @@ test('the physical request-fit guard remains separate from compaction', async ()
   await withThreshold('1', async () => {
     for (const [tokens, stops] of [
       [980_000, true],
+      [940_000, true],
       [900_000, false],
     ] as const) {
       const model = recordingModel((nth) =>

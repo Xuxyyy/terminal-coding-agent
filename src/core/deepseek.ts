@@ -1,4 +1,5 @@
 import OpenAI, {type ClientOptions} from 'openai';
+import {MAX_OUTPUT_TOKENS} from './models.js';
 export type RequestMetadata = {requestId?: string; agentId?: string; attempt?: number};
 export type Invoke = (request: Record<string, unknown>, signal?: AbortSignal, metadata?: RequestMetadata) => Promise<unknown>;
 
@@ -35,7 +36,7 @@ export function deepseekClient(apiKey: string, invoke?: Invoke): OpenAI {
   const call = invoke ?? deepseekInvoke(apiKey);
   const create = async (body: Record<string, unknown>, options?: {signal?: AbortSignal; headers?: Record<string, string>}): Promise<unknown> => {
     const request = {
-      max_tokens: 32_000,
+      max_tokens: MAX_OUTPUT_TOKENS,
       reasoning_effort: 'high',
       thinking: {type: 'enabled'},
       ...body,

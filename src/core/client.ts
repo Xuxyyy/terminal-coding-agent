@@ -8,6 +8,7 @@ import type {AssistantContinuation} from './messages.js';
 import {
   DEFAULT_MODEL,
   JUDGE_MODEL,
+  MAX_OUTPUT_TOKENS,
   DEFAULT_REASONING_EFFORT,
   isReasoningEffort,
   type ReasoningEffort,
@@ -20,7 +21,7 @@ import {decideRecovery, type RecoveryAllowances} from './recovery.js';
 import {modelOf, reasoningOf} from './settings.js';
 import type {ToolDefinition} from './tools/registry.js';
 
-export {DEFAULT_MODEL, MODELS} from './models.js';
+export {DEFAULT_MODEL, MAX_OUTPUT_TOKENS, MODELS} from './models.js';
 
 export function judgeModelFor(_model?: string): string {
   return JUDGE_MODEL;
@@ -48,7 +49,6 @@ export function chooseReasoning(
   return value;
 }
 
-export const MAX_OUTPUT_TOKENS = 32_000;
 export const MODEL_REQUEST_TIMEOUT_MS = 120_000;
 export const MODEL_IDLE_TIMEOUT_MS = 60_000;
 

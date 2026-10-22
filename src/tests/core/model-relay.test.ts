@@ -12,7 +12,7 @@ import {fakeHost, streamOf, textChunk, toolCallChunk, finishChunk, usageChunk} f
 
 const model = 'deepseek-flash';
 const sentinel = 'fake-provider-secret-for-relay-test';
-const request = () => ({model, messages: [{role: 'user', content: 'Hi'}], stream: false, max_tokens: 32_000, reasoning_effort: 'high', thinking: {type: 'enabled'}});
+const request = () => ({model, messages: [{role: 'user', content: 'Hi'}], stream: false, max_tokens: 64_000, reasoning_effort: 'high', thinking: {type: 'enabled'}});
 const answer = {choices: [{message: {role: 'assistant', content: 'Hello'}, finish_reason: 'stop'}]};
 const endpoint = (relay: {port: number; path: string}) => `http://127.0.0.1:${relay.port}${relay.path}`;
 
@@ -98,6 +98,7 @@ test('the relay uses DeepSeek for coding and permission judging', async () => {
     assert.equal(response.choices[0]?.message.content, 'Hello');
     assert.equal(verdict, 'allow');
     assert.deepEqual(seen.map((body) => body.model), [model, model]);
+    assert.equal(seen[0]?.max_tokens, 64_000);
     assert.equal(seen[1]?.max_tokens, 512);
     assert.equal(seen[1]?.stream, false);
   } finally { await relay.close(); }
@@ -116,6 +117,7 @@ test('the relay rejects unknown routes, other models, built-in tools and excessi
       {...request(), generation_config: {max_output_tokens: 100_000}},
       {...request(), url: 'https://another-host.example'},
       {...request(), store: true},
+      {...request(), max_tokens: 64_001},
     ]) {
       const result = await fetch(endpoint(relay), {method: 'POST', body: JSON.stringify(body)});
       assert.equal(result.status, 400);

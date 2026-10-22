@@ -56,7 +56,7 @@ The workspace is the current directory. Installed as the `acc` command.
 DeepSeek is the coding provider, using its official Chat Completions API through
 `openai`. `deepseek-flash` is the only coding choice and currently maps to V4.1
 Flash. The alias can change. Its context window is 1,048,576 tokens; replies are
-capped at 32,000 tokens, including reasoning, with a 120-second request timeout.
+capped at 64,000 tokens, including reasoning, with a 120-second request timeout.
 
 `ACC_MODEL` overrides the user `model` setting. Unsupported model selections
 fail. Missing `DEEPSEEK_API_KEY` is an error, with no provider fallback. Keys load from the shell,
@@ -328,7 +328,7 @@ enters the projection, so the estimator's 28% shortfall applies to the messages
 added since the measurement, never to the whole conversation.
 
 Below the trigger sits a separate physical guard: if the next request plus a
-32,000-token reply would not fit in the window, the run stops with `the next
+64,000-token reply would not fit in the window, the run stops with `the next
 request would exceed the context window` rather than sending a request the
 provider will refuse. This is a request-fit check, not another compaction policy.
 

@@ -74,7 +74,7 @@ continues with the next normal request.
 
 If the summary fails, the current run stops with the detailed history intact.
 It does not send another normal model request. A separate physical guard also
-stops if the next request plus room for a 32,000-token reply would not fit:
+stops if the next request plus room for a 64,000-token reply would not fit:
 
 ```
 stopped: the next request would exceed the context window

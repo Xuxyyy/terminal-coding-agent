@@ -16,7 +16,7 @@ prove that runs made at different dates used the same model version.
 | Context window | 1,048,576 tokens |
 | Reasoning effort | `high` |
 | Thinking | enabled; disabled when effort is `none` |
-| Maximum output | 32,000 tokens, including reasoning |
+| Maximum output | 64,000 tokens, including reasoning |
 | Request timeout | 120 seconds |
 | Permission judge | `deepseek-flash`, with a separate prompt and token limit |
 

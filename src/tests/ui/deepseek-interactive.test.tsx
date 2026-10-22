@@ -90,7 +90,7 @@ test('interactive DeepSeek text appears progressively, runs a local tool, and st
     await new Promise((resolve) => setTimeout(resolve, 60));
     press('\r');
     await until(() => frames.some((frame) => frame.includes('Reading')), 'first text never appeared');
-    assert.ok(frames.some((frame) => frame.includes('deepseek-flash') && frame.includes('reasoning: high') && frame.includes('32000')));
+    assert.ok(frames.some((frame) => frame.includes('deepseek-flash') && frame.includes('reasoning: high') && frame.includes('64000')));
     assert.equal(calls, 1, 'text should appear before the request finishes');
     releaseFirst();
     await until(() => calls === 2, 'the local tool did not lead to a second model request');

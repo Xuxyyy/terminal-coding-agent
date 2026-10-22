@@ -243,7 +243,7 @@ remains the separate command that intentionally starts a new conversation.
 ### The two lines
 
 ```
-        0.8 × window            window − 32,000              window
+        0.8 × window            window − 64,000              window
              │                        │                        │
   ───────────┼────────────────────────┼────────────────────────┼──
      work    │ compact before the     │ stop before an         │ provider refuses
@@ -252,10 +252,10 @@ remains the separate command that intentionally starts a new conversation.
 
 | window | threshold (0.8) | floor | room between |
 | --- | --- | --- | --- |
-| 1,048,576 — all three configured models | 838,861 (rounded) | 1,016,576 | 177,715 (rounded) |
+| 1,048,576 — all three configured models | 838,861 (rounded) | 984,576 | 145,715 (rounded) |
 
 The threshold is the configurable compaction policy. The floor is the physical request-fit
-guard, which reserves the maximum 32,000-token reply. They are different checks.
+guard, which reserves the maximum 64,000-token reply. They are different checks.
 The fit guard also counts any temporary progress-review text, reducing the available
 room on review steps.
 
@@ -378,9 +378,9 @@ request is `[...every message, "summarize this"]`, which is *larger* than the re
 just refused. Summarizing is the one move unavailable at the wall. So the wall has to be seen
 coming.
 
-`MAX_OUTPUT_TOKENS` (32,000, `client.ts`) is the right reserve because the reply has to fit
+`MAX_OUTPUT_TOKENS` (64,000, `models.ts`) is the right reserve because the reply has to fit
 too. Note what this implies about the window: the reserve only sits above the 0.8 line when
-the window is at least 160,000 tokens. Every configured model in the table has 1,048,576 tokens, so
+the window is at least 320,000 tokens. Every configured model in the table has 1,048,576 tokens, so
 this holds today — but a small-window model added later would trip the floor below its own
 compaction line.
 

@@ -44,7 +44,7 @@ test('recovery sends reasoning and unexecuted drafts before a complete replaceme
       textChunk('Preparing the file.'),
       toolCallChunk(drafts[0]!.id, drafts[0]!.name, drafts[0]!.args),
       toolCallChunk(drafts[1]!.id, drafts[1]!.name, drafts[1]!.args, 1),
-      finishChunk('length'), usageChunk(10, 32_000),
+      finishChunk('length'), usageChunk(10, 64_000),
     );
     if (nth === 2) {
       assert.equal(fs.existsSync(path.join(work, 'result.txt')), false);
@@ -87,7 +87,7 @@ test('recovery sends reasoning and unexecuted drafts before a complete replaceme
       content: 'Preparing the file.', toolCalls: drafts, reasoning: 'retain this plan',
     });
     assert.equal(attempts[0]!.evidence.outcome, 'incomplete');
-    assert.deepEqual(active.usage, {prompt: 60, completion: 32_012, total: 32_072});
+    assert.deepEqual(active.usage, {prompt: 60, completion: 64_012, total: 64_072});
     assert.deepEqual(loadSession(work, store.id, home).messages, active.messages.filter((message) => message.role !== 'system'));
   } finally {
     store.close();

@@ -28,7 +28,7 @@ above its automatic allowance threshold ask you for approval. An explicitly save
 - DeepSeek V4.1 Flash (`deepseek-flash`) is the only coding model, through the
   official DeepSeek API. Set `DEEPSEEK_API_KEY`. Reasoning defaults to `high`;
   `ACC_REASONING_EFFORT` accepts `none`, `low`, `high`, or `max`. Subagents inherit
-  it. Output is capped at 32,000 tokens, including reasoning. Auto permission
+  it. Output is capped at 64,000 tokens, including reasoning. Auto permission
   judging uses the same DeepSeek model and key.
 - One permission gate for file and shell actions, including sub-agent actions.
 - In `auto`, prefer Bash for reading, searching, and commands. Prefer Edit and

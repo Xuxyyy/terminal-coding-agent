@@ -6,7 +6,7 @@ import {pathToFileURL} from 'node:url';
 import {z} from 'zod';
 import {deepseekInvoke, type Invoke} from './deepseek.js';
 import {errorCategory, retryDelay, rootError} from './retry.js';
-import {DEFAULT_MODEL} from './models.js';
+import {DEFAULT_MODEL, MAX_OUTPUT_TOKENS} from './models.js';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const messageSchema = z.discriminatedUnion('role', [
@@ -25,7 +25,7 @@ const codingRequestSchema = z.object({
   messages: z.array(messageSchema),
   stream: z.boolean(),
   stream_options: z.object({include_usage: z.literal(true)}).strict().optional(),
-  max_tokens: z.number().int().min(1).max(32_000),
+  max_tokens: z.number().int().min(1).max(MAX_OUTPUT_TOKENS),
   reasoning_effort: z.enum(['none', 'low', 'high', 'max']),
   thinking: z.object({type: z.enum(['enabled', 'disabled'])}).strict(),
   tools: z.array(z.object({

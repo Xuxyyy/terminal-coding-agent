@@ -29,7 +29,7 @@ test('coding settings are explicit and reasoning overrides are validated', () =>
   assert.throws(() => parseReasoning('{"reasoning_effort":5}', 'settings', true), /must be/);
   assert.deepEqual(modelSettings(choice(async () => null)), {
     provider: 'deepseek', baseURL: 'https://api.deepseek.com', model: 'deepseek-flash',
-    reasoningEffort: 'high', thinking: 'enabled', maxOutputTokens: 32_000, requestTimeoutMs: 120_000, startupTimeoutMs: 120_000, idleTimeoutMs: 60_000,
+    reasoningEffort: 'high', thinking: 'enabled', maxOutputTokens: 64_000, requestTimeoutMs: 120_000, startupTimeoutMs: 120_000, idleTimeoutMs: 60_000,
   });
 });
 
@@ -80,7 +80,7 @@ test('reasoning and fragmented tools survive later tool and user turns', async (
   assert.equal((assistant as {reasoning_content?: string}).reasoning_content, 'inspect the file');
   assert.equal(sent[0]!.reasoning_effort, 'high');
   assert.deepEqual(sent[0]!.thinking, {type: 'enabled'});
-  assert.equal(sent[0]!.max_tokens, 32_000);
+  assert.equal(sent[0]!.max_tokens, 64_000);
   assert.equal(first.usage.total, 16);
   assert.deepEqual(events.filter((event) => event.type === 'text_delta'), [{type: 'text_delta', text: 'done'}]);
 });
@@ -117,7 +117,7 @@ test('output-limited tools become unexecuted drafts without replaying the reques
       textChunk('I will write the result.'),
       toolCallChunk(draft.id, draft.name, '{"path":"result.txt",'),
       {choices: [{index: 0, delta: {tool_calls: [{index: 0, function: {arguments: '"content":"part'}}]}, finish_reason: 'length'}]},
-      usageChunk(20, 32_000),
+      usageChunk(20, 64_000),
     );
   });
   const {host, events} = fakeHost();
@@ -130,14 +130,14 @@ test('output-limited tools become unexecuted drafts without replaying the reques
   assert.equal(response.continuation?.content, 'keep the useful plan');
   assert.deepEqual(response.toolCalls, []);
   assert.deepEqual(response.toolCallDrafts, [draft]);
-  assert.equal(response.usage.completion, 32_000);
+  assert.equal(response.usage.completion, 64_000);
   assert.equal(events.some((event) => event.type === 'model_retry'), false);
   const attempt = events.find((event) => event.type === 'model_attempt');
   assert.equal(attempt?.evidence.outcome, 'incomplete');
   assert.deepEqual(attempt?.evidence.partial, {
     content: 'I will write the result.', toolCalls: [draft], reasoning: 'keep the useful plan',
   });
-  assert.equal(attempt?.evidence.usage?.outputTokens, 32_000);
+  assert.equal(attempt?.evidence.usage?.outputTokens, 64_000);
 });
 
 test('DeepSeek sessions retain reasoning and legacy sessions cannot resume', () => {
@@ -185,7 +185,7 @@ test('the official SDK carries explicit settings and parses DeepSeek SSE usage',
   const result = await streamStep(model, [{role: 'user', content: 'hello'}], [], host);
   assert.equal(body.reasoning_effort, 'max');
   assert.deepEqual(body.thinking, {type: 'enabled'});
-  assert.equal(body.max_tokens, 32_000);
+  assert.equal(body.max_tokens, 64_000);
   assert.equal(body.extra_body, undefined);
   assert.equal(result.content, 'answer');
   assert.equal(result.continuation?.content, 'private reasoning');
