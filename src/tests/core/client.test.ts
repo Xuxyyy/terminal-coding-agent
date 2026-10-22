@@ -76,6 +76,47 @@ test('a response collects the text, the tool calls and the usage', async () => {
   ]);
   assert.equal(calls(), 1);
   assert.deepEqual(texts(events), ['look', 'ing']);
+  const thinking = events.filter((event) => event.type === 'thinking_delta');
+  assert.deepEqual(thinking.map((event) => event.text), ['plan ', 'the call']);
+  const start = events.find((event) => event.type === 'model_attempt_start')!;
+  for (const event of thinking) {
+    assert.equal(event.requestId, start.requestId);
+    assert.equal(event.agentId, start.agentId);
+    assert.equal(event.attempt, start.attempt);
+  }
+});
+
+test('thinking is recorded before reply text without becoming reply text', async () => {
+  const {choice} = fakeModel(() => streamOf(
+    reasoningChunk('Inspect '), reasoningChunk('the result.'),
+    textChunk('Done.'), finishChunk('stop'), usageChunk(12, 5),
+  ));
+  const {host, events} = fakeHost();
+  host.agentId = 'worker';
+  const response = await streamStep(choice, [], [], host, {...fast, requestId: 'thinking-request'});
+  assert.equal(response.content, 'Done.');
+  assert.deepEqual(response.continuation, {kind: 'reasoning_content', content: 'Inspect the result.'});
+  assert.deepEqual(events.filter((event) => event.type === 'thinking_delta' || event.type === 'text_delta'), [
+    {type: 'thinking_delta', text: 'Inspect ', requestId: 'thinking-request', agentId: 'worker', attempt: 1},
+    {type: 'thinking_delta', text: 'the result.', requestId: 'thinking-request', agentId: 'worker', attempt: 1},
+    {type: 'text_delta', text: 'Done.'},
+  ]);
+});
+
+test('thinking from failed attempts stays attributed separately from retry output', async () => {
+  const {choice} = fakeModel((nth) => nth === 1
+    ? streamOf(reasoningChunk('Unfinished plan'), toolCallChunk('draft', 'read_file', '{'), connectionError())
+    : streamOf(reasoningChunk('New plan'), textChunk('Done.'), finishChunk('stop')),
+  );
+  const {host, events} = fakeHost();
+  const response = await streamStep(choice, [], [], host, {...fast, requestId: 'retry-request'});
+  assert.equal(response.content, 'Done.');
+  const thinking = events.filter((event) => event.type === 'thinking_delta');
+  assert.deepEqual(thinking.map((event) => [event.requestId, event.attempt, event.text]), [
+    ['retry-request', 1, 'Unfinished plan'], ['retry-request', 2, 'New plan'],
+  ]);
+  assert.deepEqual(events.filter((event) => event.type === 'model_attempt').map((event) => event.evidence.outcome),
+    ['failed', 'completed']);
 });
 
 test('standard cached-token details produce cache hit and miss usage', () => {

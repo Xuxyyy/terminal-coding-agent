@@ -62,7 +62,7 @@ export function childHost(host: Host): {host: Host; events: AgentEvent[]} {
         : {}),
       onEvent(event) {
         events.push(event);
-        if (['model_attempt', 'model_attempt_start', 'model_retry', 'recovery', 'response_incomplete'].includes(event.type)) host.onDiagnostic?.(event);
+        if (['model_attempt', 'model_attempt_start', 'model_retry', 'recovery', 'response_incomplete', 'thinking_delta'].includes(event.type)) host.onDiagnostic?.(event);
       },
       confirm(request) {
         return host.confirm({...request, reason: `sub-agent: ${request.reason}`});

@@ -38,6 +38,7 @@ export type AgentEvent =
   | {type: 'background_task'; action: 'started' | 'completed' | 'handed_off'; task: BackgroundTaskInfo}
   | {type: 'model_request_start'; request: number}
   | {type: 'text_delta'; text: string}
+  | {type: 'thinking_delta'; text: string; requestId: string; agentId: string; attempt: number}
   | {type: 'model_retry'; attempt: number; total: number; delayMs?: number; requestId?: string}
   | {type: 'tool_start'; id: string; name: string; args: unknown}
   | {

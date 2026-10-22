@@ -124,6 +124,16 @@ test('every json line parses on its own', () => {
   for (const line of lines) assert.doesNotThrow(() => JSON.parse(line));
 });
 
+test('JSON keeps thinking while plain output and the final message remain separate', () => {
+  const thinking = {type: 'thinking_delta' as const, text: 'Inspect the file.',
+    requestId: 'request-one', agentId: 'main', attempt: 1};
+  const result = headlessResult({text: 'Done.', events: [thinking, {type: 'text_delta', text: 'Done.'}]});
+  const lines = jsonLines(result).map((line) => JSON.parse(line));
+  assert.deepEqual(lines[0], thinking);
+  assert.equal(lines.at(-1).message, 'Done.');
+  assert.deepEqual(plainLines(result), {out: 'Done.', err: []});
+});
+
 test('the result line counts the prompts and the tool steps', () => {
   const lines = jsonLines(
     headlessResult({

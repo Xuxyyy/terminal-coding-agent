@@ -13,6 +13,7 @@ import {
   childHost,
   childTools,
   makeSubagent,
+  report,
   subagent,
 } from '../../../core/tools/subagent.js';
 import {
@@ -227,6 +228,20 @@ test('an event from the child never reaches the parent host', () => {
 
   assert.deepEqual(events, []);
   assert.equal(child.events.length, 3);
+});
+
+test('child thinking reaches diagnostic logs without becoming a parent message', () => {
+  const {host, events} = fakeHost();
+  const diagnostics: unknown[] = [];
+  host.onDiagnostic = (event) => diagnostics.push(event);
+  const child = childHost(host);
+  const thinking = {type: 'thinking_delta' as const, text: 'Inspect the file.',
+    requestId: 'child-request', agentId: child.host.agentId!, attempt: 1};
+  child.host.onEvent(thinking);
+  child.host.onEvent({type: 'text_delta', text: 'Child answer.'});
+  assert.deepEqual(diagnostics, [thinking]);
+  assert.deepEqual(events, []);
+  assert.equal(report(child.events).text, 'Child answer.');
 });
 
 test('a question from the child is asked in the parent, named as the sub-agent', async () => {

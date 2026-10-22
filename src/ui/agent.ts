@@ -149,6 +149,7 @@ export function useAgent(
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
+        if (event.type === 'thinking_delta') return;
         if (event.type === 'model_request_start' || event.type === 'model_attempt_start' || event.type === 'run_start') return;
         if (event.type === 'model_attempt') {
           if (event.evidence.outcome === 'failed' && event.evidence.partial?.toolCalls.length) {

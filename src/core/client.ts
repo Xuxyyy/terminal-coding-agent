@@ -198,7 +198,7 @@ async function attemptStep(
   progress: () => void,
   completed: () => void,
   snapshot: (response: AssistantResponse) => void,
-  metadata: RequestMetadata,
+  metadata: Required<RequestMetadata>,
 ): Promise<AssistantResponse> {
   let content = '';
   let reasoningContent: string | undefined;
@@ -272,6 +272,7 @@ async function attemptStep(
         progress();
         reasoningContent = (reasoningContent ?? '') + reasoning;
         emitted = true;
+        host.onEvent({type: 'thinking_delta', text: reasoning, ...metadata});
       }
       if (delta.content) {
         progress();
