@@ -92,7 +92,7 @@ const backgroundSchema = schema.extend({
 export const BACKGROUND_INSTRUCTIONS =
   ' Background commands keep running while you use other tools. Set run_in_background to true to start one. ' +
   'A foreground command that exceeds its timeout moves to the background without restarting; its background runtime defaults to 30 minutes. ' +
-  'Completion automatically sends a runtime notice; the main agent resumes even after a reply. Do not poll repeatedly. ' +
+  'Completion automatically sends a runtime notice; the main agent resumes even after a reply. Avoid repeated status-only polling; use diagnostic checks when progress is uncertain. ' +
   'Use task_output to read status and paged output, and task_stop to stop a command. ' +
   'Wait for required results before dependent work and verify exit status before claiming success. ' +
   'Use lifetime finite (default) for work whose result must be checked. Use temporary_service for servers needed only during the run; they are cleaned up on exit. ' +

@@ -14,7 +14,7 @@ export const taskOutput: Tool = {
   name: 'task_output',
   description: 'Read a managed command’s status, exit reason, and saved output without waiting. ' +
     'Use next_offset to read another page. Access is limited to your own tasks. ' +
-    'Completion notices arrive automatically; do not repeatedly poll running tasks.',
+    'Completion notices arrive automatically; avoid repeated status-only polling. Use shell diagnostics when progress is uncertain.',
   schema: outputSchema,
   async run(args, ctx) {
     const parsed = outputSchema.parse(args);

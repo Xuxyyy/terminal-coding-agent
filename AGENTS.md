@@ -12,7 +12,7 @@
   not make task-specific changes solely to improve benchmark scores.
 - Keep actual scores, run counts, budgets, and evaluation plans in separate
   records rather than in this file. These priorities do not authorize evaluation
-  runs or paid API calls; follow the approval requirements below.
+  runs or paid API calls; follow the API test requirements below.
 
 # Public repository safety
 
@@ -46,7 +46,15 @@
   while handling credentials. Loading credentials does not authorize spending.
 - Keep unit and simulated tests key-free, using fakes and the existing offline
   test setup. Do not load real credentials for these tests.
-- Before any live API test, obtain approval for the scenario, provider/model,
+- For requested ACC e2e verification, state the scenario, provider/model,
+  permission mode, overrides (including none), and approximate cost before
+  launch. Include coding, permission-judge, retry, and subagent calls in the
+  estimate. No default spending limit or separate budget approval applies.
+  Stay within the agreed scenarios, attempts, and runtime limits. Report
+  recorded usage and cost uncertainty afterward; do not stop agreed work solely
+  because usage is missing, cost exceeds the estimate, or an agent-managed
+  default budget is reached. An explicit user spending limit still controls.
+- Before other live API tests, obtain approval for the scenario, provider/model,
   permission mode, overrides (including none), estimated cost, and spending limit.
   Include coding, permission-judge, retry, and subagent calls in the scope and
   estimate. Existing approval applies only within its agreed scope and limit.
@@ -63,10 +71,11 @@
   before reporting completion. Give it the change, expected behavior, and source
   locations. Unit tests suffice for isolated internal changes they fully cover;
   documentation-only and wording-only changes normally need no real tests.
-- Obtain approval for paid tests under the API rules above. Pass the approved
-  scope, accumulated spend, remaining budget, and any existing evidence folder
-  to the subagent. Use `.codex/agents/acc-e2e.toml` for the spending limit and
-  detailed test procedure; retries do not reset the budget.
+- Follow the ACC e2e cost-notice rule above. Pass the agreed scope, pre-run cost
+  estimate, recorded usage and uncertainty, any explicit user spending limit,
+  and any existing evidence folder to the subagent. Use
+  `.codex/agents/acc-e2e.toml` for the detailed test procedure. Carry usage across
+  scenarios and retries; delegation does not reset an explicit user limit.
 - Fix failures caused by the change and rerun affected checks within the
   approved scope. Report failures, skipped or blocked checks, and verification
   limits, with a link to the saved transcript.

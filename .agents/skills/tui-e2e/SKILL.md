@@ -14,19 +14,22 @@ an existing successful build confirmed to match it. Seed only required files.
 
 Run free checks within the task's scope without extra approval. Before paid
 API work, give the parent agent the task, pass conditions, provider and model,
-permission mode, setting overrides, and approximate cost and scope. The parent
-obtains user approval unless the work is already covered by existing approval.
+permission mode, setting overrides, and approximate cost and scope. For requested
+ACC e2e tests, the parent gives the user the estimate before launch; no default
+spending limit or separate budget approval applies. For other paid work, the
+parent obtains approval unless the work is already covered by existing approval.
 Confirm the running app's model and mode before sending a paid prompt. If they
 differ from the approved plan, correct the setup or obtain approval for the
 change. Never switch providers or broaden permissions silently.
 
-Track observable usage and enforce the user's spending limit, including any
-standing limit in the caller's instructions. Carry spent usage across retries
-and reruns. Before each paid prompt, estimate the whole turn, including tool
-rounds and retries; stop if it could exceed the remaining budget or usage is
-unknown. A running app may make several API calls before usage is visible.
-An instruction-based limit cannot guarantee a billing cutoff. Report possible
-overruns and missing usage, and obtain approval before increasing the limit.
+Follow the caller's cost policy. For ACC e2e tests, estimate the agreed scope
+including tool rounds, judges, retries, and subagents before launch. Track usage
+across attempts and report recorded cost and uncertainty afterward; missing usage
+is not zero. Do not stop agreed ACC e2e work solely because usage is missing,
+cost exceeds the estimate, or an agent-managed default budget is reached. An
+explicit user spending limit still controls. Keep agreed task, attempt, and
+runtime limits. A cost estimate is not a billing cap; in-flight calls and missing
+usage can leave final cost uncertain.
 
 ## Drive and observe
 
@@ -77,7 +80,7 @@ Return the short report in chat, linking to the saved transcript separately:
 - Only the screen or file excerpts needed to support the result. Include timing
   when it matters and a suspected source location for failures when known.
 - Actual provider, model, permission mode, and any overrides; observable usage
-  and estimated cost against the spending limit, with missing usage stated;
+  and estimated cost, any explicit user spending limit, and missing usage;
   cleanup status and any leftovers; absolute links to the saved transcript
   and the task index containing earlier attempts.
 
