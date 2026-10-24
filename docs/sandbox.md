@@ -17,10 +17,20 @@ explicitly. The same flag works with `-p`; a new launch without it starts Off.
 
 ## Both modes
 
-Each operation has a clean allowlisted environment, private HOME and temporary files,
-Shell startup files disabled, output limits, timeout, cancellation, and ordinary child
-process cleanup. Provider keys, relay URLs, agent sockets, and startup injection
-variables are not inherited. File tools keep their worker and backup behavior.
+Each operation has a clean allowlisted environment, the execution environment’s existing
+HOME, stable cache/configuration paths, shell startup files disabled, output limits,
+timeout, cancellation, and ordinary child process cleanup. In a container, HOME is
+the container’s HOME. Shell exports do not carry over to later commands. Provider
+keys, relay URLs, agent sockets, and startup injection variables are not inherited.
+File tools keep their worker and backup behavior.
+
+Each workspace has private temporary storage shared by commands and later requests.
+ACC preserves files there on completion, failure, cancellation, and service shutdown.
+Ordinary files and requested outputs need no retention declaration, even under
+`/tmp` or `TMPDIR`. Process lifetime does not determine file lifetime. Retained-service
+stop commands stop processes without deleting shared storage. ACC does not create
+a disposable HOME or automatically remove this storage; the host may still apply
+its own temporary-file policy.
 
 **Off removes ACC's OS file-access and network restrictions.** The host or container's
 own permissions still apply. Environment cleanup reduces inherited secrets but cannot
@@ -32,8 +42,10 @@ checks still run.
 
 - Ordinary workspace files are readable and writable. Selected system toolchains
   and public runtime data are readable. Other host files are unavailable.
-- Each call gets a fresh private HOME, temporary directory, and package cache.
-  Shell uses `bash --noprofile --norc -c`; personal login/startup files do not load.
+- HOME and cache/configuration locations remain stable. This grants no additional
+  access to HOME; installations and caches outside the workspace need specific
+  approved path grants. Shell uses `bash --noprofile --norc -c`; personal login/startup
+  files do not load.
 - The environment is constructed from an allowlist. Provider keys, the model
   relay URL, SSH-agent sockets, and environment-based code injection are omitted.
 - Known credential storage is hidden, including `.acc`, SSH/cloud credentials,

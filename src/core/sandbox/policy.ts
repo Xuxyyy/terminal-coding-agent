@@ -83,20 +83,21 @@ export function accessReason(access: SandboxAccess): string {
 }
 
 export function cleanEnvironment(temporary: string, env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const home = env.HOME || os.homedir();
   const result: NodeJS.ProcessEnv = {
     PATH: env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
-    HOME: temporary,
+    HOME: home,
     TMPDIR: temporary,
     TMP: temporary,
     TEMP: temporary,
-    XDG_CACHE_HOME: path.join(temporary, 'cache'),
-    XDG_CONFIG_HOME: path.join(temporary, 'config'),
-    npm_config_cache: path.join(temporary, 'npm-cache'),
+    XDG_CACHE_HOME: env.XDG_CACHE_HOME || path.join(home, '.cache'),
+    XDG_CONFIG_HOME: env.XDG_CONFIG_HOME || path.join(home, '.config'),
+    npm_config_cache: env.npm_config_cache || env.NPM_CONFIG_CACHE || path.join(home, '.npm'),
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_TERMINAL_PROMPT: '0',
   };
-  for (const key of ['LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TERM', 'NO_COLOR', 'FORCE_COLOR']) {
+  for (const key of ['LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TERM', 'NO_COLOR', 'FORCE_COLOR', 'XDG_DATA_HOME', 'XDG_STATE_HOME']) {
     if (env[key] !== undefined) result[key] = env[key];
   }
   return result;

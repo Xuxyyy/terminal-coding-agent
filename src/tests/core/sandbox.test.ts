@@ -8,7 +8,7 @@ import {once} from 'node:events';
 import {setTimeout as delay} from 'node:timers/promises';
 import test, {type TestContext} from 'node:test';
 import {cleanEnvironment, makePolicy, normalizeAccess, type SandboxAccess} from '../../core/sandbox/policy.js';
-import {macProfile, runCommand, runSandboxed} from '../../core/sandbox/run.js';
+import {macProfile, runCommand, runSandboxed, workspaceTemporary} from '../../core/sandbox/run.js';
 import {bash} from '../../core/tools/bash.js';
 import {readFile} from '../../core/tools/read.js';
 import {writeFile} from '../../core/tools/write.js';
@@ -28,6 +28,7 @@ function fixture(t: TestContext): {root: string; outside: string; temporary: str
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'acc-boundary-test-'));
   t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
   const root = path.join(directory, 'project');
+  t.after(() => fs.rmSync(workspaceTemporary(root), {recursive: true, force: true}));
   const outside = path.join(directory, 'outside');
   const temporary = path.join(directory, 'scratch');
   for (const dir of [root, outside, temporary]) fs.mkdirSync(dir);
@@ -91,14 +92,39 @@ test('process exit check does not mistake permission errors for cleanup', async 
 
 test('the child environment contains settings, not credentials or startup injection', () => {
   const env = cleanEnvironment('/private/scratch', {
-    PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', TZ: 'UTC', DEEPSEEK_API_KEY: 'fake-key',
+    PATH: '/usr/bin:/bin', HOME: '/environment/home', LANG: 'en_US.UTF-8', TZ: 'UTC', DEEPSEEK_API_KEY: 'fake-key',
     ACC_MODEL_RELAY_URL: 'http://localhost/fake-capability', SSH_AUTH_SOCK: '/fake/socket',
     BASH_ENV: '/fake/startup', NODE_OPTIONS: '--require=/fake/injection', AWS_SECRET_ACCESS_KEY: 'fake',
   });
   for (const key of ['DEEPSEEK_API_KEY', 'ACC_MODEL_RELAY_URL', 'SSH_AUTH_SOCK', 'BASH_ENV', 'NODE_OPTIONS', 'AWS_SECRET_ACCESS_KEY']) assert.equal(env[key], undefined);
-  assert.equal(env.HOME, '/private/scratch');
+  assert.equal(env.HOME, '/environment/home');
+  assert.equal(env.XDG_CACHE_HOME, '/environment/home/.cache');
+  assert.equal(env.XDG_CONFIG_HOME, '/environment/home/.config');
+  assert.equal(env.npm_config_cache, '/environment/home/.npm');
   assert.equal(env.TMPDIR, '/private/scratch');
   assert.equal(env.PATH, '/usr/bin:/bin');
+});
+
+test('explicit cache and configuration paths keep their environment lifetime', () => {
+  const locations = {HOME: '/container/home', XDG_CACHE_HOME: '/cache', XDG_CONFIG_HOME: '/config',
+    XDG_DATA_HOME: '/data', XDG_STATE_HOME: '/state', npm_config_cache: '/npm'};
+  const env = cleanEnvironment('/scratch', locations);
+  for (const [key, value] of Object.entries(locations)) assert.equal(env[key], value);
+  assert.equal(cleanEnvironment('/scratch', {NPM_CONFIG_CACHE: '/npm-upper'}).npm_config_cache, '/npm-upper');
+  assert.equal(cleanEnvironment('/scratch', {}).HOME, os.homedir());
+});
+
+test('workspace temporary storage rejects unsafe existing paths without running the command', async (t) => {
+  const {root, outside} = fixture(t);
+  const temporary = workspaceTemporary(root);
+  const options = {root, program: '/bin/bash', args: ['-c', 'touch ran'], sandbox: 'off' as const, signal: new AbortController().signal};
+  fs.symlinkSync(outside, temporary);
+  await assert.rejects(runCommand(options), /private directory owned/);
+  fs.unlinkSync(temporary);
+  fs.mkdirSync(temporary, {mode: 0o755});
+  await assert.rejects(runCommand(options), /private directory owned/);
+  assert.equal(fs.existsSync(path.join(root, 'ran')), false);
+  assert.equal(fs.statSync(temporary).mode & 0o777, 0o755);
 });
 
 test('resource grants reject credential paths, including a symlink alias', (t) => {
@@ -357,7 +383,7 @@ for (const sandbox of ['off', 'on'] as const) {
     assert.equal(fs.readFileSync(path.join(root, 'note.txt'), 'utf8'), 'after\n');
   });
 
-  test(`${sandbox}: actual child environment is clean and private scratch is removed`, available, async (t) => {
+  test(`${sandbox}: actual child environment is clean and storage survives completion`, available, async (t) => {
     const {root} = fixture(t);
     const names = ['DEEPSEEK_API_KEY', 'ACC_MODEL_RELAY_URL', 'BASH_ENV', 'NODE_OPTIONS', 'SSH_AUTH_SOCK'];
     const prior = names.map((name) => process.env[name]);
@@ -372,8 +398,40 @@ for (const sandbox of ['off', 'on'] as const) {
     assert.equal(result.code, 0, result.stderr);
     const output = JSON.parse(result.stdout);
     assert.deepEqual(output.keys, []);
-    assert.equal(output.home, output.tmp);
-    assert.equal(fs.existsSync(output.home), false);
+    assert.equal(output.home, process.env.HOME || os.homedir());
+    assert.equal(output.tmp, workspaceTemporary(root));
+    assert.equal(fs.existsSync(output.tmp), true);
+    assert.equal(fs.statSync(output.tmp).mode & 0o777, 0o700);
+  });
+
+  test(`${sandbox}: HOME installations and temporary outputs remain usable by later commands`, available, async (t) => {
+    const {root, outside} = fixture(t);
+    const home = path.join(outside, 'home');
+    fs.mkdirSync(home);
+    const locations = {HOME: home, XDG_CACHE_HOME: path.join(home, '.cache'),
+      XDG_CONFIG_HOME: path.join(home, '.config'), npm_config_cache: path.join(home, '.npm')};
+    for (const [key, value] of Object.entries(locations)) {
+      const prior = process.env[key];
+      process.env[key] = value;
+      t.after(() => { if (prior === undefined) delete process.env[key]; else process.env[key] = prior; });
+    }
+    const run = (command: string, access?: SandboxAccess) => runCommand({root, sandbox,
+      program: '/bin/bash', args: ['--noprofile', '--norc', '-c', command],
+      signal: new AbortController().signal, access});
+    const grants = {write_paths: [path.join(home, '.local'), path.join(home, '.cache'), path.join(home, '.config'), path.join(home, '.npm')]};
+    for (const target of grants.write_paths) fs.mkdirSync(target);
+    const installed = await run('mkdir -p "$HOME/.local/bin" .venv/bin; printf "#!/bin/bash\\nprintf interpreter-ok" > "$HOME/.local/bin/python"; chmod +x "$HOME/.local/bin/python"; ln -s "$HOME/.local/bin/python" .venv/bin/python; printf cache > "$XDG_CACHE_HOME/artifact"; printf config > "$XDG_CONFIG_HOME/settings"; printf npm > "$npm_config_cache/artifact"; printf output > "$TMPDIR/result"; export ACC_COMMAND_ONLY=yes', grants);
+    assert.equal(installed.code, 0, installed.stderr);
+    if (sandbox === 'on') {
+      const blocked = await run('.venv/bin/python');
+      assert.notEqual(blocked.code, 0, 'stable HOME must not silently grant access');
+    }
+    const later = await run('.venv/bin/python; cat "$XDG_CACHE_HOME/artifact" "$XDG_CONFIG_HOME/settings" "$npm_config_cache/artifact" "$TMPDIR/result"; test -z "$ACC_COMMAND_ONLY"', grants);
+    assert.equal(later.code, 0, later.stderr);
+    assert.equal(later.stdout, 'interpreter-okcacheconfignpmoutput');
+    const failed = await run('printf recovery > "$TMPDIR/partial"; exit 7');
+    assert.equal(failed.code, 7);
+    assert.equal((await run('cat "$TMPDIR/partial"')).stdout, 'recovery');
   });
 
   test(`${sandbox}: timeout and cancellation stop ordinary child processes`, available, async (t) => {

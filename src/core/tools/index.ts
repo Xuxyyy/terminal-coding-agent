@@ -18,7 +18,7 @@ const AUTO_DESCRIPTIONS: Record<string, string> = {
     'so /rewind can use their existing backups when available. This is a preference, not a restriction; shell edits remain allowed. ' +
     'Keep searches narrow and avoid sensitive files; shell searches do not inherit the grep tool\'s exclusions. ' +
     'Keep edits targeted. Shell changes are not backed up for /rewind, and git cannot reliably recover overwritten uncommitted work. ' +
-    'Clean environment and private HOME/temp files. ' +
+    'Clean environment; existing HOME and persistent workspace temp files. Exports do not persist. ' +
     'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
   edit_file:
     'Replace one exact, unique piece of text in a file. Read the file first so old_string matches byte for byte. ' +

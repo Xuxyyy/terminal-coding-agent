@@ -6,7 +6,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import test, {type TestContext} from 'node:test';
 import {BackgroundTasks} from '../../core/background.js';
 import type {AgentEvent} from '../../core/host.js';
-import {OUTPUT_LIMIT, runCommand} from '../../core/sandbox/run.js';
+import {OUTPUT_LIMIT, runCommand, workspaceTemporary} from '../../core/sandbox/run.js';
 import {backgroundBash} from '../../core/tools/bash.js';
 import {taskOutput, taskStop} from '../../core/tools/tasks.js';
 import {toolsFor, toolDefinitions} from '../../core/tools/index.js';
@@ -30,6 +30,7 @@ function fixture(t: TestContext) {
     directory: path.join(root, 'private', 'tasks')});
   t.after(async () => {
     await tasks.close('test cleanup');
+    fs.rmSync(workspaceTemporary(root), {recursive: true, force: true});
     fs.rmSync(root, {recursive: true, force: true});
   });
   const ctx: ToolContext = {root, host, allowed: new Set(), rules: {allow: [], ask: [], deny: []},
@@ -57,23 +58,29 @@ async function gone(pid: number) {
 
 test('a background shell overlaps another command and preserves private logs after cleanup', async (t) => {
   const f = fixture(t);
-  const running = await f.run('echo $$ > first.pid; echo "$HOME" > home.path; printf started; while ! test -f release; do sleep 0.01; done; printf finished');
+  const running = await f.run('echo $$ > first.pid; printf preserved > "$TMPDIR/result"; printf started; while ! test -f release; do sleep 0.01; done; cat "$TMPDIR/result" > result; printf finished');
   assert.ok('task' in running);
   await waitFor(() => fs.readFileSync(running.task.logPath, 'utf8') === 'started');
   const page = await f.tasks.output(running.task.id);
   assert.equal(page.task.status, 'running');
   assert.equal(page.output, 'started');
   assert.equal(page.task.characters, 7);
-  const second = await f.run('test -f first.pid && touch release && printf second', false);
+  const second = await f.run('test -f first.pid && test -f "$TMPDIR/result" && touch release && printf second', false);
   assert.ok('result' in second);
   assert.equal(second.result.stdout, 'second');
   await f.tasks.wait();
   const [notice] = f.tasks.drain();
   assert.equal(notice?.status, 'completed');
   assert.deepEqual(f.tasks.drain(), []);
-  const temporary = fs.readFileSync(path.join(f.root, 'home.path'), 'utf8').trim();
-  assert.equal(fs.existsSync(temporary), false);
   await f.tasks.close('done');
+  assert.equal(fs.readFileSync(path.join(f.root, 'result'), 'utf8'), 'preserved');
+  const followup = new BackgroundTasks({signal: f.controller.signal, onEvent() {}, directory: path.join(f.root, 'followup')});
+  const command = 'cat "$TMPDIR/result"';
+  const later = await followup.run({root: f.root, command, program: '/bin/bash', args: ['-c', command],
+    signal: f.controller.signal, sandbox: 'off', background: false});
+  assert.ok('result' in later);
+  assert.equal(later.result.stdout, 'preserved');
+  await followup.close('done');
   assert.equal(fs.readFileSync(running.task.logPath, 'utf8'), 'startedfinished');
   assert.equal(fs.statSync(running.task.logPath).mode & 0o777, 0o600);
   assert.equal(fs.statSync(path.dirname(running.task.logPath)).mode & 0o777, 0o700);

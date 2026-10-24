@@ -43,7 +43,7 @@ export const bash: Tool = {
     'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
     'Find files with glob; search contents with grep. Use shell searches for pipelines, ' +
     "git history, or another command's output. " +
-    'Clean environment and private HOME/temp files. ' +
+    'Clean environment; existing HOME and persistent workspace temp files. Exports do not persist. ' +
     'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
   schema,
   request(args) {

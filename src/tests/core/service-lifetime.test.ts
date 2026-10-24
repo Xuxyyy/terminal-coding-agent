@@ -7,7 +7,7 @@ import test, {type TestContext} from 'node:test';
 import {setTimeout as delay} from 'node:timers/promises';
 import {BackgroundTasks} from '../../core/background.js';
 import type {AgentEvent} from '../../core/host.js';
-import {runCommand} from '../../core/sandbox/run.js';
+import {runCommand, workspaceTemporary} from '../../core/sandbox/run.js';
 import {backgroundBash} from '../../core/tools/bash.js';
 import {taskHandoff} from '../../core/tools/tasks.js';
 import {runTool, type ToolContext} from '../../core/tools/registry.js';
@@ -30,6 +30,7 @@ function fixture(t: TestContext) {
       try { process.kill(-pid, 'SIGKILL'); } catch {}
     }
     for (const runtime of runtimes) fs.rmSync(runtime, {recursive: true, force: true});
+    fs.rmSync(workspaceTemporary(root), {recursive: true, force: true});
     fs.rmSync(root, {recursive: true, force: true});
   });
   const ctx: ToolContext = {root, host, mode: 'auto-edits', rules: {allow: [], ask: [], deny: []}, allowed: new Set(), sandbox: 'off', backgroundTasks: tasks};
@@ -97,6 +98,7 @@ test('normal shell exit settles bounded output capture while preserving collecte
   assert.match(result.stdout, /setup complete/);
   assert.ok(performance.now() - started < 2500);
   assert.equal(alive(holder), true);
+  assert.equal(fs.existsSync(workspaceTemporary(f.root)), true);
 });
 
 test('finite work blocks completion while temporary services are cleaned up without blocking', async (t) => {
@@ -131,11 +133,19 @@ for (const sandbox of ['off', 'on'] as const) {
     f.runtimes.push(handoff.runtimePath);
     assert.equal(fs.existsSync(handoff.runtimePath), true);
     assert.match(handoff.stopCommand, new RegExp(`-${service.pid}`));
+    assert.doesNotMatch(handoff.stopCommand, /rm|rmdir/);
     assert.equal(JSON.parse(fs.readFileSync(handoff.recordPath, 'utf8')).readiness.output, 'response-verified');
     assert.match((await f.tasks.output(service.id)).output, /service log/);
     await assert.rejects(f.tasks.stop(service.id), /environment-owned/);
     const last = f.events.at(-1);
     assert.equal(last?.type === 'background_task' && last.action, 'handed_off');
+    const artifact = path.join(handoff.runtimePath, 'requested-output');
+    fs.writeFileSync(artifact, 'keep after stop');
+    const stopped = await runCommand({root: f.root, program: '/bin/bash', args: ['-c', handoff.stopCommand],
+      sandbox: 'off', signal: f.controller.signal});
+    assert.equal(stopped.code, 0, stopped.stderr);
+    await waitFor(() => !alive(service.pid!));
+    assert.equal(fs.readFileSync(artifact, 'utf8'), 'keep after stop');
   });
 }
 
@@ -152,6 +162,7 @@ for (const kind of ['cancel', 'timeout', 'explicit stop', 'failure cleanup'] as 
     assert.equal(info.status, kind === 'timeout' ? 'timed_out' : 'stopped');
     assert.equal(info.handoff, undefined);
     await waitFor(() => !alive(service.pid!));
+    assert.equal(fs.existsSync(workspaceTemporary(f.root)), true);
   });
 }
 

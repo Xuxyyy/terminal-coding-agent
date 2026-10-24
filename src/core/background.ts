@@ -326,10 +326,9 @@ export class BackgroundTasks {
           if (task.error) throw task.error;
           if (fs.statSync(task.info.logPath).size > OUTPUT_LIMIT) throw new Error('command exceeded the 32 MiB output limit');
           const pid = task.process.pid!;
-          const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
           task.info.handoff = {at: new Date().toISOString(), recordPath: task.info.logPath.replace(/\.log$/, '.json'),
             runtimePath: task.process.temporary,
-            stopCommand: `kill -KILL -- -${pid}; rm -rf -- ${quote(task.process.temporary)}`};
+            stopCommand: `kill -KILL -- -${pid}`};
           task.info.status = 'handed_off';
           task.info.characters = fs.readFileSync(task.info.logPath, 'utf8').length;
           this.save(task);

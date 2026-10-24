@@ -264,9 +264,13 @@ Both writers return a `DiffPayload`, which is what the scrollback draws. The
 
 `command`, and an optional `description` the confirm prompt shows as the reason.
 Runs `bash --noprofile --norc -c` in the workspace root. Sandbox defaults to Off;
-`/sandbox` or `--sandbox on|off` selects it. Both modes use a private HOME and temporary
-directory with a clean environment. With On, network is off by default and `access`
-requests one-call grants for outside paths or network. Off ignores `access` and adds
+`/sandbox` or `--sandbox on|off` selects it. Both modes use the existing HOME and stable
+cache/configuration paths with an allowlisted environment. Each workspace has private
+temporary storage that remains available across commands and requests.
+Ordinary files need no retention declaration;
+stopping a service does not delete them. Shell exports do not persist.
+With On, network is off by default and `access` requests one-call grants for outside
+paths or network. Off ignores `access` and adds
 no OS file or network restrictions. Permission checks remain active in both modes.
 The file workers and backups use the same selected mode. On is supported only on
 macOS; Linux uses Off. See `sandbox.md`.

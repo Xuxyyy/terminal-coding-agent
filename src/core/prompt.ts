@@ -17,9 +17,10 @@ export function environmentBlock(root: string): string {
 }
 
 export function sandboxInstructions(sandbox: SandboxMode): string {
-  const shared = 'Shell and file workers use a clean environment and private HOME and temporary files. Permission checks remain active.';
+  const shared = "Shell and file workers use an allowlisted environment with the execution environment's existing HOME and stable cache/configuration paths. Workspace temporary storage persists across commands and requests, including after services stop; a path under /tmp or TMPDIR does not make its contents disposable. Ordinary files and requested outputs need no retention declaration. Shell exports do not persist. Permission checks remain active.";
   return sandbox === 'on'
     ? `Sandbox: On. File and shell tools use OS isolation. Known credential storage is hidden and network is off by default.
+The existing HOME does not grant access to its contents; request specific installation or cache paths when needed.
 Request extra paths or network with bash's access argument. Extra access requires approval for each call.
 A failed sandbox backend never falls back to Off. A blocked command may already have changed files; inspect its effects before retrying.
 ${shared}`

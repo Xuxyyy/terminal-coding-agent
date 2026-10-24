@@ -698,7 +698,7 @@ test('auto descriptions separate reading and editing preferences without changin
   assert.match(shell.description, /Prefer edit_file and write_file for ordinary file changes/);
   assert.match(shell.description, /preference, not a restriction; shell edits remain allowed/);
   assert.match(shell.description, /Shell changes are not backed up for \/rewind/);
-  assert.match(shell.description, /Clean environment and private HOME\/temp files/);
+  assert.match(shell.description, /Clean environment; existing HOME and persistent workspace temp files/);
   assert.match(shell.description, /When Sandbox is On, network is off/);
   assert.match(shell.description, /Do not blindly retry blocked commands/);
   for (const tool of auto.filter((tool) => tool.name === 'edit_file' || tool.name === 'write_file')) {
