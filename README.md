@@ -3,8 +3,16 @@
 [![test](https://github.com/Xuxyyy/terminal-coding-agent/actions/workflows/test.yml/badge.svg)](https://github.com/Xuxyyy/terminal-coding-agent/actions/workflows/test.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A small terminal coding agent that reads, edits, and runs code in the current
-directory.
+A terminal coding agent built from scratch in TypeScript. Describe a task in
+plain English; `acc` searches your project, edits files, and runs commands.
+
+Its custom agent harness handles the model/tool loop, permission checks,
+context compaction, resumable sessions, and subagents. Interactive and headless
+modes share the same core.
+
+**Terminal-Bench 2.1: 78/89 tasks passed (87.6%)**, including one manually
+assessed pass, using DeepSeek V4.1 Flash with high reasoning.
+See [evaluation details and limits](#evaluation).
 
 <p align="center">
   <img src="assets/demo.png" width="720" alt="acc adding a field to a health route, showing its tool calls and the diff it wrote">
@@ -141,6 +149,30 @@ the docs site. The design docs in [`docs/`](docs/) explain each subsystem and
 its tradeoffs in more detail.
 
 ## Evaluation
+
+### Terminal-Bench 2.1
+
+Evaluated all 89 tasks through Harbor using DeepSeek V4.1 Flash
+(`deepseek-flash`, high reasoning). Latest task outcomes as of October 24, 2026:
+
+| Outcome | Tasks |
+| --- | ---: |
+| Automated verifier pass | 77 |
+| Manually assessed pass | 1 |
+| Fail | 11 |
+| Total attempted | 89 |
+
+The combined pass count is **78/89 (87.6%)**; the automated verifier pass count
+alone is **77/89 (86.5%)**. These are the latest results per task, including
+reruns across multiple ACC source versions, rather than a single fixed-version
+`pass@1` measurement.
+
+ACC ran with `auto-edits`, automatic confirmation enabled, and sandbox off.
+Some task environments had dependencies prepared before agent execution.
+These results describe that evaluation setup; they do not measure interactive
+approval behavior or sandbox protection.
+
+### Permission and CLI checks
 
 `acc` keeps two active release gates: 60 permission-judge cases and six
 black-box package/CLI scenarios. Safety and installed-product behavior are
