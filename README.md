@@ -21,7 +21,7 @@ Requires Node 22+, macOS or Linux (Windows through WSL), and
 Set `DEEPSEEK_API_KEY` in your shell before starting. Alternatively, copy
 `.env.example` to `.env` in your project and fill in the key. ACC uses
 DeepSeek V4.1 Flash (`deepseek-flash`) through the official API, with `high`
-reasoning by default. See [model settings](https://coding-cli-docs.vercel.app/configure/models/).
+reasoning by default. See [model settings](docs/configuration.md#models-and-api-keys).
 
 ```bash
 git clone https://github.com/Xuxyyy/terminal-coding-agent.git
@@ -50,9 +50,9 @@ filesystem root. Describe your task at the interactive prompt.
   restores conversation and file-tool backups; it does not undo shell changes.
 - **Subagents run in the background by default.** They share your workspace,
   keep separate conversations, and support messages and saved follow-ups.
-  See [subagents](https://coding-cli-docs.vercel.app/configure/subagent/).
+  See [subagents](docs/tools.md#agent).
 
-See [commands](https://coding-cli-docs.vercel.app/configure/commands/) for
+See [commands](docs/commands.md) for
 session and context controls, and [feature status](docs/features.md) for
 current capabilities and known limits.
 
@@ -92,17 +92,17 @@ Some task environments had dependencies prepared before agent execution.
 These results describe that evaluation setup; they do not measure interactive
 approval behavior or sandbox protection.
 
-See [Evaluation](https://coding-cli-docs.vercel.app/design/evaluation/) for
+See [Evaluation](docs/evals.md) for
 methodology, permission-judge checks, and package/CLI checks.
 
 ## Docs
 
-Full documentation is at
-[coding-cli-docs.vercel.app](https://coding-cli-docs.vercel.app).
+Documentation lives in [docs/](docs/README.md).
 
-- [Install](https://coding-cli-docs.vercel.app/start/install/)
-- [Architecture](https://coding-cli-docs.vercel.app/design/architecture/)
-- [Commands](https://coding-cli-docs.vercel.app/configure/commands/)
+- [Install](#quick-start)
+- [Configuration](docs/configuration.md)
+- [Architecture](docs/agent-loop.md)
+- [Commands](docs/commands.md)
 
 ## Contributing
 

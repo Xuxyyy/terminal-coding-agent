@@ -1,7 +1,7 @@
 # Contributing to `acc`
 
 This file covers the few things you cannot get from the code or the
-[docs site](https://coding-cli-docs.vercel.app).
+[documentation](docs/README.md).
 
 ## Issues and pull requests
 
@@ -11,8 +11,8 @@ Open an issue first for anything large, so neither of us spends an evening on a
 change the other would turn down. A small fix — a typo, a broken link, a case
 the tests miss — can go straight to a pull request.
 
-CI runs `npm test` and builds the site on every pull request, so you will see a
-green or red check without anyone pulling your branch down.
+CI runs `npm test` on every pull request, so you will see a green or red check
+without anyone pulling your branch down.
 
 This is a side project, so a reply can take a while. That is not disinterest.
 
@@ -31,9 +31,6 @@ full output with `node --test dist/tests/<path>.test.js`.
 
 Run the full suite on macOS with ripgrep installed. CI uses macOS because the
 sandbox protection tests explicitly enable Sandbox On, which is supported only there.
-
-The site is separate: verify anything under `www/` with
-`npm run build --prefix www`. `npm test` does not touch it.
 
 ## Never run `acc` inside this repo
 
