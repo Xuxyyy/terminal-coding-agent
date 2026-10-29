@@ -110,6 +110,118 @@ test('a completion after a reply resumes the agent once and exposes failed outpu
   assert.equal(final.message, result.text);
 });
 
+test('child findings and results wake main before its shell completes, without idle model polling', async (t) => {
+  const work = root(t);
+  let sendFinding!: () => void;
+  const finding = new Promise<void>((resolve) => { sendFinding = resolve; });
+  let finishChild!: () => void;
+  const childDone = new Promise<void>((resolve) => { finishChild = resolve; });
+  let parentRequests = 0;
+  let childRequests = 0;
+  const {choice} = fakeModel((_nth, body) => {
+    const request = body as Request;
+    if (request.messages.some((message) => message.role === 'user' && message.content === 'CHILD_WAKEUP_PROBE')) {
+      childRequests++;
+      return {async *[Symbol.asyncIterator]() {
+        if (childRequests === 1) {
+          await finding;
+          yield* calls({name: 'send_message', args: {agent_id: 'main', message: 'early useful finding'}});
+        } else {
+          await childDone;
+          yield* reply('child final report');
+        }
+      }};
+    }
+    parentRequests++;
+    if (parentRequests === 1) return calls(
+      shell('while ! test -f release; do sleep 0.01; done; touch shell-finished', {run_in_background: true}),
+      {name: 'agent', args: {description: 'report an early finding', prompt: 'CHILD_WAKEUP_PROBE'}},
+    );
+    if (parentRequests === 2) return reply('Waiting for results.');
+    if (parentRequests === 3 || parentRequests === 4) {
+      assert.equal(fs.existsSync(path.join(work, 'shell-finished')), false);
+      assert.equal(notices(request).length, 0);
+      assert.match(JSON.stringify(request.messages), parentRequests === 3 ? /early useful finding/ : /child final report/);
+      return reply('Received child update.');
+    }
+    assert.equal(parentRequests, 5);
+    assert.equal(notices(request).length, 1);
+    assert.equal(fs.existsSync(path.join(work, 'shell-finished')), true);
+    return reply('Verified shell completion.');
+  });
+  const pending = runHeadless({root: work, task: 'wait for child and shell events', choice, policy: 'yes', maxSeconds: 5});
+  try {
+    await waitFor(() => parentRequests === 2);
+    await delay(30);
+    assert.equal(parentRequests, 2);
+    sendFinding();
+    await waitFor(() => parentRequests === 3 && childRequests === 2);
+    await delay(30);
+    assert.equal(parentRequests, 3);
+    finishChild();
+    await waitFor(() => parentRequests === 4);
+    await delay(30);
+    assert.equal(parentRequests, 4);
+    fs.writeFileSync(path.join(work, 'release'), '');
+    const result = await pending;
+    assert.equal(result.stopped, 'done');
+    assert.equal(parentRequests, 5);
+    assert.equal(childRequests, 2);
+  } finally {
+    sendFinding();
+    finishChild();
+    fs.writeFileSync(path.join(work, 'release'), '');
+    await pending;
+  }
+});
+
+test('shell completion wakes main while a child is still running and child completion wakes it afterward', async (t) => {
+  const work = root(t);
+  let finishChild!: () => void;
+  const childDone = new Promise<void>((resolve) => { finishChild = resolve; });
+  let parentRequests = 0;
+  let childFinished = false;
+  const {choice} = fakeModel((_nth, body) => {
+    const request = body as Request;
+    if (request.messages.some((message) => message.role === 'user' && message.content === 'SHELL_FIRST_CHILD')) {
+      return {async *[Symbol.asyncIterator]() {
+        await childDone;
+        childFinished = true;
+        yield* reply('later child report');
+      }};
+    }
+    parentRequests++;
+    if (parentRequests === 1) return calls(
+      shell('while ! test -f release; do sleep 0.01; done', {run_in_background: true}),
+      {name: 'agent', args: {description: 'finish later', prompt: 'SHELL_FIRST_CHILD'}},
+    );
+    if (parentRequests === 2) return reply('Waiting.');
+    assert.equal(notices(request).length, 1);
+    if (parentRequests === 3) {
+      assert.equal(childFinished, false);
+      return reply('Shell verified.');
+    }
+    assert.equal(parentRequests, 4);
+    assert.match(JSON.stringify(request.messages), /later child report/);
+    return reply('All verified.');
+  });
+  const pending = runHeadless({root: work, task: 'wait for shell and child', choice, policy: 'yes', maxSeconds: 5});
+  try {
+    await waitFor(() => parentRequests === 2);
+    fs.writeFileSync(path.join(work, 'release'), '');
+    await waitFor(() => parentRequests === 3);
+    await delay(30);
+    assert.equal(parentRequests, 3);
+    finishChild();
+    assert.equal((await pending).stopped, 'done');
+    assert.equal(parentRequests, 4);
+  } finally {
+    finishChild();
+    fs.writeFileSync(path.join(work, 'release'), '');
+    await pending;
+  }
+});
+
 test('foreground timeout backgrounds the same command and completion resumes within the same budget', async (t) => {
   const work = root(t);
   const {choice, calls: count} = fakeModel((nth, body) => {
@@ -128,6 +240,92 @@ test('foreground timeout backgrounds the same command and completion resumes wit
   assert.equal(count(), 3);
   assert.equal(fs.readFileSync(path.join(work, 'executions'), 'utf8').trim().split('\n').length, 1);
   assert.deepEqual(result.events.filter((event) => event.type === 'model_request_start').map((event) => event.request), [1, 2, 3]);
+});
+
+test('each agent receives and reads only its own shell completion before reporting', async (t) => {
+  const work = root(t);
+  let parentRequests = 0;
+  let childRequests = 0;
+  let mainId = '';
+  let childId = '';
+  let childRead = false;
+  const {choice} = fakeModel((_nth, body) => {
+    const request = body as Request;
+    const child = request.messages.some((message) => message.role === 'user' && message.content === 'OWNED_BACKGROUND_PROBE');
+    if (child) {
+      childRequests++;
+      if (childRequests === 1) return calls(shell('while ! test -f release-child; do sleep 0.01; done; printf B-failure; exit 7', {run_in_background: true}));
+      if (childRequests === 2) return reply('Child independent work finished.');
+      assert.equal(fs.existsSync(path.join(work, 'main-finished')), false);
+      const events = notices(request);
+      assert.equal(events.length, 1);
+      const info = JSON.parse(events[0]!.content.split('\n')[1]!) as BackgroundTaskInfo;
+      childId = info.id;
+      assert.notEqual(childId, mainId);
+      assert.equal(info.status, 'failed');
+      assert.equal(info.code, 7);
+      assert.match(events[0]!.content, /runtime event, not a human message or approval/);
+      assert.match(events[0]!.content, /Use task_output.*read its saved output.*handle failures/);
+      if (childRequests === 3) return calls({name: 'task_output', args: {task_id: childId}});
+      assert.equal(childRequests, 4);
+      const output = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content);
+      assert.equal(output.output, 'B-failure');
+      assert.equal(output.task.id, childId);
+      childRead = true;
+      return reply('Child checked B-failure and exit 7.');
+    }
+    if (request.messages.at(-1)?.content.includes('Permission required:')) return reply('Permission handling is in progress.');
+    parentRequests++;
+    if (parentRequests === 1) return calls(
+      shell('while ! test -f release-main; do sleep 0.01; done; printf A-success; touch main-finished', {run_in_background: true}),
+      {name: 'agent', args: {description: 'check own background shell', prompt: 'OWNED_BACKGROUND_PROBE'}},
+    );
+    if (parentRequests === 2) {
+      mainId = JSON.parse(request.messages.find((message) => message.role === 'tool')!.content.split('\n')[1]!).id;
+      return reply('Main independent work finished.');
+    }
+    if (parentRequests === 3) {
+      assert.equal(childRead, true);
+      assert.equal(notices(request).length, 0);
+      assert.equal(fs.existsSync(path.join(work, 'main-finished')), false);
+      assert.match(JSON.stringify(request.messages), /Child checked B-failure and exit 7/);
+      return reply('Child result reviewed; A is still running.');
+    }
+    const events = notices(request);
+    assert.equal(events.length, 1);
+    assert.equal(JSON.parse(events[0]!.content.split('\n')[1]!).id, mainId);
+    assert.ok(!events[0]!.content.includes(childId));
+    if (parentRequests === 4) return calls({name: 'task_output', args: {task_id: mainId}});
+    assert.equal(parentRequests, 5);
+    const output = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content);
+    assert.equal(output.output, 'A-success');
+    assert.equal(output.task.code, 0);
+    return reply('Main checked A-success and reported the child failure.');
+  });
+  const pending = runHeadless({root: work, task: 'check main and child background results', choice, policy: 'yes', maxSeconds: 5});
+  try {
+    await waitFor(() => parentRequests === 2 && childRequests === 2);
+    await delay(30);
+    assert.equal(parentRequests, 2);
+    assert.equal(childRequests, 2);
+    fs.writeFileSync(path.join(work, 'release-child'), '');
+    await waitFor(() => parentRequests === 3);
+    await delay(30);
+    assert.equal(parentRequests, 3);
+    assert.equal(childRequests, 4);
+    fs.writeFileSync(path.join(work, 'release-main'), '');
+    const result = await pending;
+    assert.equal(result.stopped, 'done');
+    assert.equal(parentRequests, 5);
+    assert.equal(childRequests, 4);
+    assert.equal(lifecycle(result).filter((event) => event.action === 'completed').length, 2);
+    assert.ok(result.usage.total >= 108);
+    assert.ok(result.prompts.every((prompt) => prompt.decision === 'once'));
+  } finally {
+    fs.writeFileSync(path.join(work, 'release-child'), '');
+    fs.writeFileSync(path.join(work, 'release-main'), '');
+    await pending;
+  }
 });
 
 test('step exhaustion stops pending commands immediately instead of waiting or resetting the budget', async (t) => {
@@ -199,11 +397,11 @@ test('simultaneous completions are each delivered once without idle model pollin
   assert.equal(lifecycle(result).filter((event) => event.action === 'completed').length, 2);
 });
 
-test('subagent shells are stopped and reported when their owner finishes', async (t) => {
+test('subagent temporary services are stopped and reported when their owner finishes', async (t) => {
   const work = root(t);
   const {choice} = fakeModel((nth, body) => {
-    if (nth === 1) return calls({name: 'agent', args: {description: 'Run child command', prompt: 'start a background command'}});
-    if (nth === 2) return calls(shell('sleep 20', {run_in_background: true}));
+    if (nth === 1) return calls({name: 'agent', args: {description: 'Run child command', prompt: 'start a background command', background: false}});
+    if (nth === 2) return calls(shell('sleep 20', {run_in_background: true, lifetime: 'temporary_service'}));
     if (nth === 3) return reply('Child finished.');
     const result = (body as Request).messages.filter((message) => message.role === 'tool').at(-1)!;
     assert.match(result.content, /Background commands stopped when this subagent finished/);

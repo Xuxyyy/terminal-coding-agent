@@ -70,7 +70,12 @@ Compaction preserves failed call/result pairs and uncertain effects.
       session.json                 metadata only, small, version 2
       session.jsonl                one {kind, …} record per line, append-only
       session.lock                 transient owner identity while active
+      agent-mail.jsonl             sent agent events and delivery acknowledgements
       files/<sha256>               the bytes of a file before a write, if any
+      subagents/
+        agent-<uuid>.json          child identity, settings, state, and usage
+        agent-<uuid>.jsonl         separate append-only child conversation
+        files/<sha256>             child file-tool backups
 ```
 
 Six record types interleave in the one file:
@@ -193,6 +198,87 @@ replay costs one render and stays scrollable. When a session has no view records
 
 An owned session stays in the list but is disabled and labeled `active elsewhere`. The picker does
 not add a separate explanation below the locked row. There is no session fork operation.
+
+## Persistent subagents
+
+`src/core/subagent-store.ts` owns child metadata and restoration. Parent and
+child stores share the transcript writer in `src/core/transcript-store.ts`;
+child records have the same format but use `agent-<uuid>.jsonl`. Each child
+belongs to one parent ID and workspace. The metadata stores its initial role,
+ordered tools, model and reasoning settings, permission mode, sandbox mode,
+rules, timestamps, assignment status, and cumulative recorded usage. It does
+not store clients, credentials, session approvals, or one-call sandbox grants.
+The system prompt is rebuilt with current base instructions and the saved role.
+Metadata is replaced atomically; the child conversation keeps growing in place.
+
+`agent` returns the ID after an assignment. `resume` restores that transcript
+and appends another user assignment under the same ID. `action: "list"` reads
+small child metadata files, so discovery does not depend on any parent summary.
+Parent compaction and rewind leave child files intact. Reopening a parent
+reuses its directory, which makes the same children available after a process
+restart. Evicting the parent removes its children with it. Parent `/rewind`
+does not rewind child conversations or restore their separate file backups.
+
+Statuses describe the latest assignment: `running`, `completed`, `interrupted`,
+or `failed`. Returning a report closes the assignment's store and leaves the
+child resumable without running a model. A stale `running` status from a prior
+process is listed as interrupted. Children run concurrently by default;
+`background: false` waits for the report. Both modes save child history, and
+each child still has only one active turn. Main's existing session lock protects
+its children and mail journal from another ACC process. A second invocation of an already running child is rejected.
+
+Before executing tools, a saved child writes the assistant's calls. It then
+saves each tool result before advancing. A failed save stops that child before
+it executes another action. This also covers threshold and context-recovery
+compaction: a save error stops the run, and memory reloads the recorded context
+if the compacted record was written before the error. Non-durable callers keep
+their existing best-effort compaction behavior. On resume, calls without saved results receive
+explicit uncertain-result messages. The new assignment follows a recovery
+notice; ACC does not execute old calls. Completed tool results remain intact,
+including refusals. The child must inspect current state before repeating
+uncertain actions. This cannot guarantee exactly-once external effects when a
+process dies between an action and its result being saved.
+
+Readers retain complete JSONL records and ignore malformed lines, including
+a torn final write. Reopening ensures a newline before appending, so a partial
+last line cannot swallow the next assignment. Recorded child usage is rebuilt
+from the transcript when resumed; missing provider usage and work lost before
+a record lands cannot be reconstructed. Permission and sandbox restrictions
+are reapplied with the current parent's limits; see `tools.md`.
+
+### Background messages and restart
+
+`src/core/agent-runtime.ts` owns the live child jobs and the shared permission queue.
+`src/core/agent-mailbox.ts` appends sent events and delivery acknowledgements to
+`agent-mail.jsonl` in the parent directory. Each event has an ID, sender, recipient,
+kind, time, and text. Result events also carry recorded assignment usage. Delivery
+writes a named `acc_agent` conversation message before acknowledging the event.
+The original transcript records identify delivery even if the process crashes
+before the acknowledgement or after compaction. A torn final journal write is
+removed before further appends; malformed complete journal records stop recovery.
+
+Completed background assignments save their final report and assignment ID in
+child metadata before publishing the result. Recovery can recreate a missing
+result event without executing the child again. Child usage is counted in the
+live parent and recorded with result delivery, once per result ID.
+
+If main was interrupted between a saved tool call and its result, recovery also
+fills that parent batch with uncertain outcomes before the next model request.
+Existing results stay intact, and new user messages follow the repaired batch.
+Recovery records are appended; original transcript bytes remain unchanged.
+
+Restart never schedules interrupted child work automatically. Pending messages
+stay queued, and main receives an interruption notice. Use `agent` with `resume`
+and a new assignment to inspect uncertain effects and continue. Completed idle
+children can receive new work with `send_message`. Idle children have no timers
+that call the model. Pending events live outside compacted context; delivered
+messages participate in the existing summary and recent-user-message retention.
+No compaction redesign or exactly-once external-action guarantee is implied.
+
+A headless run without a parent store has only in-memory mail and explicitly
+unsaved child IDs. Those children cannot be resumed after completion or restart.
+Parent `/rewind` does not rewind the separate mail journal, child histories, or
+child file backups.
 
 ## `/rewind`
 

@@ -4,9 +4,8 @@ import type OpenAI from 'openai';
 import {modelSettings, type ModelSettings} from './client.js';
 import {DEFAULT_MODEL} from './models.js';
 import type {Usage} from './host.js';
-import {assistantContinuation} from './messages.js';
+import {transcriptStore} from './transcript-store.js';
 import {
-  appendRecord,
   lastUsageOf,
   liveRecords,
   messagesOf,
@@ -117,92 +116,25 @@ function makeStore(
   now: () => Date,
   lock: SessionLock,
 ): SessionStore {
-  const written = new Set<Message>();
-  let closed = false;
-
-  const ensureOpen = (): void => {
-    if (closed) throw new Error('session store is closed');
-  };
-
-  const writeMeta = (): void => {
+  const writeMeta = (messages: Message[] = [], usage?: Usage): void => {
+    if (meta.firstTask === undefined) meta.firstTask = firstTaskIn(messages);
+    if (usage) {
+      meta.usage.prompt += usage.prompt;
+      meta.usage.completion += usage.completion;
+      meta.usage.total += usage.total;
+    }
     meta.updatedAt = now().toISOString();
     writeJson(path.join(dir, 'session.json'), meta);
   };
   writeMeta();
-
-  return {
-    id: meta.id,
-    dir,
-    seed(messages) {
-      ensureOpen();
-      for (const message of messages) written.add(message);
-    },
-    appendMessage(message) {
-      ensureOpen();
-      const id = crypto.randomBytes(4).toString('hex');
-      written.add(message);
-      if (meta.firstTask === undefined) meta.firstTask = firstTaskIn([message]);
-      appendRecord(dir, {kind: 'message', id, message});
+  return transcriptStore(dir, meta.id, writeMeta, () => {
+    try {
+      meta.status = 'closed';
       writeMeta();
-      return id;
-    },
-    appendStep(messages, usage) {
-      ensureOpen();
-      const fresh = messages.filter(
-        (message, index) => !(index === 0 && message.role === 'system') && !written.has(message),
-      );
-      if (fresh.length === 0) return;
-      for (const message of fresh) written.add(message);
-      if (meta.firstTask === undefined) meta.firstTask = firstTaskIn(fresh);
-      appendRecord(dir, {kind: 'messages', messages: fresh, usage});
-      meta.usage.prompt += usage.prompt;
-      meta.usage.completion += usage.completion;
-      meta.usage.total += usage.total;
-      writeMeta();
-    },
-    appendCompact(summary, replaced, replacement) {
-      ensureOpen();
-      for (const message of replacement) written.add(message);
-      const continuation = assistantContinuation(summary);
-      appendRecord(dir, {
-        kind: 'compact',
-        summary: typeof summary.content === 'string' ? summary.content : '',
-        replaced,
-        ...(continuation ? {continuation} : {}),
-        replacement,
-      });
-      writeMeta();
-    },
-    appendView(items) {
-      ensureOpen();
-      if (items.length === 0) return;
-      appendRecord(dir, {kind: 'view', items});
-      writeMeta();
-    },
-    appendCode(path, before) {
-      ensureOpen();
-      appendRecord(dir, {kind: 'code', path, before});
-      writeMeta();
-    },
-    records() {
-      return liveRecords(readRecords(dir));
-    },
-    rewind(to) {
-      ensureOpen();
-      appendRecord(dir, {kind: 'rewind', to});
-      writeMeta();
-    },
-    close() {
-      if (closed) return;
-      closed = true;
-      try {
-        meta.status = 'closed';
-        writeMeta();
-      } finally {
-        lock.release();
-      }
-    },
-  };
+    } finally {
+      lock.release();
+    }
+  });
 }
 
 export function loadSession(

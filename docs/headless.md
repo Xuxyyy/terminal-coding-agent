@@ -23,8 +23,8 @@ It is a second **implementation** of `Host` (`src/core/host.ts:46`), with an
 explicit headless model-turn budget. The terminal `Host` is built inside a
 React component (`src/ui/agent.ts`) and its `confirm` only resolves when a human
 presses a key. The headless one answers from a policy instead. Everything below
-that seam uses the same loop and permission gate. Print mode additionally enables
-managed background Bash commands; interactive mode retains foreground-only Bash.
+that seam uses the same loop and permission gate. Both hosts enable managed
+background Bash commands and completion notices.
 
 ## CLI and core responsibilities
 
@@ -126,7 +126,7 @@ Callers can save stdout or the JSON event stream when they need a record.
 
 ## Background Bash commands
 
-Print mode offers `bash.run_in_background`, `bash.timeout`, `bash.lifetime`,
+Interactive and print modes offer `bash.run_in_background`, `bash.timeout`, `bash.lifetime`,
 `task_output`, `task_stop`, and `task_handoff` in every permission mode. A background launch returns a task ID and
 log path while the same command keeps running. A foreground command also moves
 to the background when its wait expires; it is never restarted or run twice.
@@ -143,9 +143,11 @@ command receives the default background runtime starting at the transition.
 There is no fixed count limit on simultaneous commands. The original
 `--max-seconds` deadline and `--max-steps` budget always take priority.
 
-Completion produces one runtime notice between complete model/tool steps.
-If the assistant has already replied, the run waits without model polling,
-then resumes the same loop when a command finishes. Continuations share the
+Completion produces one runtime notice for the owning main agent or subagent
+between complete model/tool steps. The notice identifies the task and exit status,
+instructs the agent to read and check saved output with `task_output`, and does not
+grant human approval. If the agent has already replied, the run waits without model
+polling, then resumes its loop when a command finishes. Continuations share the
 original step count and usage totals. Scheduling and lifetime are separate:
 
 | `bash.lifetime` | Completion behavior |
@@ -197,9 +199,11 @@ connections remain open, it preserves collected output and the shell exit code,
 marks `outputIncomplete` and `cleanupUncertain`, and finishes tracking. Explicit
 stop, abort, and timeout retain the earlier one-second forced-cleanup fallback
 and report cleanup failure when it cannot be confirmed.
-Task tools accept only tasks owned by the calling agent. A foreground subagent
-inherits background support but stops its remaining commands when it finishes,
-reporting unfinished work to its parent rather than handing over ownership.
+Task tools accept only tasks owned by the calling agent. Subagents inherit
+background support and wait for their finite commands to complete and be checked.
+They can receive parent messages during that wait. Cancellation stops owned work;
+remaining temporary services are stopped when their owner finishes, with cleanup
+reported to the parent rather than handing over ownership.
 
 Logs and final task metadata are retained under
 `$ACC_HOME/runs/<run-id>/tasks/`, or `~/.acc/runs/<run-id>/tasks/` by default.

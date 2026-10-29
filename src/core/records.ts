@@ -25,19 +25,20 @@ export type SessionRecord =
 
 const RECORDS = 'session.jsonl';
 
-function recordsFile(dir: string): string {
-  return path.join(dir, RECORDS);
+function recordsFile(dir: string, name: string): string {
+  return path.join(dir, name);
 }
 
-export function appendRecord(dir: string, record: SessionRecord): void {
-  fs.appendFileSync(recordsFile(dir), `${JSON.stringify(record)}\n`, {mode: 0o600});
+export function appendRecord(dir: string, record: SessionRecord, name = RECORDS): void {
+  fs.appendFileSync(recordsFile(dir, name), `${JSON.stringify(record)}\n`, {mode: 0o600});
 }
 
-export function readRecords(dir: string): SessionRecord[] {
+export function readRecords(dir: string, name = RECORDS, required = false): SessionRecord[] {
   let text: string;
   try {
-    text = fs.readFileSync(recordsFile(dir), 'utf8');
-  } catch {
+    text = fs.readFileSync(recordsFile(dir, name), 'utf8');
+  } catch (error) {
+    if (required) throw error;
     return [];
   }
   const records: SessionRecord[] = [];
@@ -99,4 +100,30 @@ export function checkpointsOf(records: SessionRecord[]): Checkpoint[] {
 
 export function viewOf(records: SessionRecord[]): unknown[] {
   return records.flatMap((record) => (record.kind === 'view' ? record.items : []));
+}
+
+export function recoverToolResults(messages: Message[]): {messages: Message[]; recovered: Message[]} {
+  const ordered: Message[] = [];
+  const recovered: Message[] = [];
+  const moved = new Set<Message>();
+  for (let at = 0; at < messages.length; at++) {
+    const message = messages[at];
+    if (moved.has(message)) continue;
+    ordered.push(message);
+    if (message.role !== 'assistant' || !message.tool_calls?.length) continue;
+    let end = at + 1;
+    while (end < messages.length && messages[end].role !== 'assistant') end++;
+    const following = messages.slice(at + 1, end);
+    for (const call of message.tool_calls) {
+      const saved = following.find((candidate) => candidate.role === 'tool' && candidate.tool_call_id === call.id && !moved.has(candidate));
+      if (saved) { ordered.push(saved); moved.add(saved); continue; }
+      const result: Message = {
+        role: 'tool', tool_call_id: call.id,
+        content: `[runtime: ${call.function.name} was interrupted before its result was saved. Execution is uncertain; effects may have occurred. Inspect current state before repeating this action. For agent calls, list existing children before creating or resuming work. No old tool call was replayed.]`,
+      };
+      ordered.push(result);
+      recovered.push(result);
+    }
+  }
+  return {messages: ordered, recovered};
 }

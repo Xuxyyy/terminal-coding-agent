@@ -41,9 +41,9 @@ export class BackgroundTasks {
     this.directory = options.directory ?? path.resolve(accHome(), 'runs', crypto.randomUUID(), 'tasks');
   }
 
-  fork(onEvent: (event: AgentEvent) => void): BackgroundTasks {
+  fork(onEvent: (event: AgentEvent) => void, signal: AbortSignal = this.options.signal): BackgroundTasks {
     if (this.closed) throw new Error('background task manager is closed');
-    const child = new BackgroundTasks({...this.options, directory: this.directory, onEvent, subagent: true});
+    const child = new BackgroundTasks({...this.options, signal: AbortSignal.any([this.options.signal, signal]), directory: this.directory, onEvent, subagent: true});
     this.children.add(child);
     return child;
   }
@@ -285,22 +285,30 @@ export class BackgroundTasks {
     return this.notices.splice(0);
   }
 
+  hasNotices(): boolean { return this.notices.length > 0; }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
   hasPending(): boolean {
     return this.notices.length > 0 || [...this.tasks.values()].some((task) => task.background && task.info.status === 'running' &&
       (task.info.lifetime === 'finite' || (task.info.lifetime === 'retained_service' && !task.info.readiness)));
   }
 
-  async wait(): Promise<void> {
-    if (this.notices.length > 0 || !this.hasPending() || this.options.signal.aborted) return;
+  async wait(signal: AbortSignal = this.options.signal): Promise<void> {
+    const waiting = AbortSignal.any([this.options.signal, signal]);
+    if (this.notices.length > 0 || !this.hasPending() || waiting.aborted) return;
     await new Promise<void>((resolve) => {
       const wake = () => {
         this.listeners.delete(wake);
-        this.options.signal.removeEventListener('abort', wake);
+        waiting.removeEventListener('abort', wake);
         resolve();
       };
       this.listeners.add(wake);
-      this.options.signal.addEventListener('abort', wake, {once: true});
-      if (this.notices.length > 0 || !this.hasPending() || this.options.signal.aborted) wake();
+      waiting.addEventListener('abort', wake, {once: true});
+      if (this.notices.length > 0 || !this.hasPending() || waiting.aborted) wake();
     });
   }
 

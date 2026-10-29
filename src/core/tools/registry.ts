@@ -11,6 +11,8 @@ import {absoluteTarget, accessReason, hasAccess, normalizeAccess, type SandboxAc
 import {fileOperation} from '../sandbox/files.js';
 import {resolveTarget} from './paths.js';
 import type {BackgroundTasks} from '../background.js';
+import type {SessionStore} from '../store.js';
+import type {AgentRuntime} from '../agent-runtime.js';
 
 export type Judge = (
   request: Request,
@@ -30,6 +32,11 @@ export type ToolContext = {
   denied?: string[];
   sandboxAccess?: SandboxAccess;
   backgroundTasks?: BackgroundTasks;
+  store?: SessionStore;
+  agents?: AgentRuntime;
+  inboxId?: string;
+  authorizationTasks?: string[];
+  mailboxOnly?: boolean;
 };
 
 export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage; failure?: boolean; execution?: 'not_started' | 'known_result' | 'uncertain'};

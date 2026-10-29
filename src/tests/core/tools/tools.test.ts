@@ -661,17 +661,17 @@ test('tool definitions carry a JSON schema the model can fill in', () => {
 });
 
 test('auto offers shell reading while other modes keep dedicated read and search tools', () => {
-  const full = ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent'];
+  const full = ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'agent', 'send_message', 'wait_agents', 'stop_agent'];
 
   for (const mode of ['auto-edits', 'ask-edits'] as const) {
     assert.deepEqual(toolsFor(mode).map((tool) => tool.name), full);
   }
-  assert.deepEqual(toolsFor('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash', 'agent']);
+  assert.deepEqual(toolsFor('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash', 'agent', 'send_message', 'wait_agents', 'stop_agent']);
 });
 
 test('auto descriptions separate reading and editing preferences without changing tool interfaces or shared tools', () => {
   const original = toolDefinitions(tools);
-  const auto = toolsFor('auto').filter((tool) => tool.name !== 'agent');
+  const auto = toolsFor('auto').filter((tool) => tools.some((base) => base.name === tool.name));
   const definitions = toolDefinitions(auto);
   const preferences: Record<string, RegExp> = {
     bash: /Use this tool for ordinary file reads, searches, and running commands/,
@@ -707,7 +707,7 @@ test('auto descriptions separate reading and editing preferences without changin
   }
   assert.match(auto.find((tool) => tool.name === 'write_file')!.description, /Prefer edit_file for changing part of an existing file/);
   for (const mode of ['ask-edits', 'auto-edits'] as const) {
-    assert.deepEqual(toolDefinitions(toolsFor(mode).filter((tool) => tool.name !== 'agent')), original);
+    assert.deepEqual(toolDefinitions(toolsFor(mode).filter((tool) => tools.some((base) => base.name === tool.name))), original);
   }
   assert.deepEqual(toolDefinitions(tools), original);
 });
@@ -738,7 +738,7 @@ test('auto file tools still capture old content but shell edits do not', async (
   assert.equal(captured.length, 2);
 });
 
-test('the sub-agent tool keeps its original schema when no definitions exist', () => {
+test('the sub-agent tool offers list and resume without named definitions', () => {
   loadAgents([]);
   const offered = toolsFor('auto-edits').filter((tool) => tool.name === 'agent');
   const parameters = toolDefinitions(offered)[0]?.function.parameters as {
@@ -749,8 +749,8 @@ test('the sub-agent tool keeps its original schema when no definitions exist', (
 
   assert.equal(offered.length, 1);
   assert.equal(parameters.type, 'object');
-  assert.deepEqual(Object.keys(parameters.properties), ['description', 'prompt']);
-  assert.deepEqual(parameters.required, ['description', 'prompt']);
+  assert.deepEqual(Object.keys(parameters.properties), ['action', 'description', 'prompt', 'background', 'resume']);
+  assert.equal(parameters.required, undefined);
 });
 
 test('a loaded definition adds its type and description to the generated agent tool', () => {
@@ -773,7 +773,7 @@ test('a loaded definition adds its type and description to the generated agent t
     };
 
     assert.deepEqual(parameters.properties.agent.enum, ['explorer']);
-    assert.deepEqual(parameters.required, ['description', 'prompt']);
+    assert.equal(parameters.required, undefined);
     assert.match(definition?.description ?? '', /explorer: Explores code without edits/);
   } finally {
     loadAgents([]);

@@ -7,17 +7,18 @@ Read when: adding a tool, changing a schema, or changing what a tool returns
 See also: `permissions.md` (the gate a tool passes on its way to the disk),
 `agent-loop.md` (where `runTool` is called from), `features.md` (what ships today)
 
-## The seven tools
+## The ten tools
 
 In the order `src/core/tools/index.ts` registers them, which is the order the
 model sees them in.
 
-In `auto` mode, only `edit_file`, `write_file`, `bash`, and `agent` are offered.
+In `auto` mode, `edit_file`, `write_file`, `bash`, `task_output`, `task_stop`, `task_handoff`, `agent`, `send_message`, `wait_agents`,
+and `stop_agent` are offered.
 Reading and searching use Bash. `read_file`, `grep`, and `glob` remain available in
 `ask-edits` and `auto-edits`, but are not fallbacks in `auto`.
 
-These are the interactive tools. Headless runs additionally offer `task_output`
-and `task_stop`, and extend Bash with `run_in_background` and `timeout`. See
+Interactive and headless runs offer `task_output`, `task_stop`, and `task_handoff`,
+and extend Bash with `run_in_background` and `timeout`. See
 [background Bash](headless.md#background-bash-commands) for limits and lifecycle.
 
 | Tool | Arguments | What it does | When it asks |
@@ -27,8 +28,14 @@ and `task_stop`, and extend Bash with `run_in_background` and `timeout`. See
 | `glob` | `pattern`, `path?` | Finds files by name, newest first, up to 100 paths. Includes gitignored files. | only for a path outside the project, which can never be remembered |
 | `edit_file` | `path`, `old_string`, `new_string` | Replaces one exact, unique piece of text. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
 | `write_file` | `path`, `content` | Creates a file or replaces all of it. Returns a diff. | for a protected path, and for one outside the project, which can never be remembered |
-| `bash` | `command`, `description?` | Runs a shell command in the workspace root — tests, git, deleting files. | unless the command reads, or only changes what git can undo |
-| `agent` | `description`, `prompt`, `agent?` | Hands one self-contained job to a general or named sub-agent that runs its own turn loop and reports back a single message. | never itself — the child's own tool calls ask, one at a time, as they happen |
+| `bash` | `command`, `description?`, `run_in_background?`, `timeout?`, `lifetime?`, `required_by_task?` | Runs a shell command, optionally in the background. | unless the command reads, or only changes what git can undo |
+| `task_output` | `task_id`, `offset?`, `limit?` | Reads status and saved output for an owned command. | never |
+| `task_stop` | `task_id` | Stops an owned command and its process group. | never |
+| `task_handoff` | `task_id`, `command`, `description`, `access?` | Checks readiness before a requested service can survive completion. | the readiness command uses normal permission checks |
+| `agent` | `action?`, `description?`, `prompt?`, `agent?`, `resume?`, `background?` | Launches work, resumes a saved child, or lists children. | child tools use their own permission checks |
+| `send_message` | `agent_id`, `message` | Sends findings or work between main and a child. | never itself |
+| `wait_agents` | `agent_ids?`, `timeout_ms?` | Waits for a report, completion, or attention event. | never |
+| `stop_agent` | `agent_ids` | Interrupts work while keeping conversations. | never |
 
 That column describes the default, `auto-edits`. Optional `auto` mode allows
 the same ordinary project writes but sends above-cut actions to a model judge before
@@ -57,14 +64,13 @@ and the chain.
 `src/core/tools/index.ts` is the single source of what is offered. In `auto`,
 it removes `read_file`, `grep`, and `glob`, then copies the three remaining file and
 shell tools with descriptions that prefer Bash for reads and searches, and
-Edit or Write for ordinary file changes. It adds `agent` in every mode.
-`ask-edits` and `auto-edits` retain all seven tools and the original descriptions.
+Edit or Write for ordinary file changes. It adds `agent` and the three messaging/management tools in every mode.
+`ask-edits` and `auto-edits` retain the read and search tools and the original descriptions.
 Filtering preserves the remaining tools' order, schemas, and handlers without
 mutating the shared tool objects. It is the default
-argument of both `runAgent` and `contextStatus`, so what
-the interactive model is offered and what the context readout counts agree.
-Headless runs explicitly enable background tools and pass that registry to the
-loop, including its context-budget checks. A subagent inherits that capability
+argument of both `runAgent` and `contextStatus`. Interactive and headless runs
+explicitly enable background tools and pass that registry to the loop and context
+readout, including context-budget checks. A subagent inherits that capability
 while retaining its configured tool allowlist.
 
 These preferences live in the `auto` tool descriptions. The base system prompt
@@ -293,76 +299,105 @@ Three exits are synthesized, not returned by the command:
 
 ## `agent`
 
-`description`, a few words the terminal row shows, `prompt`, the whole job, and
-optional `agent`, the name of a global definition. Returns the child's final
-message and nothing else. When definitions exist, their sorted names are an
-enum in the schema and each `name: description` line is appended to the tool
-description, so the parent model has the routing information.
+The default `action: "run"` takes `description` (a few words for the terminal
+row), `prompt` (the assignment), and optional `agent` (a global definition).
+By default, it returns `agent_id` and running status immediately while the child
+runs concurrently with main and other children. Omitting `background` is the same
+as `background: true`. The child sends its final result to main automatically.
+Set `background: false` to wait and receive the child's final report in the tool result. Raw child tool output stays in the child history.
+There is no fixed child-concurrency cap; provider and machine limits still apply.
 
-Definitions are direct regular `<ACC_HOME>/agents/*.md` files loaded once at
-startup. They are global because choosing a model or a tool set is user policy,
-not something a cloned workspace may impose. Invocation still uses the
-parent's current workspace. The Markdown body is appended to the fixed
-`subagentPrompt`; it cannot replace the isolation and reporting rules.
+To continue the same child, supply `resume: "<agent_id>"`, a new `description`,
+and a follow-up `prompt`. Omit `agent`: resume uses the saved role, model,
+reasoning effort, and ordered tool list even if global definitions changed.
+Use `{"action":"list"}` without an assignment to discover children owned by
+this parent session. Listing works after parent compaction and after reopening
+the parent with `/resume`. A completed child makes no model calls until given
+another assignment. IDs cannot resume children from another parent session.
 
-It starts a second agent loop with a fresh `Session`. An unnamed call, or a
-missing field in a named definition, keeps the existing defaults: the exact
-parent `ModelChoice`, all currently available tools except `agent`, and the
-parent mode. A configured model client is created only when that type runs. A
-configured tool list is exact and keeps its written order. Every named tool
-must be available under the child's effective mode, or the invocation fails. A configured mode resolves to the
-stricter of it and the parent mode: `ask-edits` > `auto-edits` > `auto`.
+Definitions are direct regular `<ACC_HOME>/agents/*.md` files loaded at startup.
+They supply a routing description, role prompt, model, tools, or permission mode.
+Their sorted names appear in the tool schema and routing description. The body
+is appended to the fixed `subagentPrompt`. An unnamed new child inherits the
+parent's model and reasoning, tools available in its mode except `agent`,
+`wait_agents`, and `stop_agent`, and
+permission mode. A configured model is created only when that type runs. An
+exact tool allowlist keeps its order; unavailable tools cause an invocation
+error before a model call. Invalid definition files still fail startup.
 
-Missing provider keys and configured tools that are unavailable are invocation
-errors naming the agent and missing dependency. They do not stop startup.
-Invalid files do stop startup, because
-silently dropping a type would leave the parent routing against a different
-tool schema.
+Children have separate transcripts under the parent session's `subagents/`
+folder. The transcript includes user assignments, assistant messages, tool calls
+and results, compaction records, and file-tool backups. The parent transcript
+contains only the delegation and its returned report. See `sessions.md` for
+paths and crash recovery. Calls from a run without a parent session store
+(such as the current headless runner) return an explicitly unsaved ID and cannot
+resume it. They continue to execute as before.
 
-The parent blocks until the child stops, then gets one string back — the
-concatenated text of the child's last turn, plus any error it hit. A child that
-says nothing comes back as `the sub-agent returned nothing`, because an empty
-tool result reads to the model as a bug rather than an answer.
+Resume uses the stricter saved or current permission mode:
+`ask-edits` > `auto-edits` > `auto`. Sandbox stays On if either the saved child
+or current parent requires On. Saved and current deny/ask rules both apply;
+explicit allow rules survive only when present in both. These checks also apply
+to new children, which inherit the parent's current rules. Per-call sandbox
+grants are never saved. New turns copy the live parent's approvals; approvals granted to a child stay
+inside that child turn. Restarting ACC does not restore them. Agent assignments
+and messages are marked as agent communication and cannot become user requests
+to the Auto permission judge, including after restoring or compacting history. The saved tool list cannot add tools
+unavailable in the effective mode.
 
-**The point is the context, not the parallelism.** Nothing runs at the same
-time. What the child spends — twenty reads to find one line — is spent in its
-own window and thrown away, and only the paragraph comes back. That is why the
-prompt tells it its final message is the whole report: every file it read and
-every command it ran is gone the moment it returns.
+`childHost` keeps child conversation events separate from the parent's UI.
+Model diagnostics and usage still reach their existing callbacks, with the
+stable child ID used in diagnostics. Confirmation reasons start with
+`sub-agent: `. Child usage counts toward the parent turn and session totals,
+without inflating the parent's context measurement. A child with no final text
+reports `the sub-agent returned nothing`; failures and cancellation include
+the child ID so it can be found later.
 
-Four things it deliberately does not do.
+Children cannot call `agent`, `wait_agents`, or `stop_agent`, or message peers.
+A child may send useful findings and questions to `main` with `send_message`. Background shell commands, when offered by the
+caller, retain their existing lifetime: they stop when the assignment ends.
+After an interruption, resume marks missing tool results as uncertain and tells
+the child to inspect current state before repeating an action. ACC never
+replays the unfinished tool call itself.
 
-**It does not forward a single event.** `childHost` swallows all of them into a
-local array. This is stronger than `withoutText` (`src/core/compact.ts:42`),
-which only drops `text_delta`, and it has to be: a forwarded `turn_end` would
-tell the terminal the parent's turn had ended, and a forwarded `tool_start`
-would break the one-row promise. The parent draws one `agent` row, exactly like
-`bash`. The separate `onModelUsage` callback is forwarded for token accounting.
+## `send_message`
 
-**It does not get the store.** No `SessionStore` is passed, so nothing the child
-says is written to the parent's `session.jsonl`. Passing one would append the
-child's messages as if the parent had said them, and `/resume` would replay them
-into the parent's context — which is the one thing a sub-agent exists to avoid.
+Takes `agent_id` and a nonempty `message`. Main addresses one of its child IDs;
+children may address only `main`. Messages have stable IDs and are saved before
+being acknowledged. Active children receive queued messages, in order, before
+the next model request after the current complete tool batch. Messages do not
+interrupt a partially executed tool batch. A message arriving during the final
+response or cleanup still causes one follow-up turn.
 
-**It cannot spawn one of its own.** `childTools` is `toolsFor(mode)` minus
-`agent`. Without that filter the recursion has no floor.
+A completed child resumes in its saved conversation when main sends new work.
+An interrupted or failed child retains the message but requires an explicit
+`agent` call with `resume`. Messages cannot undo cancellation or grant permission.
+Do not send acknowledgements without useful information; there is no automatic
+reply-to-reply loop. Tool allowlists remain exact, so a child needs `send_message`
+in its configured tools to send interim findings.
 
-**It never asks on its own behalf.** The tool carries no `request`, so it does
-not reach the gate. Its child's calls do, one at a time, against the parent's
-`allowed` set — a "yes, this session" the user already gave is not asked for
-twice — and each reason arrives prefixed `sub-agent: `, so a prompt appearing
-mid-run is not mistaken for the parent's own.
+## `wait_agents`
 
-Its tokens count toward the turn total and the session total, through
-`ToolOutput.usage` and `recordToolUsage`. They are kept out of the context
-measurement on purpose; `agent-loop.md` has why.
+Takes optional `agent_ids` and `timeout_ms`. Waits for any selected child to send a
+message, finish, or need permission. Omitting IDs selects any child; omitting the
+timeout waits until an event or cancellation. Zero returns immediately. The
+result gives event IDs/kinds and current states; full messages arrive automatically
+at the next model boundary. Waiting uses event notifications, with no model calls
+while idle. An ordinary final response from main also waits for active children
+and resumes main when they report.
 
-`childTools(mode, allow?)` and `subagentPrompt(root, mode, role?)` are the two
-runtime seams named definitions use. A definition may **narrow, never widen**:
-the allowlist is checked against `toolsFor(mode)`, so it cannot invent a tool,
-and what survives still passes `permitted()`. `stricterMode` prevents a type
-from upgrading its parent's permission mode. `agent` is removed even if an
-in-memory caller bypasses file validation, so recursion has two defenses.
+`agent(action: "list")` reports live `running`, `waiting_permission`, `stopping`,
+`idle`, `interrupted`, or `failed` state, latest assignment status, and pending
+message counts. It is discovery, not a polling loop.
+
+## `stop_agent`
+
+Takes a nonempty `agent_ids` array. Interrupts selected children and waits for their
+current work and command cleanup to settle. Saved conversations and pending mail
+remain available. Stopping does not roll back file changes. Main must explicitly
+resume interrupted work with `agent`; a queued message cannot restart it.
+Esc, run deadlines, and main-loop failure stop all owned active children. Permission
+prompts from main and children are serialized, and cancelling a queued prompt does
+not approve it or replace another active prompt.
 
 ## Paths
 

@@ -3,6 +3,8 @@ import {createClient, modelSettings, type ModelChoice} from '../core/client.js';
 import {compactSession} from '../core/compact.js';
 import type {ConfirmDecision, Host} from '../core/host.js';
 import {runAgent} from '../core/loop.js';
+import {BackgroundTasks} from '../core/background.js';
+import {toolsFor} from '../core/tools/index.js';
 import type {Mode} from '../core/permission/mode.js';
 import {DEFAULT_SANDBOX, type SandboxMode} from '../core/sandbox/mode.js';
 import {systemPrompt} from '../core/prompt.js';
@@ -146,9 +148,12 @@ export function useAgent(
     commit([{kind: 'task', text: task}]);
     setPhase({kind: 'busy'});
 
+    let failed = false;
+    let denied = false;
     const host: Host = {
       signal: controller.signal,
       onEvent(event) {
+        if (event.type === 'error') failed = true;
         if (event.type === 'thinking_delta') return;
         if (event.type === 'model_request_start' || event.type === 'model_attempt_start' || event.type === 'run_start') return;
         if (event.type === 'model_attempt') {
@@ -170,25 +175,25 @@ export function useAgent(
           return;
         }
         if (event.type === 'compact_start') {
-          setPhase({kind: 'busy', label: COMPACTING_LABEL});
+          setPhase((current) => current.kind === 'confirming' ? current : {kind: 'busy', label: COMPACTING_LABEL});
           return;
         }
         if (event.type === 'compact_end') {
-          setPhase({kind: 'busy'});
+          setPhase((current) => current.kind === 'confirming' ? current : {kind: 'busy'});
           return;
         }
         if (event.type === 'model_retry') {
-          setPhase({kind: 'busy', label: `Retrying DeepSeek (${event.attempt}/${event.total})…`});
+          setPhase((current) => current.kind === 'confirming' ? current : {kind: 'busy', label: `Retrying DeepSeek (${event.attempt}/${event.total})…`});
           return;
         }
         if (event.type === 'text_delta') {
-          setPhase({kind: 'busy'});
+          setPhase((current) => current.kind === 'confirming' ? current : {kind: 'busy'});
           liveTextRef.current += event.text;
           setStreamText(liveTextRef.current);
           return;
         }
         if (event.type === 'tool_start') {
-          setPhase({kind: 'busy'});
+          setPhase((current) => current.kind === 'confirming' ? current : {kind: 'busy'});
         }
         if (event.type === 'turn_end') {
           flushText();
@@ -197,26 +202,56 @@ export function useAgent(
         flushText();
         commit([{kind: 'event', event}]);
       },
-      confirm(request) {
+      confirm(request, signal = controller.signal) {
+        if (signal.aborted) return Promise.resolve('deny');
         setPhase({kind: 'confirming', request});
         return new Promise<ConfirmDecision>((resolve) => {
-          resolveConfirmRef.current = (decision) => {
-            resolveConfirmRef.current = null;
+          const answer = (decision: ConfirmDecision) => {
+            if (decision === 'deny') denied = true;
+            signal.removeEventListener('abort', cancelled);
+            if (resolveConfirmRef.current === answer) resolveConfirmRef.current = null;
             setPhase({kind: 'busy'});
             resolve(decision);
           };
+          const cancelled = () => answer('deny');
+          resolveConfirmRef.current = answer;
+          signal.addEventListener('abort', cancelled, {once: true});
+          if (signal.aborted) cancelled();
         });
       },
     };
 
-    void runAgent(session, choiceRef.current, host, undefined, store ?? undefined).finally(() => {
+    const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
+    const execute = async () => {
+      let outcome: 'step_limit' | void = undefined;
+      try {
+        outcome = await runAgent(session, choiceRef.current, host, toolsFor(session.mode, true), store ?? undefined, {
+          backgroundTasks,
+          onWait(waiting) {
+            setPhase((current) => current.kind === 'busy'
+              ? {kind: 'busy', ...(waiting ? {label: 'Waiting for background work…'} : {})}
+              : current);
+          },
+        });
+      } catch (error) {
+        failed = true;
+        host.onEvent({type: 'error', message: (error as Error).message});
+      } finally {
+        try {
+          await backgroundTasks.close('interactive turn ended', !controller.signal.aborted && !failed && !denied && outcome !== 'step_limit');
+        } catch (error) {
+          host.onEvent({type: 'error', message: (error as Error).message});
+        }
+      }
+    };
+    void execute().finally(() => {
       flushText();
       resolveConfirmRef.current = null;
       if (controller.signal.aborted) {
         commit([{kind: 'notice', text: 'stopped'}]);
       }
       controllerRef.current = null;
-      setPhase({kind: 'idle'});
+      setPhase((current) => current.kind === 'closed' ? current : {kind: 'idle'});
     });
     return true;
   };
@@ -360,7 +395,7 @@ export function useAgent(
 
   const context = () => {
     if (phase.kind !== 'idle') return;
-    const status = contextStatus(session);
+    const status = contextStatus(session, toolsFor(session.mode, true));
     commit([{kind: 'context', ...status}]);
   };
 
@@ -481,6 +516,7 @@ export function useAgent(
 
   useEffect(
     () => () => {
+      controllerRef.current?.abort();
       try {
         storeRef.current?.close();
       } catch {}

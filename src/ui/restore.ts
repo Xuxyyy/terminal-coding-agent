@@ -30,7 +30,7 @@ export function restoreItems(messages: Message[]): Item[] {
 
   for (const message of messages) {
     if (message.role === 'user') {
-      items.push({kind: 'task', text: textOf(message.content)});
+      items.push({kind: message.name === 'acc_runtime' ? 'notice' : 'task', text: textOf(message.content)});
     } else if (message.role === 'assistant') {
       const text = textOf(message.content);
       if (text) items.push({kind: 'text', text});

@@ -115,6 +115,81 @@ test('the repl writes every turn to a session on disk', async () => {
   );
 });
 
+test('interactive background completion resumes and reads output without another human message', async () => {
+  const root = workspace();
+  loadSettings([]);
+  const home = process.env.ACC_HOME!;
+  let taskId = '';
+  const {choice, calls} = fakeModel((nth, body) => {
+    const request = body as {messages: {role: string; name?: string; content: string}[]};
+    if (nth === 1) return streamOf(toolCallChunk('start', 'bash', JSON.stringify({
+      command: 'while ! test -f release; do sleep 0.01; done; printf checked-output', run_in_background: true,
+    })), finishChunk('tool_calls'));
+    if (nth === 2) return answer('Other work finished.');
+    const notices = request.messages.filter((message) => message.name === 'acc_runtime');
+    assert.equal(notices.length, 1);
+    taskId = JSON.parse(notices[0]!.content.split('\n')[1]!).id;
+    if (nth === 3) return streamOf(toolCallChunk('read', 'task_output', JSON.stringify({task_id: taskId})), finishChunk('tool_calls'));
+    assert.equal(nth, 4);
+    assert.equal(JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content).output, 'checked-output');
+    return answer('Background output checked.');
+  });
+  const {agent, unmount} = mount(root, choice);
+  try {
+    agent.current!.send('run and check background work');
+    for (let n = 0; n < 200 && agent.current?.phase.kind !== 'busy'; n++) await tick();
+    for (let n = 0; n < 200 && calls() < 2; n++) {
+      if (agent.current?.phase.kind === 'confirming') agent.current.respond('once');
+      await tick();
+    }
+    await tick();
+    assert.equal(calls(), 2);
+    assert.deepEqual(agent.current!.phase, {kind: 'busy', label: 'Waiting for background work…'});
+    assert.equal(agent.current!.send('unexpected human message'), false);
+    fs.writeFileSync(path.join(root, 'release'), '');
+    await settle(agent);
+    assert.equal(calls(), 4);
+    const stored = loadSession(root, null, home);
+    assert.equal(stored.messages.filter((message) => message.role === 'user' && message.name !== 'acc_runtime').length, 1);
+    assert.equal(stored.messages.filter((message) => message.role === 'user' && message.name === 'acc_runtime').length, 1);
+    assert.ok(taskId);
+  } finally {
+    agent.current!.interrupt();
+    await settle(agent);
+    unmount();
+  }
+});
+
+test('interactive interruption stops owned background shells without another model call', async () => {
+  const root = workspace();
+  loadSettings([]);
+  const {choice, calls} = fakeModel((nth) => nth === 1
+    ? streamOf(toolCallChunk('start', 'bash', JSON.stringify({command: 'sleep 20', run_in_background: true})), finishChunk('tool_calls'))
+    : answer('Waiting.'));
+  const {agent, unmount} = mount(root, choice);
+  try {
+    agent.current!.send('wait for background work');
+    for (let n = 0; n < 200 && calls() < 2; n++) {
+      if (agent.current?.phase.kind === 'confirming') agent.current.respond('once');
+      await tick();
+    }
+    await tick();
+    assert.equal(calls(), 2);
+    agent.current!.interrupt();
+    await settle(agent);
+    assert.equal(calls(), 2);
+    const finished = agent.current!.committed.filter((item) => item.kind === 'event' && item.event.type === 'background_task' && item.event.action === 'completed');
+    assert.equal(finished.length, 1);
+    const event = finished[0];
+    assert.ok(event?.kind === 'event' && event.event.type === 'background_task');
+    assert.equal(event.event.task.status, 'stopped');
+  } finally {
+    agent.current!.interrupt();
+    await settle(agent);
+    unmount();
+  }
+});
+
 test('starting the repl and quitting leaves no session behind', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
@@ -1259,7 +1334,7 @@ test('interactive startup uses auto-edits by default and honors explicitly saved
       agent.current!.send('read the note');
       await settle(agent);
       assert.equal(request?.messages[0]?.content, systemPrompt(root, mode));
-      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode)));
+      assert.deepEqual(request?.tools, toolDefinitions(toolsFor(mode, true)));
       if (saved) assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {permission_mode: saved});
       else assert.equal(fs.existsSync(file), false);
     } finally {

@@ -17,18 +17,23 @@ The workspace is the current directory. Installed as the `acc` command.
 ## The agent loop
 
 - Streaming turn loop: messages → model → tool calls → run → append → repeat.
-- Seven built-in tools: `read_file`, `grep`, `glob`, `edit_file` (unique-match),
-  `write_file`, `bash`, `agent`. Default `auto-edits` mode offers all seven.
-  Optional `auto` mode offers only `edit_file`, `write_file`, `bash`, and `agent`.
+- Ten built-in tools: `read_file`, `grep`, `glob`, `edit_file` (unique-match),
+  `write_file`, `bash`, `agent`, `send_message`, `wait_agents`, and `stop_agent`.
+  Default `auto-edits` mode offers all ten. Optional `auto` omits the three dedicated read/search tools.
 - `agent` hands one self-contained job to a sub-agent. Files in
   `<ACC_HOME>/agents/*.md` define optional global types with a routing
   description, appended role prompt, model, exact tool list, and permission
   mode. Missing fields inherit the parent's model, tools available in the child's mode
-  except `agent`,
+  except `agent`, `wait_agents`, and `stop_agent`,
   and its mode; a configured mode can only make the child stricter. The child
-  still runs in the current workspace. The parent blocks, draws one row, and
-  gets back the child's final message alone — nothing the child read or ran is
-  written to the session or added to the parent's context.
+  still runs in the current workspace. By default it returns a stable child ID
+  immediately and lets main and other children continue; `background: false` waits for the report. Messages and final
+  reports reach main automatically, including while main waits. `send_message` queues
+  work for active children and resumes completed idle children. `wait_agents` waits
+  for events without model polling; `stop_agent` interrupts work while retaining
+  history. Idle children make no model calls. Permission prompts share a queue. Child history is saved
+  separately under its parent session. The tool can list saved children and
+  resume one with a follow-up assignment, including after restarting ACC.
 - `grep` shells out to `rg` on `PATH`. It returns matching paths only unless
   asked for `content` or `count`, it respects `.gitignore`, includes dotfiles,
   and never searches `.git`. When `rg` is not installed it says so and points at
@@ -194,7 +199,7 @@ typo anywhere in the file stops `acc` at startup with the file named. See
 `acc -p "<task>"` runs one turn with no terminal and exits — no Ink, no
 keyboard, no TTY needed. It is a second implementation of `Host`, in
 `src/core/headless/`; the loop, the tools and the permission gate below the seam
-are shared. Headless runs also enable managed background Bash commands.
+are shared. Both hosts enable managed background Bash commands.
 
 - stdout is the answer and nothing else, so `acc -p "…" > out.txt` is useful.
   Tool lines, the prompts with their decisions, and the stop reason go to
@@ -220,7 +225,8 @@ are shared. Headless runs also enable managed background Bash commands.
   `task_stop` stops owned commands. Explicit lifetimes separate finite work,
   temporary services, and retained services. `task_handoff` verifies readiness
   before a main-agent service can survive successful normal completion, with
-  private logs and a recorded stop command. Interactive Bash remains foreground-only.
+  private logs and a recorded stop command. Main agents and subagents receive only
+  their own completion notices and must read and check results before reporting.
 - No resumable session is written, and a print run cannot be reopened with
   `/resume`. Command logs and final task metadata remain in the private
   `runs/<run-id>/tasks/` directory under `ACC_HOME` (default `~/.acc`).
@@ -390,8 +396,8 @@ catch what `bash` changes — both wait for numbers from real use (see
 `sessions.md`). Domain filtering, authenticated network tools, a
 debugging transcript, todo panel, skills, memory.
 
-For sub-agents, deliberately: project-local definitions, parallel or background
-work, nested agents, persistent child sessions, inherited parent conversation,
+For sub-agents, deliberately: project-local definitions, nested agents, peer
+messages, inherited parent conversation,
 live child progress, hot reload, and per-agent token, turn, timeout,
 temperature, or reasoning settings.
 

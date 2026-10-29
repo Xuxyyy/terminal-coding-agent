@@ -409,7 +409,7 @@ test('late output after cancellation cannot execute tools or alter the conversat
 test('subagent requests inherit the main deadline and unknown usage is visible', async () => {
   let childRequests = 0;
   const {choice} = fakeModel((nth) => {
-    if (nth === 1) return streamOf(toolCallChunk('child', 'agent', JSON.stringify({description: 'inspect', prompt: 'inspect'})), finishChunk('tool_calls'), usageChunk(10, 2));
+    if (nth === 1) return streamOf(toolCallChunk('child', 'agent', JSON.stringify({description: 'inspect', prompt: 'inspect', background: false})), finishChunk('tool_calls'), usageChunk(10, 2));
     childRequests++;
     return new Promise(() => {});
   });

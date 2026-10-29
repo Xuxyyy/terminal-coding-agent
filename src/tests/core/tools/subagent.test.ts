@@ -3,10 +3,18 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
+import {spawnSync} from 'node:child_process';
 import type OpenAI from 'openai';
 import type {AgentDefinition} from '../../../core/agents.js';
 import type {ModelChoice} from '../../../core/client.js';
-import {INTERRUPTED, type Host} from '../../../core/host.js';
+import {INTERRUPTED, type Host, type AgentEvent} from '../../../core/host.js';
+import {runAgent} from '../../../core/loop.js';
+import {addTask, createSession} from '../../../core/session.js';
+import {startSession, openSession} from '../../../core/store.js';
+import {loadSubagent, listSubagents, startSubagent} from '../../../core/subagent-store.js';
+import {modelSettings} from '../../../core/client.js';
+import {assistantMessage} from '../../../core/messages.js';
+import {runTool} from '../../../core/tools/registry.js';
 import {subagentPrompt} from '../../../core/prompt.js';
 import type {ToolContext} from '../../../core/tools/registry.js';
 import {
@@ -30,7 +38,7 @@ const SECRET = 'SECRET-FROM-THE-TOOL';
 
 const ANSWER = 'the note names one owner';
 
-const job = {description: 'read a note', prompt: 'say who owns the note'};
+const job = {description: 'read a note', prompt: 'say who owns the note', background: false};
 
 function definition(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
   return {
@@ -116,9 +124,23 @@ test('the parent is given the final message and none of the tool output', async 
 
   assert.equal(calls(), 2);
   assert.ok(sent[1]!.includes(SECRET));
-  assert.equal(output.text, ANSWER);
+  assert.ok(output.text.endsWith(`\n\n${ANSWER}`));
   assert.doesNotMatch(output.text, new RegExp(SECRET));
   assert.doesNotMatch(output.text, /notes\.txt/);
+});
+
+test('omitted or true background requires the main runtime without starting a model', async () => {
+  const root = workspace();
+  const model = recordingChoice();
+  try {
+    for (const background of [undefined, true]) {
+      const output = await subagent.run({...job, background}, context(root, fakeHost().host, model.choice));
+      assert.match(output.text, /background agents require the main agent runtime/);
+    }
+    assert.equal(model.calls(), 0);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
 });
 
 test('narration before a tool call is not glued to the final message', async () => {
@@ -138,7 +160,7 @@ test('narration before a tool call is not glued to the final message', async () 
 
   const output = await subagent.run(job, context(root, host, choice));
 
-  assert.equal(output.text, ANSWER);
+  assert.ok(output.text.endsWith(`\n\n${ANSWER}`));
 });
 
 test('the usage the parent sees is the whole child turn', async () => {
@@ -172,7 +194,7 @@ test('an allow list narrows the child to those tools alone', () => {
 test('auto child allowlists cannot restore read or search tools or add recursive agents', () => {
   const offered = childTools('auto', ['grep', 'glob', 'read_file']);
   assert.deepEqual(offered, []);
-  assert.deepEqual(childTools('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash']);
+  assert.deepEqual(childTools('auto').map((tool) => tool.name), ['edit_file', 'write_file', 'bash', 'send_message']);
   const editing = childTools('auto', ['edit_file', 'write_file']);
   assert.deepEqual(editing.map((tool) => tool.name), ['edit_file', 'write_file']);
   assert.ok(editing.every((tool) => tool.description.includes('Prefer this tool')));
@@ -189,7 +211,7 @@ test('children use the parent auto preference unless configured with a stricter 
     const tool = makeSubagent([definition({permissionMode: configured})]);
     const ctx = {...context(root, host, child.choice), mode: 'auto' as const};
     const output = await tool.run({...job, agent: 'explorer'}, ctx);
-    assert.equal(output.text, ANSWER);
+    assert.ok(output.text.endsWith(`\n\n${ANSWER}`));
     const mode = configured ?? 'auto';
     const body = child.bodies[0]!;
     const messages = body.messages as {content: string}[];
@@ -197,8 +219,8 @@ test('children use the parent auto preference unless configured with a stricter 
     assert.doesNotMatch(messages[0]!.content, /Prefer bash|Prefer edit_file/);
     const offered = body.tools as {function: {name: string; description: string}}[];
     assert.deepEqual(offered.map((tool) => tool.function.name), mode === 'auto'
-      ? ['edit_file', 'write_file', 'bash']
-      : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash']);
+      ? ['edit_file', 'write_file', 'bash', 'send_message']
+      : ['read_file', 'grep', 'glob', 'edit_file', 'write_file', 'bash', 'send_message']);
     const shell = offered.find((tool) => tool.function.name === 'bash')!;
     assert.equal(shell.function.description.includes('Use this tool for ordinary file reads, searches, and running commands'), mode === 'auto');
     for (const tool of offered.filter((tool) => tool.function.name === 'edit_file' || tool.function.name === 'write_file')) {
@@ -270,7 +292,7 @@ test('interrupting the child reports the interruption, not a half answer', async
 
   const output = await subagent.run(job, context(root, host, choice));
 
-  assert.equal(output.text, INTERRUPTED);
+  assert.ok(output.text.endsWith(`\n\n${INTERRUPTED}`));
 });
 
 test('a run with no model to lend says so instead of throwing', async () => {
@@ -303,7 +325,7 @@ test('definitions add sorted routing while an omitted type keeps the general chi
 
   const output = await tool.run(job, context(root, host, parent.choice));
 
-  assert.equal(output.text, ANSWER);
+  assert.ok(output.text.endsWith(`\n\n${ANSWER}`));
   assert.deepEqual(factoryCalls, []);
   assert.match(tool.description, /explorer: Explores code without editing/);
   assert.match(tool.description, /writer: Writes focused changes/);
@@ -336,7 +358,7 @@ test('a named type uses its lazy model, appended prompt, tool order, and stricte
     context(root, host, recordingChoice().choice),
   );
 
-  assert.equal(output.text, ANSWER);
+  assert.ok(output.text.endsWith(`\n\n${ANSWER}`));
   assert.deepEqual(requested, ['kimi-k3']);
   const body = child.bodies[0]!;
   const messages = body.messages as {role: string; content: string}[];
@@ -478,4 +500,276 @@ test('named subagents inherit reasoning even when a factory supplies another eff
     assert.equal(child.bodies[0]!.reasoning_effort, 'max');
     assert.deepEqual(child.bodies[0]!.thinking, {type: 'enabled'});
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+function persistent(t: {after(fn: () => void): void}) {
+  const root = workspace();
+  const home = workspace();
+  const store = startSession(root, home);
+  t.after(() => {
+    store.close();
+    fs.rmSync(root, {recursive: true, force: true});
+    fs.rmSync(home, {recursive: true, force: true});
+  });
+  return {root, home, store};
+}
+
+function idOf(text: string): string {
+  const id = /^agent_id: (.+)$/m.exec(text)?.[1];
+  assert.ok(id);
+  return id;
+}
+
+test('the real parent loop persists separate child tool history and stable diagnostic identity', async (t) => {
+  const {root, store} = persistent(t);
+  fs.writeFileSync(path.join(root, 'notes.txt'), SECRET);
+  const {host} = fakeHost();
+  const diagnostics: AgentEvent[] = [];
+  host.onDiagnostic = (event) => diagnostics.push(event);
+  const {choice} = fakeModel((nth) => {
+    if (nth === 1) return streamOf(toolCallChunk('delegate', 'agent', JSON.stringify(job)), finishChunk('tool_calls'));
+    if (nth === 2) return streamOf(toolCallChunk('read', 'read_file', JSON.stringify({path: 'notes.txt'})), finishChunk('tool_calls'), usageChunk(10, 2));
+    return streamOf(textChunk(nth === 3 ? ANSWER : 'parent done'), finishChunk('stop'), usageChunk(3, 4));
+  });
+  const session = createSession(root, 'parent', choice.contextWindow);
+  session.mode = 'auto-edits';
+  store.appendMessage(addTask(session, 'delegate the note check'));
+  await runAgent(session, choice, host, [subagent], store);
+  const [meta] = listSubagents(store);
+  assert.ok(meta);
+  assert.equal(meta.status, 'completed');
+  const saved = loadSubagent(store, meta.id);
+  assert.ok(JSON.stringify(saved.messages).includes(SECRET));
+  assert.ok(!JSON.stringify(store.records()).includes(SECRET));
+  assert.ok(JSON.stringify(store.records()).includes(`agent_id: ${meta.id}`));
+  assert.deepEqual(diagnostics.filter((event) => event.type === 'model_attempt').map((event) => event.evidence.agentId), [meta.id, meta.id]);
+  assert.deepEqual(meta.usage, {prompt: 13, completion: 6, total: 19});
+  const file = path.join(store.dir, 'subagents', `agent-${meta.id}.jsonl`);
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+});
+
+test('repeated resume appends to one child history and restart discovers it after parent compaction', async (t) => {
+  const {root, home, store} = persistent(t);
+  const model = recordingChoice('remembered answer');
+  const first = await subagent.run({...job, prompt: 'Remember the codeword violet-cabin.'}, {...context(root, fakeHost().host, model.choice), store});
+  const id = idOf(first.text);
+  const file = path.join(store.dir, 'subagents', `agent-${id}.jsonl`);
+  const original = fs.readFileSync(file, 'utf8');
+  await subagent.run({...job, resume: id, prompt: 'Use the earlier codeword.'}, {...context(root, fakeHost().host, model.choice), store});
+  assert.match(JSON.stringify(model.bodies[1]!.messages), /violet-cabin/);
+  assert.ok(fs.readFileSync(file, 'utf8').startsWith(original));
+  store.appendCompact({role: 'assistant', content: 'summary with no agent identities'}, 10, [{role: 'assistant', content: 'summary'}]);
+  const parentId = store.id;
+  store.close();
+  const script = `
+    import assert from 'node:assert/strict';
+    import {openSession} from ${JSON.stringify(new URL('../../../core/store.js', import.meta.url).href)};
+    import {subagent} from ${JSON.stringify(new URL('../../../core/tools/subagent.js', import.meta.url).href)};
+    import {fakeHost, fakeModel, streamOf, textChunk, finishChunk} from ${JSON.stringify(new URL('../../fakes.js', import.meta.url).href)};
+    const {store} = openSession(${JSON.stringify(root)}, ${JSON.stringify(parentId)}, ${JSON.stringify(home)});
+    const {host} = fakeHost();
+    let sent;
+    const {choice} = fakeModel((_n, body) => { sent = body; return streamOf(textChunk('restart done'), finishChunk('stop')); });
+    choice.model = 'fake-child';
+    const ctx = {root: ${JSON.stringify(root)}, host, allowed: new Set(), rules: {allow: [], ask: [], deny: []}, mode: 'auto-edits', choice, store};
+    const listed = JSON.parse((await subagent.run({action: 'list'}, ctx)).text);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].agent_id, ${JSON.stringify(id)});
+    const result = await subagent.run({resume: listed[0].agent_id, description: 'recall codeword', prompt: 'What was the earlier codeword?', background: false}, ctx);
+    assert.match(JSON.stringify(sent.messages), /violet-cabin/);
+    assert.equal(sent.messages.filter(m => m.role === 'user').length, 3);
+    assert.ok(result.text.includes('restart done'));
+    store.close();
+  `;
+  const restarted = spawnSync(process.execPath, ['--import', new URL('../../offline.js', import.meta.url).pathname, '--input-type=module', '-e', script], {encoding: 'utf8', timeout: 10_000});
+  assert.equal(restarted.status, 0, restarted.stderr);
+  assert.equal(listSubagents(store).length, 1);
+  assert.equal(loadSubagent(store, id).messages.filter((m) => m.role === 'user').length, 3);
+});
+
+test('a hard-interrupted tool batch keeps saved results and marks only missing outcomes uncertain', async (t) => {
+  const {root, store} = persistent(t);
+  const model = recordingChoice('inspected without repeating');
+  const child = startSubagent(store, {
+    workspace: root, description: 'unfinished actions', tools: ['bash'], mode: 'auto-edits', sandbox: 'off',
+    rules: {allow: [], ask: [], deny: []}, modelSettings: modelSettings(model.choice),
+  });
+  child.store.appendMessage({role: 'user', content: 'Do the original job.'});
+  child.store.appendStep([
+    assistantMessage('', [{id: 'done', name: 'bash', args: '{"command":"printf done"}'}, {id: 'pending', name: 'bash', args: '{"command":"touch repeated.txt"}'}]),
+    {role: 'tool', tool_call_id: 'done', content: 'completed action'},
+  ], {prompt: 5, completion: 2, total: 7});
+  child.store.close();
+  const metaFile = path.join(store.dir, 'subagents', `agent-${child.meta.id}.json`);
+  const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+  meta.status = 'running';
+  fs.writeFileSync(metaFile, JSON.stringify(meta));
+  assert.equal(listSubagents(store)[0]!.status, 'interrupted');
+  const result = await subagent.run({...job, resume: meta.id, prompt: 'Inspect the current state and report.'}, {...context(root, fakeHost().host, model.choice), store});
+  const messages = model.bodies[0]!.messages as {role: string; tool_call_id?: string; content: string}[];
+  assert.equal(messages.filter((m) => m.tool_call_id === 'done').length, 1);
+  assert.match(messages.find((m) => m.tool_call_id === 'pending')!.content, /Execution is uncertain/);
+  assert.match(JSON.stringify(messages), /previous assignment did not complete/);
+  assert.ok(!fs.existsSync(path.join(root, 'repeated.txt')));
+  assert.match(result.text, /status: completed/);
+  assert.equal(loadSubagent(store, meta.id).messages.filter((m) => m.role === 'tool').length, 2);
+});
+
+test('cancellation saves an interrupted child that can receive a new assignment', async (t) => {
+  const {root, store} = persistent(t);
+  const {host, controller} = fakeHost();
+  const cancelled = fakeModel(() => {
+    controller.abort();
+    return streamOf(textChunk('unfinished'), finishChunk('stop'), usageChunk(2, 1));
+  });
+  const output = await subagent.run(job, {...context(root, host, cancelled.choice), store});
+  const id = idOf(output.text);
+  assert.match(output.text, /status: interrupted/);
+  assert.equal(loadSubagent(store, id).meta.status, 'interrupted');
+  const next = recordingChoice();
+  next.choice.model = cancelled.choice.model;
+  await subagent.run({...job, resume: id, prompt: 'Continue carefully.'}, {...context(root, fakeHost().host, next.choice), store});
+  assert.match(JSON.stringify(next.bodies[0]!.messages), /previous assignment did not complete/);
+  assert.equal(loadSubagent(store, id).meta.status, 'completed');
+});
+
+test('resume preserves saved role, tools, model effort, and stricter mode after definitions change', async (t) => {
+  const {root, store} = persistent(t);
+  const original = recordingChoice();
+  original.choice.model = 'deepseek-flash';
+  original.choice.reasoningEffort = 'max';
+  const first = await makeSubagent([definition({tools: ['write_file'], permissionMode: 'ask-edits'})]).run(
+    {...job, agent: 'explorer'}, {...context(root, fakeHost().host, original.choice), store},
+  );
+  const resumed = fakeModel((nth) => nth === 1
+    ? streamOf(toolCallChunk('write', 'write_file', JSON.stringify({path: 'blocked.txt', content: 'must ask'})), finishChunk('tool_calls'))
+    : streamOf(textChunk('reported refusal'), finishChunk('stop')));
+  resumed.choice.model = original.choice.model;
+  resumed.choice.reasoningEffort = 'none';
+  const {host, asked} = fakeHost();
+  host.confirm = async (request) => { asked.push(request); return 'deny'; };
+  const bodies: string[] = [];
+  const create = resumed.choice.client.chat.completions.create;
+  resumed.choice.client = {chat: {completions: {create: async (body: unknown, options: unknown) => {
+    bodies.push(JSON.stringify(body)); return create(body as never, options as never);
+  }}}} as unknown as OpenAI;
+  const reopened = {...context(root, host, resumed.choice), mode: 'auto' as const, store};
+  await makeSubagent([]).run({...job, resume: idOf(first.text)}, reopened);
+  assert.equal(asked.length, 1);
+  assert.ok(!fs.existsSync(path.join(root, 'blocked.txt')));
+  assert.match(bodies[0]!, /Report exact paths/);
+  assert.match(bodies[0]!, /"reasoning_effort":"max"/);
+  assert.deepEqual(JSON.parse(bodies[0]!).tools.map((one: {function: {name: string}}) => one.function.name), ['write_file']);
+});
+
+for (const restriction of ['saved-deny', 'current-deny', 'current-mode', 'saved-sandbox', 'current-sandbox'] as const) {
+  test(`resume enforces ${restriction} without restoring old approvals`, async (t) => {
+    const {root, store} = persistent(t);
+    const model = recordingChoice();
+    const {host} = fakeHost();
+    const ctx = {...context(root, host, model.choice), store, sandbox: restriction === 'saved-sandbox' ? 'on' as const : 'off' as const};
+    if (restriction === 'saved-deny') ctx.rules.deny.push({tag: 'edit', pattern: 'blocked.txt'});
+    const first = await subagent.run(job, ctx);
+    const id = idOf(first.text);
+    const next = fakeModel((nth) => nth === 1
+      ? streamOf(toolCallChunk('action', restriction.includes('sandbox') ? 'read_file' : 'write_file', JSON.stringify({path: restriction.includes('sandbox') ? '.env' : 'blocked.txt', content: 'no'})), finishChunk('tool_calls'))
+      : streamOf(textChunk('done'), finishChunk('stop')));
+    next.choice.model = model.choice.model;
+    fs.writeFileSync(path.join(root, '.env'), 'test-placeholder-secret');
+    const resumedHost = fakeHost();
+    resumedHost.host.confirm = async (request) => { resumedHost.asked.push(request); return 'deny'; };
+    const resumedCtx = {...context(root, resumedHost.host, next.choice), store,
+      sandbox: restriction === 'current-sandbox' ? 'on' as const : 'off' as const,
+      mode: restriction === 'current-mode' ? 'ask-edits' as const : 'auto-edits' as const};
+    if (restriction === 'current-deny') resumedCtx.rules.deny.push({tag: 'edit', pattern: 'blocked.txt'});
+    await subagent.run({...job, resume: id}, resumedCtx);
+    assert.ok(!fs.existsSync(path.join(root, 'blocked.txt')));
+    const saved = JSON.stringify(loadSubagent(store, id).messages);
+    if (restriction.includes('sandbox')) assert.match(saved, /sandbox blocks credential storage/);
+    else if (restriction.includes('deny')) assert.match(saved, /denied by a rule/);
+    else assert.equal(resumedHost.asked.length, 1);
+  });
+}
+
+test('IDs are parent-scoped and invalid resume or list calls do not invoke a model', async (t) => {
+  const {root, store} = persistent(t);
+  const otherHome = workspace();
+  const other = startSession(root, otherHome);
+  t.after(() => { other.close(); fs.rmSync(otherHome, {recursive: true, force: true}); });
+  const model = recordingChoice();
+  const ctx = {...context(root, fakeHost().host, model.choice), store};
+  const first = await subagent.run(job, ctx);
+  for (const args of [{...job, resume: idOf(first.text)}, {...job, resume: '../session'}, {action: 'list', prompt: 'do work'}]) {
+    const result = await runTool([subagent], 'agent', JSON.stringify(args), {...ctx, store: other});
+    assert.match(result.text, /^Error:/);
+  }
+  assert.equal(model.calls(), 1);
+});
+
+
+test('a durable child records a call before permission and counts cancelled tool usage once', async (t) => {
+  const {root, store} = persistent(t);
+  const {host, controller} = fakeHost();
+  let observed = false;
+  host.confirm = async () => {
+    const [meta] = listSubagents(store);
+    assert.ok(meta);
+    const saved = loadSubagent(store, meta.id);
+    assert.match(JSON.stringify(saved.messages), /pending-write/);
+    assert.equal(saved.messages.some((m) => m.role === 'tool'), false);
+    observed = true;
+    controller.abort();
+    return 'once';
+  };
+  const {choice} = fakeModel(() => streamOf(
+    toolCallChunk('pending-write', 'write_file', JSON.stringify({path: 'cancelled.txt', content: 'never written'})),
+    finishChunk('tool_calls'), usageChunk(5, 2),
+  ));
+  const result = await subagent.run(job, {...context(root, host, choice), mode: 'ask-edits', store});
+  assert.equal(observed, true);
+  assert.equal(fs.existsSync(path.join(root, 'cancelled.txt')), false);
+  assert.deepEqual(loadSubagent(store, idOf(result.text)).meta.usage, {prompt: 5, completion: 2, total: 7});
+  assert.equal(loadSubagent(store, idOf(result.text)).messages.filter((m) => m.role === 'tool').length, 1);
+});
+
+test('a torn transcript tail keeps later resume records readable across more than one reopen', async (t) => {
+  const {root, store} = persistent(t);
+  const model = recordingChoice();
+  const ctx = {...context(root, fakeHost().host, model.choice), store};
+  const first = await subagent.run({...job, prompt: 'Keep original context.'}, ctx);
+  const id = idOf(first.text);
+  const file = path.join(store.dir, 'subagents', `agent-${id}.jsonl`);
+  fs.appendFileSync(file, '{"kind":"messages","mess');
+  await subagent.run({...job, resume: id, prompt: 'First recovery.'}, ctx);
+  await subagent.run({...job, resume: id, prompt: 'Second recovery.'}, ctx);
+  const saved = JSON.stringify(loadSubagent(store, id).messages);
+  assert.match(saved, /Keep original context/);
+  assert.match(saved, /First recovery/);
+  assert.match(saved, /Second recovery/);
+});
+
+test('a failed transcript write stops a durable child before the tool can execute', async (t) => {
+  const {root, store} = persistent(t);
+  const session = createSession(root, 'child', 1_000_000);
+  addTask(session, 'write a file');
+  const {host} = fakeHost();
+  const model = fakeModel(() => streamOf(toolCallChunk('write', 'write_file', JSON.stringify({path: 'not-written.txt', content: 'no'})), finishChunk('tool_calls')));
+  const failing = {...store, appendStep() { throw new Error('disk unavailable'); }};
+  await assert.rejects(runAgent(session, model.choice, host, childTools('auto-edits'), failing, {durableTools: true}), /disk unavailable/);
+  assert.equal(fs.existsSync(path.join(root, 'not-written.txt')), false);
+});
+
+
+test('a named child without a parent model keeps the client factory reasoning default', async () => {
+  const root = workspace();
+  try {
+    const model = recordingChoice();
+    model.choice.model = 'deepseek-flash';
+    model.choice.reasoningEffort = 'max';
+    const tool = makeSubagent([definition({model: 'deepseek-flash'})], () => model.choice);
+    await tool.run({...job, agent: 'explorer'}, context(root, fakeHost().host));
+    assert.equal(model.bodies[0]!.reasoning_effort, 'max');
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
 });

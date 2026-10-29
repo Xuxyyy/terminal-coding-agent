@@ -25,7 +25,8 @@ test('the base prompt uses reusable guidance with accurate ACC runtime instructi
   assert.match(prompt, /denied by the user or by ACC's permission checks/);
   assert.match(prompt, /Never use another tool to bypass a permission denial/);
   assert.match(prompt, /Prefer the dedicated file\/search tools/);
-  assert.match(prompt, /ACC executes tool calls sequentially/);
+  assert.match(prompt, /Each agent executes its tool calls sequentially/);
+  assert.match(prompt, /It runs concurrently by default; set `background: false` when you need to wait for its report/);
   assert.match(prompt, /<environment>/);
   assert.ok(prompt.includes(`working directory: ${process.cwd()}`));
   assert.match(prompt, /^platform: .+$/m);

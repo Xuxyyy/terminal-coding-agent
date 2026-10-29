@@ -123,12 +123,20 @@ export type Compaction = {
   usage: Usage;
 };
 
+export class CompactionSaveError extends Error {
+  constructor(cause: unknown) {
+    super(`could not save compacted session; the run stopped: ${(cause as Error)?.message ?? String(cause)}`, {cause});
+    this.name = 'CompactionSaveError';
+  }
+}
+
 export async function compactSession(
   session: Session,
   choice: ModelChoice,
   host: Host,
   store?: SessionStore,
   postSummaryMessages: readonly Message[] = [],
+  options: {requireSave?: boolean} = {},
 ): Promise<Compaction | null> {
   const usage: Usage = {prompt: 0, completion: 0, total: 0};
   let text: string | null = null;
@@ -169,11 +177,17 @@ export async function compactSession(
   });
   const replacement = [...retainedUsers, summary, ...failureContext, ...postSummaryMessages];
 
-  session.messages = [system, ...replacement];
-  setMeasured(session, 0);
+  const apply = (): void => {
+    session.messages = [system, ...replacement];
+    setMeasured(session, 0);
+  };
+  if (!options.requireSave) apply();
   try {
     store?.appendCompact(summary, replaced, replacement);
-  } catch {}
+  } catch (error) {
+    if (options.requireSave) throw new CompactionSaveError(error);
+  }
+  if (options.requireSave) apply();
 
   return {
     summary: text,

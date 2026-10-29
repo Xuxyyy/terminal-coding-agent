@@ -8,6 +8,7 @@ import type {Tool} from './registry.js';
 import {makeSubagent} from './subagent.js';
 import {writeFile} from './write.js';
 import {taskOutput, taskStop, taskHandoff} from './tasks.js';
+import {sendMessage, waitAgents, stopAgent} from './agent-messages.js';
 
 export const tools: Tool[] = [readFile, grep, glob, editFile, writeFile, bash];
 
@@ -37,7 +38,7 @@ export function toolsFor(mode: Mode, background = false): Tool[] {
   const enabled = background ? offered.map((tool) => tool.name === 'bash'
     ? {...backgroundBash, description: tool.description + BACKGROUND_INSTRUCTIONS}
     : tool) : offered;
-  return [...enabled, ...(background ? [taskOutput, taskStop, taskHandoff] : []), makeSubagent()];
+  return [...enabled, ...(background ? [taskOutput, taskStop, taskHandoff] : []), makeSubagent(), sendMessage, waitAgents, stopAgent];
 }
 
 export {toolDefinitions, runTool} from './registry.js';

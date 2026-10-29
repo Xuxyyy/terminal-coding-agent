@@ -28,6 +28,7 @@ export type Session = {
   mode: Mode;
   sandbox: SandboxMode;
   usage: Usage;
+  agentUsage?: Set<string>;
   lastContextTokens: number;
   measuredAt: number;
   contextWindow: number;
@@ -85,7 +86,7 @@ export function recordToolUsage(session: Session, usage: Usage): void {
 }
 
 function userText(message: OpenAI.ChatCompletionMessageParam): string | null {
-  if (message.role !== 'user') return null;
+  if (message.role !== 'user' || message.name === 'acc_agent' || message.name === 'acc_runtime') return null;
   const {content} = message;
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return null;
@@ -129,6 +130,7 @@ export function clearSession(session: Session): void {
   session.allowed.clear();
   session.asked = [];
   session.denied = [];
+  delete session.agentUsage;
   setMeasured(session, 0);
 }
 

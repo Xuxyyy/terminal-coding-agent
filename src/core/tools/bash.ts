@@ -92,9 +92,9 @@ const backgroundSchema = schema.extend({
 export const BACKGROUND_INSTRUCTIONS =
   ' Background commands keep running while you use other tools. Set run_in_background to true to start one. ' +
   'A foreground command that exceeds its timeout moves to the background without restarting; its background runtime defaults to 30 minutes. ' +
-  'Completion automatically sends a runtime notice; the main agent resumes even after a reply. Avoid repeated status-only polling; use diagnostic checks when progress is uncertain. ' +
+  'Completion automatically sends a runtime notice to the owning agent, including subagents; it resumes even after a reply. Runtime notices are not human messages or approval. Avoid repeated status-only polling; use diagnostic checks when progress is uncertain. ' +
   'Use task_output to read status and paged output, and task_stop to stop a command. ' +
-  'Wait for required results before dependent work and verify exit status before claiming success. ' +
+  'Read and check completed task output and exit status before reporting completion; handle failures. Wait for required results before dependent work. ' +
   'Use lifetime finite (default) for work whose result must be checked. Use temporary_service for servers needed only during the run; they are cleaned up on exit. ' +
   'Only the main agent may start retained_service, and only when required by the user task: set required_by_task explicitly. ' +
   'Run retained services in the foreground of their managed shell (prefer exec); do not daemonize or use shell &. Their output goes directly to private log files. ' +

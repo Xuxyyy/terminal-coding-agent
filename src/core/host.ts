@@ -89,7 +89,7 @@ export type ConfirmRequest = {
 };
 
 export interface Host {
-  confirm(request: ConfirmRequest): Promise<ConfirmDecision>;
+  confirm(request: ConfirmRequest, signal?: AbortSignal): Promise<ConfirmDecision>;
   onEvent(event: AgentEvent): void;
   onModelUsage?(usage: ModelTokenUsage): void;
   signal: AbortSignal;

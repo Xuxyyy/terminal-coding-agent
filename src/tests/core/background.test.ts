@@ -99,6 +99,31 @@ test('foreground expiry moves the original process into the background exactly o
   assert.equal((await f.tasks.output(result.task.id)).output, 'done');
 });
 
+test('cancelling a background wait removes its subscription and leaves the command running', async (t) => {
+  const f = fixture(t);
+  const running = await f.run('while ! test -f release; do sleep 0.01; done; printf done');
+  assert.ok('task' in running);
+  const listeners = (f.tasks as unknown as {listeners: Set<() => void>}).listeners;
+  for (let i = 0; i < 12; i++) {
+    const controller = new AbortController();
+    const waiting = f.tasks.wait(controller.signal);
+    assert.equal(listeners.size, 1);
+    controller.abort();
+    await waiting;
+    assert.equal(listeners.size, 0);
+    assert.equal((await f.tasks.output(running.task.id)).task.status, 'running');
+  }
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await f.tasks.wait(cancelled.signal);
+  assert.equal(listeners.size, 0);
+  const completion = f.tasks.wait();
+  fs.writeFileSync(path.join(f.root, 'release'), '');
+  await completion;
+  assert.equal(listeners.size, 0);
+  assert.equal(f.tasks.drain()[0]?.status, 'completed');
+});
+
 test('output pages use character offsets and work during and after execution', async (t) => {
   const f = fixture(t);
   const text = 'α😀z'.repeat(15_000);
@@ -271,6 +296,30 @@ test('closing kills shell descendants and cleans startup races without late noti
   assert.deepEqual(other.drain(), []);
 });
 
+test('cancelling a child shell owner leaves parent and sibling work running', async (t) => {
+  const f = fixture(t);
+  const controller = new AbortController();
+  const child = f.tasks.fork(() => {}, controller.signal);
+  const sibling = f.tasks.fork(() => {});
+  const start = (manager: BackgroundTasks) => manager.run({root: f.root, command: 'sleep 20',
+    program: '/bin/bash', args: ['-c', 'sleep 20'], signal: f.host.signal, sandbox: 'off', background: true});
+  const parentTask = await start(f.tasks);
+  const childTask = await start(child);
+  const siblingTask = await start(sibling);
+  assert.ok('task' in parentTask && 'task' in childTask && 'task' in siblingTask);
+  controller.abort();
+  await waitFor(() => child.hasNotices());
+  assert.equal((await child.output(childTask.task.id)).task.status, 'stopped');
+  assert.equal((await f.tasks.output(parentTask.task.id)).task.status, 'running');
+  assert.equal((await sibling.output(siblingTask.task.id)).task.status, 'running');
+  assert.equal(child.drain().length, 1);
+  assert.deepEqual(child.drain(), []);
+  assert.deepEqual(f.tasks.drain(), []);
+  assert.deepEqual(sibling.drain(), []);
+  await assert.rejects(f.tasks.output(childTask.task.id), /unknown task/);
+  await assert.rejects(sibling.output(childTask.task.id), /unknown task/);
+});
+
 test('invalid background arguments and denied commands never start a process', async (t) => {
   const f = fixture(t);
   const registry = [backgroundBash, taskOutput, taskStop];
@@ -286,7 +335,7 @@ test('invalid background arguments and denied commands never start a process', a
   assert.equal(fs.existsSync(f.tasks.directory), false);
 });
 
-test('interactive tool definitions keep their original Bash interface', () => {
+test('base tool definitions keep foreground Bash unless managed background tools are enabled', () => {
   for (const mode of ['auto', 'auto-edits', 'ask-edits'] as const) {
     const interactive = toolsFor(mode);
     assert.equal(interactive.some((tool) => tool.name === 'task_output' || tool.name === 'task_stop'), false);

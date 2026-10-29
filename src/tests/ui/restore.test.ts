@@ -70,6 +70,11 @@ test('restoreSummary names the count and when it started', () => {
   assert.match(summary, /2026-08-11/);
 });
 
+test('runtime completion events restore as notices rather than human tasks', () => {
+  const content = '[runtime background task completion notice]\ncompleted';
+  assert.deepEqual(restoreItems([{role: 'user', name: 'acc_runtime', content}]), [{kind: 'notice', text: content}]);
+});
+
 test('a stored view replays every turn, diff and all', () => {
   const diff: DiffPayload = {
     path: 'src/cart.js',

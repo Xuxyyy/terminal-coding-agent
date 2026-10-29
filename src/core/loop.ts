@@ -9,16 +9,18 @@ import {
 } from './client.js';
 import {INTERRUPTED, INTERRUPTED_TURN, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
-import {compactSession, withoutText} from './compact.js';
+import {compactSession, CompactionSaveError, withoutText} from './compact.js';
 import {assistantDraftMessage, assistantMessage} from './messages.js';
 import {
   projectedTokens,
   recordToolUsage,
+  restoreMessages,
   setMeasured,
   overThreshold,
   type Session,
 } from './session.js';
 import type {SessionStore} from './store.js';
+import {lastUsageOf, messagesOf, recoverToolResults} from './records.js';
 import {captureSnapshot} from './history.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
 import {displayPath, resolveTarget} from './tools/paths.js';
@@ -26,6 +28,8 @@ import type {Judge, Tool} from './tools/registry.js';
 import {askJudge, judgeMessages} from './permission/judge.js';
 import {NORMAL_STEP_POLICY} from './step-policy.js';
 import type {BackgroundTasks} from './background.js';
+import {AgentRuntime} from './agent-runtime.js';
+import {waitForChange} from './wait-for-change.js';
 
 export {NORMAL_STEP_POLICY};
 
@@ -111,9 +115,10 @@ export async function runAgent(
   host: Host,
   registry: Tool[] = toolsFor(session.mode),
   store?: SessionStore,
-  options: {maxSteps?: number; backgroundTasks?: BackgroundTasks; waitForBackground?: boolean} = {},
+  options: {maxSteps?: number; backgroundTasks?: BackgroundTasks; waitForBackground?: boolean; durableTools?: boolean; agents?: AgentRuntime; inboxId?: string; onWait?: (waiting: boolean) => void} = {},
 ): Promise<'step_limit' | void> {
   const {backgroundTasks} = options;
+  const waitForBackground = options.waitForBackground ?? Boolean(backgroundTasks);
   const maxSteps = options.maxSteps ?? host.maxSteps;
   const definitions = toolDefinitions(registry);
   const total: Usage = {prompt: 0, completion: 0, total: 0};
@@ -127,6 +132,17 @@ export async function runAgent(
     }
     outerHost.onEvent(event);
   }};
+  const inboxId = options.inboxId ?? 'main';
+  const ownsAgents = !options.inboxId;
+  let agents = options.agents;
+  const accounted = session.agentUsage ??= new Set<string>();
+  const accountAgentUsage = (id: string, usage: Usage) => {
+    if (accounted.has(id)) return;
+    accounted.add(id);
+    addUsage(total, usage);
+    recordToolUsage(session, usage);
+  };
+  if (ownsAgents) host = {...host, confirm: (request, signal = host.signal) => agents ? agents.confirm(request, signal, 'main') : outerHost.confirm(request, signal)};
   const judge = judgeFor(session, host);
   let continuationUsed = false;
   let nextRequestId = randomUUID();
@@ -141,11 +157,12 @@ export async function runAgent(
       }
     : undefined;
 
-  const save = (usage: Usage): void => {
+  const save = (usage: Usage, required = options.durableTools): void => {
     if (!store) return;
     try {
       store.appendStep(session.messages, usage);
-    } catch {
+    } catch (error) {
+      if (required) throw error;
       if (warned) return;
       warned = true;
       host.onEvent({
@@ -163,11 +180,20 @@ export async function runAgent(
   };
 
   try {
+    if (ownsAgents && !agents) agents = new AgentRuntime(outerHost, store);
+    if (ownsAgents && agents) agents.accountUsage = accountAgentUsage;
+    if (ownsAgents && store) {
+      const recovery = recoverToolResults(session.messages);
+      if (recovery.recovered.length) store.appendStep(recovery.recovered, NO_USAGE);
+      session.messages = recovery.messages;
+    }
     for (let step = 0; ; step += 1) {
       if (host.signal.aborted) {
         markInterrupted();
         return;
       }
+      agents?.check();
+      const durable = options.durableTools || Boolean(store && agents?.list().length);
       if (maxSteps !== undefined && step >= maxSteps) {
         host.onEvent({
           type: 'error',
@@ -176,13 +202,19 @@ export async function runAgent(
         host.onEvent({type: 'turn_end', usage: total});
         return 'step_limit';
       }
+      for (const event of agents?.mail.deliver(inboxId, session, store) ?? []) {
+        if (event.usage) {
+          accountAgentUsage(event.id, event.usage);
+        }
+      }
       const completed = backgroundTasks?.drain() ?? [];
       if (completed.length > 0) {
         session.messages.push({
           role: 'user',
+          name: 'acc_runtime',
           content: '[runtime background task completion notice]\n' +
             completed.map((task) => JSON.stringify(task)).join('\n') +
-            '\nUse task_output if more output is needed. Check the result before claiming success.',
+            '\nThis is a runtime event, not a human message or approval. Use task_output with each task id to read its saved output, check its exit status and result, and handle failures before reporting completion.',
         });
         save(NO_USAGE);
       }
@@ -220,20 +252,25 @@ export async function runAgent(
         const task = step === 0 && last?.role === 'user' ? last : null;
         if (task) session.messages.pop();
         host.onEvent({type: 'compact_start'});
-        const result = await compactSession(
-          session,
-          choice,
-          withoutText(host),
-          store,
-          task ? [task] : [],
-        );
-        if (task && !result) session.messages.push(task);
-        host.onEvent({
-          type: 'compact_end',
-          replaced: result?.replaced ?? 0,
-          before: result?.before ?? 0,
-          after: result?.after ?? 0,
-        });
+        let result: Awaited<ReturnType<typeof compactSession>> = null;
+        try {
+          result = await compactSession(
+            session,
+            choice,
+            withoutText(host),
+            store,
+            task ? [task] : [],
+            {requireSave: durable},
+          );
+        } finally {
+          if (task && !result) session.messages.push(task);
+          host.onEvent({
+            type: 'compact_end',
+            replaced: result?.replaced ?? 0,
+            before: result?.before ?? 0,
+            after: result?.after ?? 0,
+          });
+        }
         if (!result) {
           host.onEvent({
             type: 'error',
@@ -285,8 +322,12 @@ export async function runAgent(
           compacted = true;
           host.onEvent({type: 'recovery', kind: 'context', requestId, agentId: host.agentId!, recoveryId: randomUUID(), startedAt: new Date().toISOString()});
           host.onEvent({type: 'compact_start'});
-          const compact = await compactSession(session, choice, withoutText(host), store);
-          host.onEvent({type: 'compact_end', replaced: compact?.replaced ?? 0, before: compact?.before ?? 0, after: compact?.after ?? 0});
+          let compact: Awaited<ReturnType<typeof compactSession>> = null;
+          try {
+            compact = await compactSession(session, choice, withoutText(host), store, [], {requireSave: durable});
+          } finally {
+            host.onEvent({type: 'compact_end', replaced: compact?.replaced ?? 0, before: compact?.before ?? 0, after: compact?.after ?? 0});
+          }
           if (!compact || compact.after >= compact.before || projectedTokens(session, registry) + MAX_OUTPUT_TOKENS > session.contextWindow) throw new Error('context recovery exhausted: compaction could not make the request fit');
         }
       }
@@ -313,22 +354,43 @@ export async function runAgent(
           continue;
         }
         save(result.usage);
-        const unverified = options.waitForBackground ? backgroundTasks?.unverifiedServices() ?? [] : [];
+        const unverified = waitForBackground ? backgroundTasks?.unverifiedServices() ?? [] : [];
         if (result.finishReason !== 'length' && unverified.length > 0) {
-          session.messages.push({role: 'user', content: '[runtime: retained services still need readiness verification]\n' +
+          session.messages.push({role: 'user', name: 'acc_runtime', content: '[runtime: retained services still need readiness verification]\n' +
             unverified.map((task) => JSON.stringify(task)).join('\n') +
             '\nUse task_handoff to check the user-requested behavior, or task_stop if the service should not remain. ACC cannot hand off an unverified service.'});
           save(NO_USAGE);
           continue;
         }
-        if (result.finishReason !== 'length' && options.waitForBackground && backgroundTasks?.hasPending()) {
-          if (maxSteps === undefined || step + 1 < maxSteps) await backgroundTasks.wait();
+        if (agents?.mail.pending(inboxId).length) continue;
+        const tasks = result.finishReason !== 'length' && waitForBackground ? backgroundTasks : undefined;
+        const children = ownsAgents ? agents : undefined;
+        const waitingForTasks = Boolean(tasks?.hasPending());
+        const waitingForChildren = Boolean(children?.running());
+        if (waitingForTasks || waitingForChildren) {
+          if (!waitingForTasks || maxSteps === undefined || step + 1 < maxSteps) {
+            options.onWait?.(true);
+            try {
+              await waitForChange(() => {
+                agents?.check();
+                return Boolean(tasks?.hasNotices() || agents?.mail.pending(inboxId).length ||
+                  (waitingForTasks && !tasks?.hasPending()) || (waitingForChildren && !children?.running()));
+              }, [
+                ...(tasks ? [(listener: () => void) => tasks.subscribe(listener)] : []),
+                ...(agents ? [(listener: () => void) => agents!.subscribe(listener)] : []),
+              ], host.signal);
+            } finally {
+              options.onWait?.(false);
+            }
+          }
           continue;
         }
         host.onEvent({type: 'turn_end', usage: total});
         return;
       }
 
+      const durableRound = durable || result.toolCalls.some((call) => ['agent', 'send_message', 'wait_agents', 'stop_agent'].includes(call.name));
+      if (durableRound) save(result.usage, true);
       for (const call of result.toolCalls) {
         if (host.signal.aborted) {
           session.messages.push({
@@ -362,6 +424,8 @@ export async function runAgent(
           judge,
           denied: session.denied,
           backgroundTasks,
+          store,
+          agents, inboxId, authorizationTasks: session.asked,
         });
         if (output.usage) {
           addUsage(total, output.usage);
@@ -380,10 +444,30 @@ export async function runAgent(
           diff: output.diff ?? null,
           execution: output.execution,
         });
+        if (durableRound) save(NO_USAGE, true);
       }
-      save(result.usage);
+      save(durableRound ? NO_USAGE : result.usage, durableRound);
     }
   } catch (error) {
+    if (error instanceof CompactionSaveError) {
+      let message = error.message;
+      if (store) {
+        try {
+          const records = store.records();
+          if (records.length === 0) throw new Error('saved history is unavailable');
+          const asked = session.asked;
+          restoreMessages(session, messagesOf(records));
+          if (options.inboxId && options.inboxId !== 'main') session.asked = asked;
+          setMeasured(session, lastUsageOf(records)?.total ?? 0);
+          store.seed(session.messages);
+        } catch {
+          message += '\nCould not reload saved history; reopen the session after fixing storage.';
+        }
+      }
+      host.onEvent({type: 'error', message});
+      host.onEvent({type: 'turn_end', usage: total});
+      return;
+    }
     const partial = error instanceof StreamFailure ? error.partial : null;
     if (partial?.content && partial.toolCalls.length === 0) {
       host.onEvent({type: 'response_incomplete', agentId: host.agentId!, reason: aborted(error, host) ? 'interrupted' : 'generation failed'});
@@ -399,5 +483,7 @@ export async function runAgent(
     const explained = explainError(error, choice.model);
     host.onEvent({type: 'error', ...explained});
     host.onEvent({type: 'turn_end', usage: total});
+  } finally {
+    if (ownsAgents) await agents?.close();
   }
 }
