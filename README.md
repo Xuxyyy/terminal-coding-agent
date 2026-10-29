@@ -6,189 +6,94 @@
 A terminal coding agent built from scratch in TypeScript. Describe a task in
 plain English; `acc` searches your project, edits files, and runs commands.
 
-Its custom agent harness handles the model/tool loop, permission checks,
-context compaction, resumable sessions, and subagents. Interactive and headless
-modes share the same core.
-
-**Terminal-Bench 2.1: 78/89 tasks passed (87.6%)**, including one manually
-assessed pass, using DeepSeek V4.1 Flash with high reasoning.
-See [evaluation details and limits](#evaluation).
+Includes permission checks, resumable interactive sessions, automatic context
+compaction, background commands, and subagents.
 
 <p align="center">
   <img src="assets/demo.png" width="720" alt="acc adding a field to a health route, showing its tool calls and the diff it wrote">
 </p>
 
-## What it is
-
-One TypeScript package with a local test suite. You start it inside a
-project, describe a task in plain English, and it reads the files, searches
-them, edits them, and runs commands until the task is done. The default permission
-mode is `auto-edits`: ordinary project edits run automatically, while actions
-above its automatic allowance threshold ask you for approval. An explicitly saved mode wins.
-
-- Default `auto-edits` mode offers seven tools: `read_file`, `grep`, `glob`,
-  `bash`, `edit_file`, `write_file`, and `agent`. Optional `auto` mode offers
-  only the last four and uses a model judge for actions needing review.
-  Global [agent definitions](https://coding-cli-docs.vercel.app/configure/subagent/)
-  can give a sub-agent its own prompt, model, tools, and stricter permission mode.
-  The parent waits for its report; the child has a separate conversation and
-  cannot spawn another agent.
-- DeepSeek V4.1 Flash (`deepseek-flash`) is the only coding model, through the
-  official DeepSeek API. Set `DEEPSEEK_API_KEY`. Reasoning defaults to `high`;
-  `ACC_REASONING_EFFORT` accepts `none`, `low`, `high`, or `max`. Subagents inherit
-  it. Output is capped at 64,000 tokens, including reasoning. Auto permission
-  judging uses the same DeepSeek model and key.
-- One permission gate for file and shell actions, including sub-agent actions.
-- In `auto`, prefer Bash for reading, searching, and commands. Prefer Edit and
-  Write for ordinary file changes so `/rewind` can use their existing backups
-  when available. These are preferences, not restrictions.
-- Sessions you can reopen. `/resume` returns to an earlier run; `/rewind` takes
-  the conversation and files captured by file-tool backups back to before a
-  message you sent. Shell changes are not captured or restored. Git cannot
-  reliably recover overwritten uncommitted work.
-- Context management. `/context` shows window usage. Before a model request,
-  the agent automatically compacts at 80% projected usage. `/compact` can also
-  run manually. Compaction keeps recent user prompts and summarizes older
-  context; a failed summary preserves the conversation and stops the run.
-- Bounded work. The agent reviews progress privately every 20 model turns,
-  with an extra warning when 10 turns remain before a boundary.
-  Interactive runs ask to continue after each 60-turn segment. Print mode
-  stops at its configured turn or time limit.
-
-**It edits your files and runs shell commands** in the folder you start it
-from. That is what it is for, and it is why every call goes through the gate.
-
 ## Quick start
+
+Requires Node 22+, macOS or Linux (Windows through WSL), and
+[ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on your `PATH`.
+
+Set `DEEPSEEK_API_KEY` in your shell before starting. Alternatively, copy
+`.env.example` to `.env` in your project and fill in the key. ACC uses
+DeepSeek V4.1 Flash (`deepseek-flash`) through the official API, with `high`
+reasoning by default. See [model settings](https://coding-cli-docs.vercel.app/configure/models/).
 
 ```bash
 git clone https://github.com/Xuxyyy/terminal-coding-agent.git
 cd terminal-coding-agent
-npm install   # prepare runs tsc, so there is no separate build step
+npm install
 npm link
-acc --version
 cd ~/some-project
 acc
 ```
 
-It is not published on npm — cloning is the way to install it.
+`npm install` builds the CLI automatically. ACC is not published on npm.
 
-**The workspace is the current directory.** Interactive `acc` takes no path
-argument, and it refuses to start in your home directory or at the filesystem
-root, so `cd` into a project folder first. `acc --version` is
-workspace-independent.
+**The workspace is the current directory.** Run `acc` inside your project;
+it takes no path argument and refuses to start in your home directory or the
+filesystem root. Describe your task at the interactive prompt.
 
-## Requirements and keys
+## Behavior and limits
 
-- Node 22 or newer, on macOS or Linux. The `bash` tool runs commands through
-  `bash`, so Windows needs WSL.
-- ripgrep (`rg`) on your `PATH`, for fast shell searches and the `grep` and `glob` tools.
-  If it is missing, the tools report an error and suggest shell `grep` or `find`.
-  Shell searches do not inherit the tool's sensitive-file exclusions.
-- Set `DEEPSEEK_API_KEY` in your environment or copy `.env.example` to `.env`
-  and fill it in. Keys load from the shell, then the project's `.env`, then
-  `~/.acc/.env`. Model IDs and selection settings are on
-  [Models](https://coding-cli-docs.vercel.app/configure/models/).
+- **ACC edits files and runs shell commands.** The default `auto-edits` mode
+  allows ordinary project edits and asks for approval above its automatic
+  allowance threshold. A saved permission mode takes precedence.
+- **Sandbox defaults to Off.** Permission checks still apply, but ACC's OS file
+  and network restrictions do not. Sandbox On is supported only on macOS;
+  enable it with `acc --sandbox on` or `/sandbox`. See [sandbox details](docs/sandbox.md).
+- **Recovery is limited.** `/resume` reopens interactive sessions. `/rewind`
+  restores conversation and file-tool backups; it does not undo shell changes.
+- **Subagents run in the background by default.** They share your workspace,
+  keep separate conversations, and support messages and saved follow-ups.
+  See [subagents](https://coding-cli-docs.vercel.app/configure/subagent/).
+
+See [commands](https://coding-cli-docs.vercel.app/configure/commands/) for
+session and context controls, and [feature status](docs/features.md) for
+current capabilities and known limits.
 
 ## Print mode
 
 Run one task without an interactive terminal:
 
 ```bash
-acc -p "summarize this project" --max-steps 60 --max-seconds 300
+acc -p "summarize this project" --max-steps 120 --max-seconds 300
 ```
 
-`--json` emits structured events and a final result. `--max-steps` limits model
-turns, including the final answer; `--max-seconds` limits elapsed time. Their
-defaults are 60 and 300. Confirmations are denied unless `--yes` is passed.
-Actions already allowed by the permission gate can still run and edit files.
-Print runs do not save resumable sessions. See [Print mode](docs/headless.md).
-
-Interactive and print runs support background Bash commands, so each agent can
-use other tools while its commands run. Completion notifies the owning main agent
-or subagent to read and check the results within the same time and step budgets.
-Private command logs are retained under `ACC_HOME/runs/` (default `~/.acc/runs/`).
-
-## Sandbox
-
-Sandbox defaults to **Off**. On is supported only on macOS; Linux uses Off.
-Use `/sandbox` while idle, or launch with `acc --sandbox on` (also supported
-with `-p`). The choice lasts for this ACC process and stays visible in the UI.
-Both modes keep permission checks and clean shell environments. Off removes
-ACC's OS file and network restrictions; environment cleanup cannot stop
-commands from reading credential files. See [sandbox details](docs/sandbox.md).
-
-## How it works
-
-**The seam.** `src/core` runs the agent and never imports React; `src/ui` draws
-it with Ink. They meet at `Host` in `src/core/host.ts`: `confirm`, `onEvent`,
-`signal`, and optional `onModelUsage` for token accounting. Core never imports
-UI, so the turn loop is tested without starting a terminal.
-
-**The loop.** The model receives the conversation and available tools. Its
-requested tools run in order, their results enter the conversation, and the
-next model request continues the task. A response without tool calls ends the
-turn. Progress reviews, permission decisions, context checks, and cancellation
-bound this loop.
-
-**One permission gate.** File and shell actions pass through `permitted()` in
-`src/core/tools/registry.ts`. The parent `agent` call delegates a job; each file
-or shell action inside the child receives its own permission check. A session
-approval is remembered only when the decision comes back
-`suppressible`, which is what stops a guardrail from being remembered by
-mistake — a refusal you were meant to see cannot be turned off by an earlier
-"yes".
-
-**Resume in place.** Each interactive session writes a `session.jsonl`, one
-record per line, holding both the messages the model saw and the view the terminal drew. `/resume`
-reopens a session in the folder it already owns instead of copying its history
-into a new one, so a resumed run and its original stay a single session on disk.
-
-The longer explanation is
-[Architecture](https://coding-cli-docs.vercel.app/design/architecture/) on
-the docs site. The design docs in [`docs/`](docs/) explain each subsystem and
-its tradeoffs in more detail.
+Defaults: **120 model turns** (including the final answer) and **300 seconds**.
+Add `--json` for structured events and a final result. Confirmations are denied
+unless `--yes` is passed; actions already allowed by the permission gate can
+still edit files. Print runs do not save resumable sessions.
+See [print mode](docs/headless.md) for details.
 
 ## Evaluation
 
 ### Terminal-Bench 2.1
 
-Evaluated all 89 tasks through Harbor using DeepSeek V4.1 Flash
-(`deepseek-flash`, high reasoning). Latest task outcomes as of October 24, 2026:
+Latest task outcomes as of **October 24, 2026**, using Harbor and DeepSeek
+V4.1 Flash (`deepseek-flash`, high reasoning):
 
 | Outcome | Tasks |
 | --- | ---: |
-| Automated verifier pass | 77 |
-| Manually assessed pass | 1 |
+| Automated verifier pass | 78 |
 | Fail | 11 |
 | Total attempted | 89 |
 
-The combined pass count is **78/89 (87.6%)**; the automated verifier pass count
-alone is **77/89 (86.5%)**. These are the latest results per task, including
-reruns across multiple ACC source versions, rather than a single fixed-version
-`pass@1` measurement.
+**78/89 automated verifier passes (87.6%).** These latest per-task results
+include reruns across multiple ACC source versions, rather than a single
+fixed-version `pass@1` measurement.
 
 ACC ran with `auto-edits`, automatic confirmation enabled, and sandbox off.
 Some task environments had dependencies prepared before agent execution.
 These results describe that evaluation setup; they do not measure interactive
 approval behavior or sandbox protection.
 
-### Permission and CLI checks
-
-`acc` keeps two active release gates: 60 permission-judge cases and six
-black-box package/CLI scenarios. Safety and installed-product behavior are
-reported separately. The Judge eval calls a live model and is an optional paid
-check; normal tests and package/CLI checks run without paid model calls.
-
 See [Evaluation](https://coding-cli-docs.vercel.app/design/evaluation/) for
-commands and evidence limits.
-
-## Not built yet
-
-Left undone on purpose: a git-backed snapshot that would catch what `bash`
-changes, a byte cap on file backups, and compacting and retrying after a
-provider rejects a request for length. The current loop checks projected
-context before sending a request.
-[`docs/features.md`](docs/features.md) lists what ships today and what does not.
+methodology, permission-judge checks, and package/CLI checks.
 
 ## Docs
 
