@@ -213,14 +213,14 @@ automatic compaction behave the same after `/resume`.
 
 - Purpose: make `/compact` and automatic compaction documentation match observable behavior.
 - Actions: update `README.md`, `docs/features.md`,
-  `www/src/content/docs/configure/commands.md`, and
-  `www/src/content/docs/design/architecture.md` where they claim the whole conversation is replaced
+  `docs/commands.md`, and
+  `docs/agent-loop.md` where they claim the whole conversation is replaced
   only by a summary. Explain that recent user prompts remain exact within a 20,000-token budget while
   older details and raw tool evidence are represented by the summary. Do not describe provider-native
   Remote V2 compaction as a feature of this project.
 - Expected result: public docs describe one local compaction operation, not summary followed by a
   separate clear pass.
-- Verification: run `npm run build --prefix www` and repository-wide stale-text searches; resolve
+- Verification: check relative Markdown links in `README.md` and `docs/`, and run repository-wide stale-text searches; resolve
   broken links or contradictory statements.
 
 ## Phase 4 — Complete automated and independent verification
@@ -229,7 +229,7 @@ automatic compaction behave the same after `/resume`.
 
 - Purpose: detect regressions and accidental scope changes before live testing.
 - Actions: run the focused command from the verification strategy, then `npm test`,
-  `npm run build --prefix www`, stale-claim searches, `git diff --check`, `git diff --stat`, and a
+  relative Markdown link checks, stale-claim searches, `git diff --check`, `git diff --stat`, and a
   full diff review. Confirm `.claude/` and unrelated files are untouched. Route failures back to the
   responsible phase and rerun every affected gate.
 - Expected result: all automated checks pass and the diff contains only the planned feature, tests,

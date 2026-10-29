@@ -79,53 +79,13 @@ because that is where the handoff tooling writes.
 **`plans/` and `notes/` are not.** They are absent from a fresh clone or a
 worktree; ask for them if they are missing.
 
-## The docs site
+## Documentation
 
-`www/` is the site: ten Starlight pages, tracked, live at
-<https://coding-cli-docs.vercel.app>. Vercel rebuilds it on every push to `main`.
-The project's **Root Directory is `www`** — left empty, the build runs at the
-repo root, finds no Astro project, and fails.
-
-The sidebar is **Start / Configure / Design**, and `Configure` is one page per
-module — `settings`, `permissions`, `tools`, `models`, `mcp`, `commands`. Titles
-are plain nouns. A module's reasoning and its reference belong on the same page,
-so do not re-split them; `design/` holds only what crosses every module —
-`architecture` and `tradeoffs`.
-
-A module page **leads with what happens**, then how to configure it. Keep a
-reason only where it changes what a reader predicts — one or two sentences at
-the top of the thing it explains, not a section of its own. The standalone
-argument goes in `docs/`, which every page links to at the bottom. A page that
-opens with a case for the design instead of the behaviour is the failure to
-avoid; so is stating the same rule in prose and again in a table.
-
-Verify anything under `www/` with `npm run build --prefix www`. `npm test` does
-not touch the site.
-
-The site URL is committed in **three** places: `site` in `www/astro.config.mjs`,
-the links in `README.md`, and `homepage` in `package.json`. Moving hosts means
-changing all three in one commit, or the deployed pages carry canonical URLs
-pointing somewhere they no longer live.
-
-Node is pinned twice on purpose. `engines.node` in `www/package.json` is what
-Vercel reads; `www/.node-version` is what a move back to Cloudflare would need.
-
-Search is Pagefind, and it is production-only — absent from `npm run dev` by
-design. Nothing configures it.
-
-`README.md` points at the site, it does not copy it. The model table, the tool
-list, and the settings syntax live on the site only, because two copies of a
-fact drift apart and the site is the one that gets updated.
-
-Architecture is the deliberate exception, and it now exists at three lengths.
-The README's *How it works* is the thirty-second version, for someone who landed
-on GitHub and will not click anything. The site is the version with the
-reasoning, for a reader who will give it ten minutes — `design/architecture` for
-what crosses every module, and the opening sections of each `configure/` page
-for the rest. `docs/` is the full argument, for whoever changes the code. That
-duplication is on purpose — a reader who stops at the first one should still
-have something true. Change architecture writing in all three, or say in the
-commit which length you chose not to touch.
+[docs/README.md](docs/README.md) is the documentation index. Keep `README.md`
+brief: installation, main behavior and limits, and links to the relevant guides.
+Detailed configuration, commands, subsystem design, and evaluation guidance
+belong in `docs/`. Update those guides and their links when behavior changes.
+Check relative Markdown links instead of running a separate documentation build.
 
 ## Sessions
 

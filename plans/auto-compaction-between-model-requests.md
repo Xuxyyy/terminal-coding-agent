@@ -118,16 +118,16 @@ Auto compaction uses one configurable threshold and runs at a safe boundary imme
 ### Step 2 — Update user-facing behavior documentation
 
 - Purpose: make the public description match what users see.
-- Actions: update `docs/features.md` and `www/src/content/docs/configure/commands.md` to explain that auto compaction checks projected usage between model requests, summarizes complete history before removing details, continues the same run on success, and stops with history intact on failure. Preserve the separate descriptions of manual `/compact` and `/clear`.
+- Actions: update `docs/features.md` and `docs/commands.md` to explain that auto compaction checks projected usage between model requests, summarizes complete history before removing details, continues the same run on success, and stops with history intact on failure. Preserve the separate descriptions of manual `/compact` and `/clear`.
 - Expected result: no public page tells users that old results are cleared before compaction or that compaction waits for the next user message.
-- Verification: run `npm run build --prefix www` in addition to repository-wide stale-text searches.
+- Verification: check relative Markdown links in `README.md` and `docs/` in addition to repository-wide stale-text searches.
 
 ## Phase 4 — Complete automated and independent verification
 
 ### Step 1 — Run repository gates and inspect the change
 
-- Purpose: catch type, regression, documentation-build, and accidental-scope failures before live testing.
-- Actions: run the focused compiled tests, `npm test`, and `npm run build --prefix www`. Inspect `git diff --check`, `git diff --stat`, and the full diff. Confirm `.claude/` is untouched and unrelated files are not included.
+- Purpose: catch type, regression, documentation-link, and accidental-scope failures before live testing.
+- Actions: run the focused compiled tests and `npm test`, then check relative Markdown links in `README.md` and `docs/`. Inspect `git diff --check`, `git diff --stat`, and the full diff. Confirm `.claude/` is untouched and unrelated files are not included.
 - Expected result: all automated gates pass and the diff contains only the planned behavior, tests, docs, and plan.
 - Verification: save the commands and pass/fail summaries for final evidence; route any failure back to the responsible phase and rerun all affected gates.
 
@@ -140,14 +140,14 @@ Auto compaction uses one configurable threshold and runs at a safe boundary imme
 
 ## Final verification
 
-- Unit-test result: `npm run build`, the four focused compiled test files, full `npm test`, and the docs-site build must all pass with recorded output summaries.
+- Unit-test result: `npm run build`, the four focused compiled test files, full `npm test`, and Markdown link checks must all pass with recorded output summaries.
 - Subagent E2E result: the approved `acc-e2e` feature run must report PASS for every planned scenario, include terminal and session-file evidence, and confirm cleanup. Otherwise the goal is not complete and no commit should be created.
 - Complete-goal checks: repository-wide searches show no obsolete automatic-clear symbols or stale clear-first/no-mid-run documentation; manual `/compact` and `/clear` tests remain green; failed auto compaction preserves history and stops; secret inspection passes before staging; `git diff --check` is clean; `.claude/` and unrelated user changes remain untouched.
 
 ## Execution evidence
 
 - Pre-E2E automated gates: `npm run build` passed; the four planned focused compiled test files
-  passed 72/72; `npm test` passed 970/970; `npm run build --prefix www` passed with all internal
+  passed 72/72; `npm test` passed 970/970; the retired documentation build passed with all internal
   links valid; stale-symbol and diff checks passed.
 - Independent E2E run 1: automatic compaction reached the correct boundary, stored the complete
   32,042-character tool result before one compact record with `replaced: 3`, showed the notice
@@ -160,7 +160,7 @@ Auto compaction uses one configurable threshold and runs at a safe boundary imme
   streaming, tool-round replay, compact replacement, compact-record reload, token estimation,
   and model switching.
 - Final automated gates: the planned four focused compiled test files passed 74/74; full
-  `npm test` passed 975/975; `npm run build --prefix www` passed with all internal links valid;
+  `npm test` passed 975/975; the retired documentation build passed with all internal links valid;
   stale-symbol, `.claude/`, and `git diff --check` checks passed.
 - Independent E2E rerun: both approved DeepSeek v4 Flash scenarios passed. Automatic
   compaction read the real 32,042-character tool result, showed the threshold notice and
