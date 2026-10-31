@@ -1,0 +1,29 @@
+{
+  "task": "cancel-async-tasks",
+  "run_name": "2026-10-19_224148_cancel-async-tasks",
+  "task_name": "terminal-bench/cancel-async-tasks",
+  "trial_name": "a3d048d351136e48070696cda8bb7966__tzScyod",
+  "started_at": "2026-10-20T02:41:54.148517Z",
+  "finished_at": "2026-10-20T02:45:28.609025Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

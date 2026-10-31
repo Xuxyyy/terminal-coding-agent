@@ -1,0 +1,29 @@
+{
+  "task": "sqlite-db-truncate",
+  "run_name": "2026-10-20_034509_sqlite-db-truncate",
+  "task_name": "terminal-bench/sqlite-db-truncate",
+  "trial_name": "956f038b479cc3b9b493553b57a60a8f__hRWdiMw",
+  "started_at": "2026-10-20T07:45:10.214500Z",
+  "finished_at": "2026-10-20T07:46:43.690695Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

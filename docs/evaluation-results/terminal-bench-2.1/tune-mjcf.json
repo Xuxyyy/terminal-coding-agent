@@ -1,0 +1,29 @@
+{
+  "task": "tune-mjcf",
+  "run_name": "2026-10-23_023353_tune-mjcf",
+  "task_name": "terminal-bench/tune-mjcf",
+  "trial_name": "7da0fd3b906624df9eff8829ccd4f19c__FraKjmf",
+  "started_at": "2026-10-23T06:33:54.414704Z",
+  "finished_at": "2026-10-23T06:41:02.651242Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

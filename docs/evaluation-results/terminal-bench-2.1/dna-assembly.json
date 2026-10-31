@@ -1,0 +1,29 @@
+{
+  "task": "dna-assembly",
+  "run_name": "2026-10-20_074413_dna-assembly",
+  "task_name": "terminal-bench/dna-assembly",
+  "trial_name": "e41a8e94d86019949b08d3b5f88a85f6__tcL2Hio",
+  "started_at": "2026-10-20T11:44:39.030801Z",
+  "finished_at": "2026-10-20T11:55:53.781294Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

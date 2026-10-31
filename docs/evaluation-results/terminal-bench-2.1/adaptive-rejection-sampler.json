@@ -1,0 +1,29 @@
+{
+  "task": "adaptive-rejection-sampler",
+  "run_name": "2026-10-21_074643_adaptive-rejection-sampler",
+  "task_name": "terminal-bench/adaptive-rejection-sampler",
+  "trial_name": "bcaa2399985cd57666018025846289ab__RFDiz53",
+  "started_at": "2026-10-21T11:46:44.548066Z",
+  "finished_at": "2026-10-21T12:00:26.431879Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

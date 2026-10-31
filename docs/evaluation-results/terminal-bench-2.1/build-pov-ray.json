@@ -1,0 +1,29 @@
+{
+  "task": "build-pov-ray",
+  "run_name": "2026-10-19_110901_build-pov-ray",
+  "task_name": "terminal-bench/build-pov-ray",
+  "trial_name": "4f08dab602fe2e9e2f42051cc6aef684__9SYjuru",
+  "started_at": "2026-10-19T15:09:02.205194Z",
+  "finished_at": "2026-10-19T15:27:11.093485Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

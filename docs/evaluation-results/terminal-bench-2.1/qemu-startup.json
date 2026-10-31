@@ -1,0 +1,29 @@
+{
+  "task": "qemu-startup",
+  "run_name": "2026-10-21_231352_qemu-startup",
+  "task_name": "terminal-bench/qemu-startup",
+  "trial_name": "8e58263747da7dc688ad470688fb7282__aaL5c9J",
+  "started_at": "2026-10-22T03:13:52.907350Z",
+  "finished_at": "2026-10-22T03:18:46.908217Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

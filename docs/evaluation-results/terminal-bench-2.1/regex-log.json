@@ -1,0 +1,29 @@
+{
+  "task": "regex-log",
+  "run_name": "2026-10-20_013744_regex-log",
+  "task_name": "terminal-bench/regex-log",
+  "trial_name": "802c16cfd132e6c457529cb864be5a75__NwJKuis",
+  "started_at": "2026-10-20T05:37:44.582409Z",
+  "finished_at": "2026-10-20T05:40:47.830963Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

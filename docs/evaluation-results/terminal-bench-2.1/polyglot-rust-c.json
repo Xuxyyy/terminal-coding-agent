@@ -1,0 +1,29 @@
+{
+  "task": "polyglot-rust-c",
+  "run_name": "2026-10-20_043327_polyglot-rust-c",
+  "task_name": "terminal-bench/polyglot-rust-c",
+  "trial_name": "a33dc72e2278d225513c0724abe2e453__HoDgiTS",
+  "started_at": "2026-10-20T08:33:17.627208Z",
+  "finished_at": "2026-10-20T08:35:48.394785Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

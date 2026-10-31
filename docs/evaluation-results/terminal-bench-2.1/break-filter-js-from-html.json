@@ -1,0 +1,29 @@
+{
+  "task": "break-filter-js-from-html",
+  "run_name": "2026-10-19_080030_break-filter-js-from-html",
+  "task_name": "terminal-bench/break-filter-js-from-html",
+  "trial_name": "678008d1a4fd1e6e1b9b3cc9a327219f__VmAfs6P",
+  "started_at": "2026-10-19T12:00:31.397625Z",
+  "finished_at": "2026-10-19T12:03:45.270741Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

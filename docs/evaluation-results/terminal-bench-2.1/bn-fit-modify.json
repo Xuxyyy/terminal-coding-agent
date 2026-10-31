@@ -1,0 +1,29 @@
+{
+  "task": "bn-fit-modify",
+  "run_name": "2026-10-21_015211_bn-fit-modify",
+  "task_name": "terminal-bench/bn-fit-modify",
+  "trial_name": "b5f9644970c17ad9ddb46b7266f7bcd8__TQWaHmE",
+  "started_at": "2026-10-21T05:52:12.395062Z",
+  "finished_at": "2026-10-21T05:55:48.261833Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

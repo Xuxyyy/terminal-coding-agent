@@ -1,0 +1,29 @@
+{
+  "task": "merge-diff-arc-agi-task",
+  "run_name": "2026-10-20_113725_merge-diff-arc-agi-task",
+  "task_name": "terminal-bench/merge-diff-arc-agi-task",
+  "trial_name": "6aab6511a5344ce87698293bb1ce4cc5__ojZuT9T",
+  "started_at": "2026-10-20T15:37:25.530968Z",
+  "finished_at": "2026-10-20T15:47:23.693759Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

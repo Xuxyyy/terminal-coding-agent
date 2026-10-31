@@ -1,0 +1,29 @@
+{
+  "task": "distribution-search",
+  "run_name": "2026-10-20_044306_distribution-search",
+  "task_name": "terminal-bench/distribution-search",
+  "trial_name": "8787d3004ac4dd9d78f0c14f5b5ef94a__JCBWKee",
+  "started_at": "2026-10-20T08:43:07.509105Z",
+  "finished_at": "2026-10-20T08:44:00.030649Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

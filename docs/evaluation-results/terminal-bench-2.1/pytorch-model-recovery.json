@@ -1,0 +1,29 @@
+{
+  "task": "pytorch-model-recovery",
+  "run_name": "2026-10-21_091928_pytorch-model-recovery",
+  "task_name": "terminal-bench/pytorch-model-recovery",
+  "trial_name": "2e628841cff93290919172398e573e79__twYyyQ4",
+  "started_at": "2026-10-21T13:19:29.294799Z",
+  "finished_at": "2026-10-21T13:20:39.784421Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

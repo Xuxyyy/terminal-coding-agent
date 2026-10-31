@@ -1,0 +1,29 @@
+{
+  "task": "fix-ocaml-gc",
+  "run_name": "2026-10-23_075241_fix-ocaml-gc",
+  "task_name": "terminal-bench/fix-ocaml-gc",
+  "trial_name": "2031f3d5224b891fe443a31526b569eb__aVnNwjM",
+  "started_at": "2026-10-23T11:52:41.603623Z",
+  "finished_at": "2026-10-23T13:30:16.689203Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

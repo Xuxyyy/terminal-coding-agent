@@ -1,0 +1,29 @@
+{
+  "task": "crack-7z-hash",
+  "run_name": "2026-10-22_235735_crack-7z-hash",
+  "task_name": "terminal-bench/crack-7z-hash",
+  "trial_name": "99cbb2269f6bd112d3387fd01cb69001__KXWEfLB",
+  "started_at": "2026-10-23T03:57:36.169197Z",
+  "finished_at": "2026-10-23T04:03:46.472321Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

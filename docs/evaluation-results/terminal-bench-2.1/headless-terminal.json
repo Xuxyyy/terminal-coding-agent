@@ -1,0 +1,29 @@
+{
+  "task": "headless-terminal",
+  "run_name": "2026-10-20_071046_headless-terminal",
+  "task_name": "terminal-bench/headless-terminal",
+  "trial_name": "203953871ebdae4efbf163af94998493__bSaXBJe",
+  "started_at": "2026-10-20T11:10:53.260106Z",
+  "finished_at": "2026-10-20T11:19:29.912402Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

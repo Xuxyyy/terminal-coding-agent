@@ -1,0 +1,29 @@
+{
+  "task": "torch-pipeline-parallelism",
+  "run_name": "2026-10-24_041810_torch-pipeline-parallelism",
+  "task_name": "terminal-bench/torch-pipeline-parallelism",
+  "trial_name": "db605337c749a872cea7b5b413429b39__q9fAEpq",
+  "started_at": "2026-10-24T08:18:11.757995Z",
+  "finished_at": "2026-10-24T08:30:53.631349Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

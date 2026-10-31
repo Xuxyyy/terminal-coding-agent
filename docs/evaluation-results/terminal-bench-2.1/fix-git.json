@@ -1,0 +1,29 @@
+{
+  "task": "fix-git",
+  "run_name": "2026-10-20_012146_fix-git",
+  "task_name": "terminal-bench/fix-git",
+  "trial_name": "16948b980df9d96de616a205f5acca1c__kicLmMW",
+  "started_at": "2026-10-20T05:21:47.141742Z",
+  "finished_at": "2026-10-20T05:22:41.130372Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

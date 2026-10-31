@@ -1,0 +1,29 @@
+{
+  "task": "log-summary-date-ranges",
+  "run_name": "2026-10-20_013021_log-summary-date-ranges",
+  "task_name": "terminal-bench/log-summary-date-ranges",
+  "trial_name": "27b074a2f10fff7606e096f3abd8dced__ZChwmsq",
+  "started_at": "2026-10-20T05:30:21.660028Z",
+  "finished_at": "2026-10-20T05:31:02.276476Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

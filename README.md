@@ -72,28 +72,11 @@ See [print mode](docs/headless.md) for details.
 
 ## Evaluation
 
-### Terminal-Bench 2.1
+**Terminal-Bench 2.1: 78/89 automated verifier passes (87.6%).**
+See the [evaluation report](docs/terminal-bench-2.1-results.md) for settings,
+task results, and sanitized evidence.
 
-Latest task outcomes as of **October 24, 2026**, using Harbor and DeepSeek
-V4.1 Flash (`deepseek-flash`, high reasoning):
-
-| Outcome | Tasks |
-| --- | ---: |
-| Automated verifier pass | 78 |
-| Fail | 11 |
-| Total attempted | 89 |
-
-**78/89 automated verifier passes (87.6%).** These latest per-task results
-include reruns across multiple ACC source versions, rather than a single
-fixed-version `pass@1` measurement.
-
-ACC ran with `auto-edits`, automatic confirmation enabled, and sandbox off.
-Some task environments had dependencies prepared before agent execution.
-These results describe that evaluation setup; they do not measure interactive
-approval behavior or sandbox protection.
-
-See [Evaluation](docs/evals.md) for
-methodology, permission-judge checks, and package/CLI checks.
+See [permission and CLI checks](docs/evals.md) for separate checks.
 
 ## Docs
 

@@ -1,0 +1,29 @@
+{
+  "task": "financial-document-processor",
+  "run_name": "2026-10-22_092343_financial-document-processor",
+  "task_name": "terminal-bench/financial-document-processor",
+  "trial_name": "63dc43a15d9ec401613016e9114d1a93__zJQL9iK",
+  "started_at": "2026-10-22T13:23:44.165327Z",
+  "finished_at": "2026-10-22T13:31:16.210125Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

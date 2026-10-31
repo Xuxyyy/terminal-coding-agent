@@ -1,0 +1,29 @@
+{
+  "task": "circuit-fibsqrt",
+  "run_name": "2026-10-23_230413_circuit-fibsqrt",
+  "task_name": "terminal-bench/circuit-fibsqrt",
+  "trial_name": "9bcffe1054bb33249aa578a9a2a74f3c__Ggck7Kd",
+  "started_at": "2026-10-24T03:04:13.885321Z",
+  "finished_at": "2026-10-24T03:08:34.903331Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

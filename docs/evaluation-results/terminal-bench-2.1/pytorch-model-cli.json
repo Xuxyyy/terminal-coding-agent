@@ -1,0 +1,29 @@
+{
+  "task": "pytorch-model-cli",
+  "run_name": "2026-10-21_115419_pytorch-model-cli",
+  "task_name": "terminal-bench/pytorch-model-cli",
+  "trial_name": "6f11544dcc81a380dc4611902961f552__nGuZ783",
+  "started_at": "2026-10-21T15:54:33.281658Z",
+  "finished_at": "2026-10-21T15:59:10.137286Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 5,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

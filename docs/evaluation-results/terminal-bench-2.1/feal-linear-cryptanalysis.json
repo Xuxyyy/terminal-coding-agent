@@ -1,0 +1,29 @@
+{
+  "task": "feal-linear-cryptanalysis",
+  "run_name": "2026-10-20_102601_feal-linear-cryptanalysis",
+  "task_name": "terminal-bench/feal-linear-cryptanalysis",
+  "trial_name": "0f3234c5fde85f9dc610d94cfefd4c89__CeL5G7W",
+  "started_at": "2026-10-20T14:26:01.594404Z",
+  "finished_at": "2026-10-20T14:29:02.540635Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

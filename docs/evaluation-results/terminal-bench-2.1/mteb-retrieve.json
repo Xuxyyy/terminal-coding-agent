@@ -1,0 +1,29 @@
+{
+  "task": "mteb-retrieve",
+  "run_name": "2026-10-23_115725_mteb-retrieve",
+  "task_name": "terminal-bench/mteb-retrieve",
+  "trial_name": "fa7c777df6ed8987a2bb144b4b73a120__UCcjMMC",
+  "started_at": "2026-10-23T15:57:25.958527Z",
+  "finished_at": "2026-10-23T16:02:16.466792Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 1,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

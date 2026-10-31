@@ -1,0 +1,29 @@
+{
+  "task": "filter-js-from-html",
+  "run_name": "2026-10-23_093418_filter-js-from-html",
+  "task_name": "terminal-bench/filter-js-from-html",
+  "trial_name": "2d1496b6fc62adeccdba7a56f4bc24e5__7EFY7e5",
+  "started_at": "2026-10-23T13:34:19.284497Z",
+  "finished_at": "2026-10-23T13:50:06.315368Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

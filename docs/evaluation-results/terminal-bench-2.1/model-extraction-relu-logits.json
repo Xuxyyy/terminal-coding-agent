@@ -1,0 +1,29 @@
+{
+  "task": "model-extraction-relu-logits",
+  "run_name": "2026-10-20_103257_model-extraction-relu-logits",
+  "task_name": "terminal-bench/model-extraction-relu-logits",
+  "trial_name": "1ae5045ad68b5d34c3398b612066a07c__aN7cR87",
+  "started_at": "2026-10-20T14:32:58.367664Z",
+  "finished_at": "2026-10-20T14:34:57.840188Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

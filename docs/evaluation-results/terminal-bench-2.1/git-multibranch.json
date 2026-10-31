@@ -1,0 +1,29 @@
+{
+  "task": "git-multibranch",
+  "run_name": "2026-10-20_072223_git-multibranch",
+  "task_name": "terminal-bench/git-multibranch",
+  "trial_name": "7759a92a373c967dd31535975bad8659__j62myGN",
+  "started_at": "2026-10-20T11:22:24.436533Z",
+  "finished_at": "2026-10-20T11:25:46.304108Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

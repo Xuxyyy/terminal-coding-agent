@@ -1,0 +1,29 @@
+{
+  "task": "multi-source-data-merger",
+  "run_name": "2026-10-20_051814_multi-source-data-merger",
+  "task_name": "terminal-bench/multi-source-data-merger",
+  "trial_name": "70367c38732e1beda7b229968a48d602__fYTmaGf",
+  "started_at": "2026-10-20T09:18:23.087802Z",
+  "finished_at": "2026-10-20T09:19:17.655328Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

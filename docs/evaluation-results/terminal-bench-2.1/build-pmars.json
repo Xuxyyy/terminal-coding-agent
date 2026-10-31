@@ -1,0 +1,29 @@
+{
+  "task": "build-pmars",
+  "run_name": "2026-10-19_230706_build-pmars",
+  "task_name": "terminal-bench/build-pmars",
+  "trial_name": "63f0449b276f081986740c941ea93720__RoW3Lfc",
+  "started_at": "2026-10-20T03:07:05.699855Z",
+  "finished_at": "2026-10-20T03:09:11.909166Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

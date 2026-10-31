@@ -1,0 +1,29 @@
+{
+  "task": "count-dataset-tokens",
+  "run_name": "2026-10-21_065951_count-dataset-tokens",
+  "task_name": "terminal-bench/count-dataset-tokens",
+  "trial_name": "cd0574ec8281f53854256acc93702ed1__ddaPUHi",
+  "started_at": "2026-10-21T10:59:52.793842Z",
+  "finished_at": "2026-10-21T11:06:06.514382Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

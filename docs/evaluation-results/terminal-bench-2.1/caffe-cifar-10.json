@@ -1,0 +1,29 @@
+{
+  "task": "caffe-cifar-10",
+  "run_name": "2026-10-19_231439_caffe-cifar-10",
+  "task_name": "terminal-bench/caffe-cifar-10",
+  "trial_name": "7b0045106d7d5af724efe96b610ba64f__2NdtDYE",
+  "started_at": "2026-10-20T03:14:39.600805Z",
+  "finished_at": "2026-10-20T04:04:09.892342Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": "NonZeroAgentExitCodeError",
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "task": "git-leak-recovery",
+  "run_name": "2026-10-20_035016_git-leak-recovery",
+  "task_name": "terminal-bench/git-leak-recovery",
+  "trial_name": "22a9ec10dbd4cd8b99477b70e1944103__3NKJEEa",
+  "started_at": "2026-10-20T07:50:16.857979Z",
+  "finished_at": "2026-10-20T07:51:06.593650Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

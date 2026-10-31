@@ -1,0 +1,29 @@
+{
+  "task": "polyglot-c-py",
+  "run_name": "2026-10-20_042555_polyglot-c-py",
+  "task_name": "terminal-bench/polyglot-c-py",
+  "trial_name": "25570ccacf63f573a252eaa2a9c62ee8__grmpt5x",
+  "started_at": "2026-10-20T08:25:56.422387Z",
+  "finished_at": "2026-10-20T08:29:44.498796Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

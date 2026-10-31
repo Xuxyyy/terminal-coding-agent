@@ -1,0 +1,29 @@
+{
+  "task": "large-scale-text-editing",
+  "run_name": "2026-10-20_060530_large-scale-text-editing",
+  "task_name": "terminal-bench/large-scale-text-editing",
+  "trial_name": "1f1cddc3df15e452fe2d3c6928f6b1e5__Kb46wic",
+  "started_at": "2026-10-20T10:05:31.217099Z",
+  "finished_at": "2026-10-20T10:07:27.990033Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

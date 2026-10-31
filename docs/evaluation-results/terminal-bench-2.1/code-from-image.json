@@ -1,0 +1,29 @@
+{
+  "task": "code-from-image",
+  "run_name": "2026-10-20_024552_code-from-image",
+  "task_name": "terminal-bench/code-from-image",
+  "trial_name": "ef2907bb300d9b3352410c2a75dbf831__uiqHZ6a",
+  "started_at": "2026-10-20T06:45:53.062704Z",
+  "finished_at": "2026-10-20T06:58:30.352715Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

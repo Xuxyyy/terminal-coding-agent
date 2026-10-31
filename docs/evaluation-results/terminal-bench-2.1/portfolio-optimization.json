@@ -1,0 +1,29 @@
+{
+  "task": "portfolio-optimization",
+  "run_name": "2026-10-23_125511_portfolio-optimization",
+  "task_name": "terminal-bench/portfolio-optimization",
+  "trial_name": "d112f8945600f18ec47bbbe76935dc05__XxG6NPf",
+  "started_at": "2026-10-23T16:55:11.610525Z",
+  "finished_at": "2026-10-23T16:58:31.235091Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

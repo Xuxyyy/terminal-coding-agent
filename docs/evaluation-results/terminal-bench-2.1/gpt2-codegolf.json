@@ -1,0 +1,29 @@
+{
+  "task": "gpt2-codegolf",
+  "run_name": "2026-10-23_130300_gpt2-codegolf",
+  "task_name": "terminal-bench/gpt2-codegolf",
+  "trial_name": "fe42af8e9c5aa927c3b680acd08e4303__qp24pNn",
+  "started_at": "2026-10-23T17:03:01.296378Z",
+  "finished_at": "2026-10-23T17:18:22.757576Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": "AgentTimeoutError",
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

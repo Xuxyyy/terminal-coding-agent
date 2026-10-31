@@ -1,0 +1,29 @@
+{
+  "task": "overfull-hbox",
+  "run_name": "2026-10-22_070920_overfull-hbox",
+  "task_name": "terminal-bench/overfull-hbox",
+  "trial_name": "3c3b16e4b2de5fea90ca98db242b155a__NqdBJyP",
+  "started_at": "2026-10-22T11:09:21.635662Z",
+  "finished_at": "2026-10-22T11:21:07.228227Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

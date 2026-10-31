@@ -1,0 +1,29 @@
+{
+  "task": "hf-model-inference",
+  "run_name": "2026-10-21_124716_hf-model-inference",
+  "task_name": "terminal-bench/hf-model-inference",
+  "trial_name": "01370f37e61286f920dfca1e47149664__Vijwdxo",
+  "started_at": "2026-10-21T16:47:17.517332Z",
+  "finished_at": "2026-10-21T16:52:00.132274Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

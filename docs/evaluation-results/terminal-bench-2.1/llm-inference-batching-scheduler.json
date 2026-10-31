@@ -1,0 +1,29 @@
+{
+  "task": "llm-inference-batching-scheduler",
+  "run_name": "2026-10-20_123425_llm-inference-batching-scheduler",
+  "task_name": "terminal-bench/llm-inference-batching-scheduler",
+  "trial_name": "a3bf47589118daec5124fe3689b44398__2NTJVvD",
+  "started_at": "2026-10-20T16:34:26.678953Z",
+  "finished_at": "2026-10-20T16:45:20.569108Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

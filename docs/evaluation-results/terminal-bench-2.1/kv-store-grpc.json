@@ -1,0 +1,29 @@
+{
+  "task": "kv-store-grpc",
+  "run_name": "2026-10-20_012504_kv-store-grpc",
+  "task_name": "terminal-bench/kv-store-grpc",
+  "trial_name": "973c5d4c111fb61a344457936f1c3640__XxFHCqz",
+  "started_at": "2026-10-20T05:25:05.327214Z",
+  "finished_at": "2026-10-20T05:26:24.755101Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

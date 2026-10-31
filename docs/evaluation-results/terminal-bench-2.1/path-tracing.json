@@ -1,0 +1,29 @@
+{
+  "task": "path-tracing",
+  "run_name": "2026-10-23_045729_path-tracing",
+  "task_name": "terminal-bench/path-tracing",
+  "trial_name": "cf56094c881a488b27e9f204a638a7e7__yB6TtvR",
+  "started_at": "2026-10-23T08:57:29.861742Z",
+  "finished_at": "2026-10-23T09:00:51.632144Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

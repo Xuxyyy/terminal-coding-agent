@@ -1,0 +1,29 @@
+{
+  "task": "openssl-selfsigned-cert",
+  "run_name": "2026-10-20_015824_openssl-selfsigned-cert",
+  "task_name": "terminal-bench/openssl-selfsigned-cert",
+  "trial_name": "d4afa2bd2a9ba1420db8d6cfde42ffdb__DPYY858",
+  "started_at": "2026-10-20T05:58:25.321448Z",
+  "finished_at": "2026-10-20T05:59:34.947831Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

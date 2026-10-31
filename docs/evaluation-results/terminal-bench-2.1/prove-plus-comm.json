@@ -1,0 +1,29 @@
+{
+  "task": "prove-plus-comm",
+  "run_name": "2026-10-20_013350_prove-plus-comm",
+  "task_name": "terminal-bench/prove-plus-comm",
+  "trial_name": "d5ae25720df1f7cd619ed8408cda4b87__sULzcmi",
+  "started_at": "2026-10-20T05:33:50.989532Z",
+  "finished_at": "2026-10-20T05:35:02.180977Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

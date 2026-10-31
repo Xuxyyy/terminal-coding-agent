@@ -1,0 +1,29 @@
+{
+  "task": "dna-insert",
+  "run_name": "2026-10-20_073805_dna-insert",
+  "task_name": "terminal-bench/dna-insert",
+  "trial_name": "37fc023970e3464c1acc31f43e04a0b4__tLnFB9B",
+  "started_at": "2026-10-20T11:38:05.969445Z",
+  "finished_at": "2026-10-20T11:41:57.955132Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

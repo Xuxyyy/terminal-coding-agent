@@ -1,0 +1,29 @@
+{
+  "task": "compile-compcert",
+  "run_name": "2026-10-23_070332_compile-compcert",
+  "task_name": "terminal-bench/compile-compcert",
+  "trial_name": "22bde2a73d62fa46f5ab96f710561a72__cFTNrJT",
+  "started_at": "2026-10-23T11:03:32.717017Z",
+  "finished_at": "2026-10-23T11:28:21.276393Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

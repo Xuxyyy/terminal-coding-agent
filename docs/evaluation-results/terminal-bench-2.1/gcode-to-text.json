@@ -1,0 +1,29 @@
+{
+  "task": "gcode-to-text",
+  "run_name": "2026-10-23_132949_gcode-to-text",
+  "task_name": "terminal-bench/gcode-to-text",
+  "trial_name": "7dd2af04820e71ecaba96bc493cbffa1__gweVY6i",
+  "started_at": "2026-10-23T17:29:49.579570Z",
+  "finished_at": "2026-10-23T17:45:06.384041Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": "AgentTimeoutError",
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

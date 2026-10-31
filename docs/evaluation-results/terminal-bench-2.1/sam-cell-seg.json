@@ -1,0 +1,29 @@
+{
+  "task": "sam-cell-seg",
+  "run_name": "2026-10-24_015212_sam-cell-seg",
+  "task_name": "terminal-bench/sam-cell-seg",
+  "trial_name": "37c182b91df18b9c2ea2dceda47430bb__cbN7zAU",
+  "started_at": "2026-10-24T05:52:12.951173Z",
+  "finished_at": "2026-10-24T06:29:57.504867Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

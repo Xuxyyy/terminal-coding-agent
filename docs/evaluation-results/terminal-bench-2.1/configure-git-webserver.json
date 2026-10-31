@@ -1,0 +1,29 @@
+{
+  "task": "configure-git-webserver",
+  "run_name": "2026-10-20_061013_configure-git-webserver",
+  "task_name": "terminal-bench/configure-git-webserver",
+  "trial_name": "e3dc712acfecdb1338a889f86c97b374__MCVHVxN",
+  "started_at": "2026-10-20T10:10:14.213191Z",
+  "finished_at": "2026-10-20T10:16:45.116072Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

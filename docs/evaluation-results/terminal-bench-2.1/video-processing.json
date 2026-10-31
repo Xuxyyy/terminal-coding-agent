@@ -1,0 +1,29 @@
+{
+  "task": "video-processing",
+  "run_name": "2026-10-22_232841_video-processing",
+  "task_name": "terminal-bench/video-processing",
+  "trial_name": "d3f02e177b49e5768b6ce6709fc4ae3e__TLo7Umg",
+  "started_at": "2026-10-23T03:28:41.839019Z",
+  "finished_at": "2026-10-23T03:35:31.132455Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

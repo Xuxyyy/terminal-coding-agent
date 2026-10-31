@@ -1,0 +1,29 @@
+{
+  "task": "raman-fitting",
+  "run_name": "2026-10-20_044707_raman-fitting",
+  "task_name": "terminal-bench/raman-fitting",
+  "trial_name": "97ca4025332b20739da553cab0658f2e__YWDYX4M",
+  "started_at": "2026-10-20T08:47:07.554149Z",
+  "finished_at": "2026-10-20T08:51:18.782762Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

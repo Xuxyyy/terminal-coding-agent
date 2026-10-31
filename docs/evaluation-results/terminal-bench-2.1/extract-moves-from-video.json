@@ -1,0 +1,29 @@
+{
+  "task": "extract-moves-from-video",
+  "run_name": "2026-10-22_224043_extract-moves-from-video",
+  "task_name": "terminal-bench/extract-moves-from-video",
+  "trial_name": "168e2b9168511b8f8d32b1697f4703b0__DUHkSSn",
+  "started_at": "2026-10-23T02:40:44.894769Z",
+  "finished_at": "2026-10-23T03:11:02.241972Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": "AgentTimeoutError",
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

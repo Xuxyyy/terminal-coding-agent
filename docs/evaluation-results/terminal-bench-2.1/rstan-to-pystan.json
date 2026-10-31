@@ -1,0 +1,29 @@
+{
+  "task": "rstan-to-pystan",
+  "run_name": "2026-10-24_084617_rstan-to-pystan",
+  "task_name": "terminal-bench/rstan-to-pystan",
+  "trial_name": "rstan-to-pystan__due948S",
+  "started_at": "2026-10-24T12:46:18.594158Z",
+  "finished_at": "2026-10-24T13:11:48.087868Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

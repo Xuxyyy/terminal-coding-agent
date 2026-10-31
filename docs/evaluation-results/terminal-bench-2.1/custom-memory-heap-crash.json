@@ -1,0 +1,29 @@
+{
+  "task": "custom-memory-heap-crash",
+  "run_name": "2026-10-20_055915_custom-memory-heap-crash",
+  "task_name": "terminal-bench/custom-memory-heap-crash",
+  "trial_name": "61e021e0304c9818a9be2c9173c8a093__vEUXbDs",
+  "started_at": "2026-10-20T09:59:16.354546Z",
+  "finished_at": "2026-10-20T10:02:10.639756Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

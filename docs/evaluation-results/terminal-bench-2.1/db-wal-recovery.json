@@ -1,0 +1,29 @@
+{
+  "task": "db-wal-recovery",
+  "run_name": "2026-10-20_052148_db-wal-recovery",
+  "task_name": "terminal-bench/db-wal-recovery",
+  "trial_name": "07e9193513bfce038b9f9d84962ecc85__EpQDPNi",
+  "started_at": "2026-10-20T09:21:49.039545Z",
+  "finished_at": "2026-10-20T09:34:42.430489Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 7,
+    "passed": 5,
+    "failed": 2,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

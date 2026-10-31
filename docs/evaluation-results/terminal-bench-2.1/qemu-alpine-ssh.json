@@ -1,0 +1,29 @@
+{
+  "task": "qemu-alpine-ssh",
+  "run_name": "2026-10-21_232220_qemu-alpine-ssh",
+  "task_name": "terminal-bench/qemu-alpine-ssh",
+  "trial_name": "60b7050b0e0aa51641208cf65766743d__rwR3RDd",
+  "started_at": "2026-10-22T03:22:21.194218Z",
+  "finished_at": "2026-10-22T03:32:17.433476Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

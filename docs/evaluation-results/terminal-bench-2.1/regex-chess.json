@@ -1,0 +1,29 @@
+{
+  "task": "regex-chess",
+  "run_name": "2026-10-21_035718_regex-chess",
+  "task_name": "terminal-bench/regex-chess",
+  "trial_name": "e763e0ac1c9759081af0a4a82ba51b8c__zxmwuyf",
+  "started_at": "2026-10-21T07:57:39.134090Z",
+  "finished_at": "2026-10-21T08:12:19.680701Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

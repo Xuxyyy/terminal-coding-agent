@@ -1,0 +1,29 @@
+{
+  "task": "reshard-c4-data",
+  "run_name": "2026-10-24_070752_reshard-c4-data",
+  "task_name": "terminal-bench/reshard-c4-data",
+  "trial_name": "reshard-c4-data__ontgB4m",
+  "started_at": "2026-10-24T11:07:52.965502Z",
+  "finished_at": "2026-10-24T11:12:20.157980Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

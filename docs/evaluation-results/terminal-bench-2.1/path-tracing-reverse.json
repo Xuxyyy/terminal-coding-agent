@@ -1,0 +1,29 @@
+{
+  "task": "path-tracing-reverse",
+  "run_name": "2026-10-23_050616_path-tracing-reverse",
+  "task_name": "terminal-bench/path-tracing-reverse",
+  "trial_name": "035880d7ef5554b217e53a75ce5e87e4__69HT8xx",
+  "started_at": "2026-10-23T09:06:16.839254Z",
+  "finished_at": "2026-10-23T09:12:13.401201Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

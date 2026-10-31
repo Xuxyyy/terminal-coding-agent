@@ -1,0 +1,29 @@
+{
+  "task": "sparql-university",
+  "run_name": "2026-10-20_045438_sparql-university",
+  "task_name": "terminal-bench/sparql-university",
+  "trial_name": "02aeca67b6c5b0d2d72c91ab471beb51__KPtiFZN",
+  "started_at": "2026-10-20T08:54:38.962641Z",
+  "finished_at": "2026-10-20T08:58:04.715416Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

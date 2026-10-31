@@ -1,0 +1,29 @@
+{
+  "task": "sqlite-with-gcov",
+  "run_name": "2026-10-23_044455_sqlite-with-gcov",
+  "task_name": "terminal-bench/sqlite-with-gcov",
+  "trial_name": "9f9bd57fbf9f4831e9031755e83aea6b__5h62KgM",
+  "started_at": "2026-10-23T08:44:56.428837Z",
+  "finished_at": "2026-10-23T08:52:50.858933Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

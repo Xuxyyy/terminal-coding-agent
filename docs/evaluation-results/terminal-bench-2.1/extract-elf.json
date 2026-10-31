@@ -1,0 +1,29 @@
+{
+  "task": "extract-elf",
+  "run_name": "2026-10-20_072848_extract-elf",
+  "task_name": "terminal-bench/extract-elf",
+  "trial_name": "1ef31d566be4fe3459d5368621ae7ef7__e2RJFYV",
+  "started_at": "2026-10-20T11:28:56.371252Z",
+  "finished_at": "2026-10-20T11:32:26.018510Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

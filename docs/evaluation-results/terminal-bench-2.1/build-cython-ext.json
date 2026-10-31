@@ -1,0 +1,29 @@
+{
+  "task": "build-cython-ext",
+  "run_name": "2026-10-20_230158_build-cython-ext",
+  "task_name": "terminal-bench/build-cython-ext",
+  "trial_name": "35dc561790e73f13e59837828ac0863c__sd62U4C",
+  "started_at": "2026-10-21T03:01:58.902156Z",
+  "finished_at": "2026-10-21T03:06:14.735961Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

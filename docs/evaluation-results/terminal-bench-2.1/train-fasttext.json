@@ -1,0 +1,29 @@
+{
+  "task": "train-fasttext",
+  "run_name": "2026-10-24_023427_train-fasttext",
+  "task_name": "terminal-bench/train-fasttext",
+  "trial_name": "460fc0818971ec83545a76805267b654__cvaLVDk",
+  "started_at": "2026-10-24T06:34:28.002925Z",
+  "finished_at": "2026-10-24T07:35:03.065561Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 2,
+    "passed": 1,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

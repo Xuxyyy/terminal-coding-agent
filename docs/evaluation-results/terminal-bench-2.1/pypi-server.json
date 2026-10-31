@@ -1,0 +1,29 @@
+{
+  "task": "pypi-server",
+  "run_name": "2026-10-20_062349_pypi-server",
+  "task_name": "terminal-bench/pypi-server",
+  "trial_name": "1a1e0542f58e2d3362fec17a9bbb9866__2EgxGrZ",
+  "started_at": "2026-10-20T10:23:49.868465Z",
+  "finished_at": "2026-10-20T10:25:15.616461Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

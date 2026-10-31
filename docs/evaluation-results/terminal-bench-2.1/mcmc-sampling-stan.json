@@ -1,0 +1,29 @@
+{
+  "task": "mcmc-sampling-stan",
+  "run_name": "2026-10-24_054950_mcmc-sampling-stan",
+  "task_name": "terminal-bench/mcmc-sampling-stan",
+  "trial_name": "mcmc-sampling-stan__hmLnz4G",
+  "started_at": "2026-10-24T09:49:51.396070Z",
+  "finished_at": "2026-10-24T10:14:37.723413Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

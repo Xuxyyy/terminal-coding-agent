@@ -1,0 +1,29 @@
+{
+  "task": "make-doom-for-mips",
+  "run_name": "2026-10-23_004530_make-doom-for-mips",
+  "task_name": "terminal-bench/make-doom-for-mips",
+  "trial_name": "2d83dd3dee8e0f055e09973934cf0d7e__vS48iG4",
+  "started_at": "2026-10-23T04:45:31.400343Z",
+  "finished_at": "2026-10-23T05:01:25.325250Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": "AgentTimeoutError",
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

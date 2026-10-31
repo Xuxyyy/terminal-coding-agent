@@ -1,0 +1,29 @@
+{
+  "task": "make-mips-interpreter",
+  "run_name": "2026-10-23_030643_make-mips-interpreter",
+  "task_name": "terminal-bench/make-mips-interpreter",
+  "trial_name": "41a55da0abec5d7b32a0c2321f8b18e8__yVNVNrv",
+  "started_at": "2026-10-23T07:06:44.152430Z",
+  "finished_at": "2026-10-23T07:21:39.052822Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}

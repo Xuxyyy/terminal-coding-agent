@@ -1,0 +1,29 @@
+{
+  "task": "torch-tensor-parallelism",
+  "run_name": "2026-10-24_003614_torch-tensor-parallelism",
+  "task_name": "terminal-bench/torch-tensor-parallelism",
+  "trial_name": "f32ce74a5aeb6638480247ab799fe461__TAd7RBX",
+  "started_at": "2026-10-24T04:36:14.596257Z",
+  "finished_at": "2026-10-24T04:43:04.008292Z",
+  "agent_info": {
+    "name": "acc",
+    "version": "0.1.0",
+    "model_info": {
+      "name": "deepseek-flash"
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "exception_type": null,
+  "verifier_test_summary": {
+    "tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pending": 0,
+    "other": 0
+  }
+}
