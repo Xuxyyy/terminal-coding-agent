@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type OpenAI from 'openai';
 import type {Usage} from './host.js';
+import type {TraceLink} from './trace.js';
 import {
   assistantMessage,
   type AssistantContinuation,
@@ -9,7 +10,7 @@ import {
 
 type Message = OpenAI.ChatCompletionMessageParam;
 
-export type SessionRecord =
+export type SessionRecord = (
   | {kind: 'view'; items: unknown[]}
   | {kind: 'message'; id: string; message: Message}
   | {kind: 'messages'; messages: Message[]; usage: Usage}
@@ -21,7 +22,7 @@ export type SessionRecord =
       replacement?: Message[];
     }
   | {kind: 'code'; path: string; before: string | null}
-  | {kind: 'rewind'; to: number};
+  | {kind: 'rewind'; to: number}) & {trace?: TraceLink};
 
 const RECORDS = 'session.jsonl';
 

@@ -14,7 +14,7 @@ Terminal Coding Agent (ACC), using DeepSeek Flash with high reasoning effort, co
 
 ## Task results
 
-Selection: one recorded result per task across run dates and ACC source revisions. Evidence links contain selected, sanitized metadata, not full original logs.
+Evidence links contain selected, sanitized metadata, not full original logs.
 
 | Task | Raw verifier reward | Outcome | Observation | Sanitized evidence |
 | --- | ---: | --- | --- | --- |

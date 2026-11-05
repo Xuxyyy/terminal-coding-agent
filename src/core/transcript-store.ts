@@ -21,7 +21,10 @@ export function transcriptStore(
     if (closed) throw new Error('session store is closed');
   };
 
-  return {
+  const write = (record: Parameters<typeof appendRecord>[1]): void => {
+    appendRecord(dir, {...record, ...(store.trace ? {trace: store.trace.reference()} : {})}, name);
+  };
+  const store: SessionStore = {
     id,
     dir,
     seed(messages) {
@@ -31,7 +34,7 @@ export function transcriptStore(
     appendMessage(message) {
       ensureOpen();
       const id = crypto.randomBytes(4).toString('hex');
-      appendRecord(dir, {kind: 'message', id, message}, name);
+      write({kind: 'message', id, message});
       written.add(message);
       onWrite([message]);
       return id;
@@ -42,32 +45,32 @@ export function transcriptStore(
         (message, index) => !(index === 0 && message.role === 'system') && !written.has(message),
       );
       if (fresh.length === 0) return;
-      appendRecord(dir, {kind: 'messages', messages: fresh, usage}, name);
+      write({kind: 'messages', messages: fresh, usage});
       for (const message of fresh) written.add(message);
       onWrite(fresh, usage);
     },
     appendCompact(summary, replaced, replacement) {
       ensureOpen();
       const continuation = assistantContinuation(summary);
-      appendRecord(dir, {
+      write({
         kind: 'compact',
         summary: typeof summary.content === 'string' ? summary.content : '',
         replaced,
         ...(continuation ? {continuation} : {}),
         replacement,
-      }, name);
+      });
       for (const message of replacement) written.add(message);
       onWrite();
     },
     appendView(items) {
       ensureOpen();
       if (items.length === 0) return;
-      appendRecord(dir, {kind: 'view', items}, name);
+      write({kind: 'view', items});
       onWrite();
     },
     appendCode(path, before) {
       ensureOpen();
-      appendRecord(dir, {kind: 'code', path, before}, name);
+      write({kind: 'code', path, before});
       onWrite();
     },
     records() {
@@ -75,7 +78,7 @@ export function transcriptStore(
     },
     rewind(to) {
       ensureOpen();
-      appendRecord(dir, {kind: 'rewind', to}, name);
+      write({kind: 'rewind', to});
       onWrite();
     },
     close() {
@@ -84,4 +87,5 @@ export function transcriptStore(
       onClose();
     },
   };
+  return store;
 }

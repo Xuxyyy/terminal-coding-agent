@@ -9,6 +9,7 @@ import {modeOf} from '../settings.js';
 import {DEFAULT_MAX_STEPS, validateMaxSteps} from './budget.js';
 import {BackgroundTasks} from '../background.js';
 import {toolsFor} from '../tools/index.js';
+import {TraceRun, traceHost} from '../trace.js';
 import {
   createHeadlessHost,
   type HeadlessTokenUsage,
@@ -28,6 +29,7 @@ export type HeadlessResult = {
   tokenUsage: HeadlessTokenUsage;
   stopped: StopReason;
   error?: string;
+  trace?: {runId: string; path: string; summaryPath?: string; warning?: string};
 };
 
 export async function runHeadless(options: {
@@ -41,6 +43,7 @@ export async function runHeadless(options: {
   signal?: AbortSignal;
   deadlineMs?: number;
   onEvent?: (event: AgentEvent) => void;
+  trace?: TraceRun | false;
 }): Promise<HeadlessResult> {
   const startedAt = new Date().toISOString();
   const started = performance.now();
@@ -63,11 +66,13 @@ export async function runHeadless(options: {
   const interrupt = () => controller.abort(options.signal?.reason ?? new DOMException('Headless run interrupted', 'AbortError'));
   options.signal?.addEventListener('abort', interrupt, {once: true});
   if (options.signal?.aborted) interrupt();
-  const {host, events, prompts, tokenUsage} = createHeadlessHost({
+  const {host: rawHost, events, prompts, tokenUsage} = createHeadlessHost({
     policy: options.policy,
     signal: controller.signal,
     deadlineMs, maxSteps, onEvent: options.onEvent,
   });
+  const trace = options.trace === false ? undefined : options.trace ?? TraceRun.headless(options.root, {task: options.task.slice(0, 120), model: modelSettings(options.choice), permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion()});
+  const host = traceHost(rawHost, trace?.main);
 
   let timedOut = false;
   let timer: NodeJS.Timeout | null = null;
@@ -85,12 +90,16 @@ export async function runHeadless(options: {
   host.onEvent({type: 'run_start', schemaVersion: 2, settings: {startedAt, deadlineMs, permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion(), model: modelSettings(options.choice)}});
 
   let outcome: 'step_limit' | void = undefined;
+  let thrown: unknown;
   const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
   try {
     outcome = await runAgent(
       session, options.choice, host, toolsFor(session.mode, true), undefined,
       {maxSteps, backgroundTasks, waitForBackground: true},
     );
+  } catch (error) {
+    thrown = error;
+    host.onEvent({type: 'error', message: (error as Error).message});
   } finally {
     try {
       const normalCompletion = !controller.signal.aborted && outcome !== 'step_limit' &&
@@ -132,6 +141,7 @@ export async function runHeadless(options: {
         : error !== undefined
           ? 'error'
           : 'done';
+  trace?.finish(stopped, {usage, tokenUsageComplete: tokenUsage.complete, ...(thrown ? {message: (thrown as Error).message} : {})});
 
   return {
     text,
@@ -142,6 +152,7 @@ export async function runHeadless(options: {
     usage,
     tokenUsage,
     stopped,
+    ...(trace ? {trace: {runId: trace.runId, path: trace.file, ...(trace.summaryPath ? {summaryPath: trace.summaryPath} : {}), ...(trace.warning ? {warning: trace.warning} : {})}} : {}),
     ...(error ? {error} : {}),
   };
 }

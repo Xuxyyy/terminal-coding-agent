@@ -36,6 +36,8 @@ import {permissionNotice, withPermission} from './permission.js';
 import {sandboxLabel} from './sandbox.js';
 import {restoreView} from './restore.js';
 import {rewindFiles, rewindRows, rewoundNotice, type RewindRow} from './rewind.js';
+import {TraceRun, TraceScope, traceHost} from '../core/trace.js';
+import {sourceVersion} from '../core/source-version.js';
 
 export type Agent = {
   committed: Item[];
@@ -141,6 +143,9 @@ export function useAgent(
     const controller = new AbortController();
     controllerRef.current = controller;
     const store = openStore();
+    const trace = store ? new TraceRun(store.dir, {workspace: workspaceRoot, mode: 'interactive', task: task.slice(0, 120), model: modelSettings(choiceRef.current), permissionMode: session.mode, sandbox: session.sandbox, source: sourceVersion()}, (text) => commit([{kind: 'notice', text}])) : undefined;
+    const traceScope = trace ? new TraceScope(trace, 'main', trace.rootSpanId, undefined, 'session.jsonl') : undefined;
+    if (store) store.trace = traceScope;
     const message = addTask(session, task);
     try {
       store?.appendMessage(message);
@@ -150,7 +155,9 @@ export function useAgent(
 
     let failed = false;
     let denied = false;
-    const host: Host = {
+    const host: Host = traceHost({
+      agentId: 'main',
+      trace: traceScope,
       signal: controller.signal,
       onEvent(event) {
         if (event.type === 'error') failed = true;
@@ -219,7 +226,7 @@ export function useAgent(
           if (signal.aborted) cancelled();
         });
       },
-    };
+    });
 
     const backgroundTasks = new BackgroundTasks({signal: controller.signal, onEvent: host.onEvent});
     const execute = async () => {
@@ -242,6 +249,7 @@ export function useAgent(
         } catch (error) {
           host.onEvent({type: 'error', message: (error as Error).message});
         }
+        trace?.finish(controller.signal.aborted ? 'cancelled' : failed ? 'error' : denied ? 'denied' : outcome === 'step_limit' ? 'step_limit' : 'done');
       }
     };
     void execute().finally(() => {
@@ -250,6 +258,7 @@ export function useAgent(
       if (controller.signal.aborted) {
         commit([{kind: 'notice', text: 'stopped'}]);
       }
+      if (store && store.trace === traceScope) store.trace = undefined;
       controllerRef.current = null;
       setPhase((current) => current.kind === 'closed' ? current : {kind: 'idle'});
     });

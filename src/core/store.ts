@@ -25,6 +25,7 @@ import {
   writeJson,
 } from './projects.js';
 import {acquireSessionLock, type SessionLock} from './session-lock.js';
+import type {TraceScope} from './trace.js';
 
 export type SessionMeta = {
   version: number;
@@ -48,6 +49,7 @@ export type StoredSession = {
 };
 
 export type SessionStore = {
+  trace?: TraceScope;
   id: string;
   dir: string;
   seed(messages: Message[]): void;

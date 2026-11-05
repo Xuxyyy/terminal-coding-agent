@@ -14,6 +14,7 @@ import type {Rules} from '../settings.js';
 import {recoverToolResults} from '../records.js';
 import {toolsFor} from './index.js';
 import type {Tool, ToolOutput} from './registry.js';
+import {traceHost} from '../trace.js';
 
 const NAME = 'agent';
 
@@ -61,7 +62,7 @@ export function childTools(mode: Mode, allow?: string[], background = false): To
 export function childHost(host: Host, agentId: string = randomUUID()): {host: Host; events: AgentEvent[]} {
   const events: AgentEvent[] = [];
   return {
-    host: {
+    host: traceHost({
       ...host,
       agentId,
       signal: host.signal,
@@ -75,7 +76,7 @@ export function childHost(host: Host, agentId: string = randomUUID()): {host: Ho
       confirm(request) {
         return host.confirm({...request, reason: `sub-agent: ${request.reason}`}, host.signal);
       },
-    },
+    }),
     events,
   };
 }
@@ -196,6 +197,7 @@ export function makeSubagent(
         modelSettings: modelSettings(choice),
       }) : undefined;
       const agentId = persisted?.meta.id ?? randomUUID();
+      const assignmentId = persisted?.meta.assignmentId ?? randomUUID();
       if (persisted) {
         persisted.meta.background = background;
         persisted.meta.description = args.description;
@@ -204,7 +206,11 @@ export function makeSubagent(
         persisted.meta.rules = rules;
       }
       const execute = async (signal: AbortSignal): Promise<ToolOutput> => {
-        const child = childHost({...ctx.host, signal}, agentId);
+        const scope = ctx.host.trace?.child(agentId, assignmentId, ctx.host.trace.parentSpanId, persisted ? `subagents/agent-${agentId}.jsonl` : undefined);
+        const assignment = scope?.run.start(scope, 'assignment', {description: args.description, background, model: modelSettings(choice!), resumed: Boolean(saved), transcript: scope.transcript});
+        const assignmentScope = assignment ? scope!.under(assignment) : undefined;
+        const child = childHost({...ctx.host, signal, trace: assignmentScope, traceObserver: undefined}, agentId);
+        if (persisted) persisted.store.trace = assignmentScope;
         if (ctx.agents) child.host.confirm = (request) => ctx.agents!.confirm({...request, reason: `sub-agent: ${request.reason}`}, signal, agentId);
         const backgroundTasks = ctx.backgroundTasks?.fork((event) => {
           child.host.onEvent(event);
@@ -262,11 +268,12 @@ export function makeSubagent(
         }
 
         persisted?.finish(status, {text: result.text, failure: result.failure, usage: result.usage});
+        if (assignment) scope!.run.end(assignment, status, {usage: result.usage});
         return result;
       };
       if (!ctx.agents) return execute(ctx.host.signal);
       if (ctx.store) ctx.agents.onIdle(agentId, () => makeSubagent(definitions, clientFactory).run({resume: agentId, description: args.description, prompt: 'Process queued messages.', background: true}, {...ctx, mailboxOnly: true}));
-      const done = ctx.agents.start(agentId, args.description, execute, background, persisted?.meta.assignmentId ?? randomUUID());
+      const done = ctx.agents.start(agentId, args.description, execute, background, assignmentId);
       if (background) return {text: `agent_id: ${agentId}\nstatus: running${persisted ? '' : ' (not saved; this run has no parent session store)'}`};
       return done;
     },

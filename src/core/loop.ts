@@ -20,6 +20,7 @@ import {
   type Session,
 } from './session.js';
 import type {SessionStore} from './store.js';
+import {traceHost} from './trace.js';
 import {lastUsageOf, messagesOf, recoverToolResults} from './records.js';
 import {captureSnapshot} from './history.js';
 import {runTool, toolDefinitions, toolsFor} from './tools/index.js';
@@ -75,16 +76,17 @@ function reminderForStep(
   return {role: 'system', content: `${progress}\n\n${COMPLETION_AUDIT}${closing}`};
 }
 
-function judgeFor(session: Session, host: Host): Judge | undefined {
-  if (session.mode !== 'auto') return undefined;
+function judgeFor(session: Session): (host: Host) => Judge | undefined {
+  if (session.mode !== 'auto') return () => undefined;
   let choice: ModelChoice | null = null;
   try {
     choice = createJudgeClient();
   } catch {
     choice = null;
   }
-  return async (request, reason) => {
+  return (host) => async (request, reason) => {
     if (!choice) return 'ask';
+    const judgeHost = traceHost(host, host.trace?.forAgent(`${host.agentId ?? 'main'}/judge`));
     return askJudge(
       choice,
       judgeMessages({
@@ -97,7 +99,7 @@ function judgeFor(session: Session, host: Host): Judge | undefined {
       }),
       host.signal,
       host.onModelUsage,
-      host.onEvent,
+      judgeHost.onEvent,
       `${host.agentId ?? 'main'}/judge`,
     );
   };
@@ -117,6 +119,8 @@ export async function runAgent(
   store?: SessionStore,
   options: {maxSteps?: number; backgroundTasks?: BackgroundTasks; waitForBackground?: boolean; durableTools?: boolean; agents?: AgentRuntime; inboxId?: string; onWait?: (waiting: boolean) => void} = {},
 ): Promise<'step_limit' | void> {
+  host = traceHost(host);
+  if (store) store.trace = host.trace;
   const {backgroundTasks} = options;
   const waitForBackground = options.waitForBackground ?? Boolean(backgroundTasks);
   const maxSteps = options.maxSteps ?? host.maxSteps;
@@ -143,7 +147,7 @@ export async function runAgent(
     recordToolUsage(session, usage);
   };
   if (ownsAgents) host = {...host, confirm: (request, signal = host.signal) => agents ? agents.confirm(request, signal, 'main') : outerHost.confirm(request, signal)};
-  const judge = judgeFor(session, host);
+  const makeJudge = judgeFor(session);
   let continuationUsed = false;
   let nextRequestId = randomUUID();
   let warned = false;
@@ -412,16 +416,19 @@ export async function runAgent(
           name: call.name,
           args,
         });
+        const toolSpan = host.trace?.tools.get(call.id);
+        const toolHost = toolSpan ? traceHost(host, host.trace!.under(toolSpan)) : host;
         const output = await runTool(registry, call.name, call.args, {
           root: session.root,
-          host,
+          host: toolHost,
           allowed: session.allowed,
           rules: session.rules,
           mode: session.mode,
           sandbox: session.sandbox,
           choice,
           backup,
-          judge,
+          judge: makeJudge(toolHost),
+          judgeFactory: makeJudge,
           denied: session.denied,
           backgroundTasks,
           store,
@@ -443,6 +450,7 @@ export async function runAgent(
           result: output.text,
           diff: output.diff ?? null,
           execution: output.execution,
+          failure: output.failure,
         });
         if (durableRound) save(NO_USAGE, true);
       }

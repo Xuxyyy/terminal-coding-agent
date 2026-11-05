@@ -368,10 +368,16 @@ export async function streamStep(
     arm(timeoutMs);
     if (host.signal.aborted) abort();
     let result: AssistantResponse | undefined;
+    let firstProgressMs: number | undefined;
+    let firstTextMs: number | undefined;
+    const observedHost: Host = {...host, onEvent(event) {
+      if (event.type === 'text_delta') firstTextMs ??= performance.now() - started;
+      host.onEvent(event);
+    }};
     try {
       result = await Promise.race([
-        attemptStep(choice, messages, toolDefs, host, signal, () => active,
-          () => { if (!completionTimer) { phase = 'idle'; arm(idleTimeoutMs); } },
+        attemptStep(choice, messages, toolDefs, observedHost, signal, () => active,
+          () => { firstProgressMs ??= performance.now() - started; if (!completionTimer) { phase = 'idle'; arm(idleTimeoutMs); } },
           () => {
             clearTimeout(timer);
             if (!completionTimer) completionTimer = setTimeout(() => resolveComplete(partial), 50);
@@ -393,6 +399,7 @@ export async function streamStep(
       if (usage) host.onModelUsage?.(usage);
       host.onEvent({type: 'model_attempt', evidence: {
         requestId, agentId, attempt, startedAt, elapsedMs: performance.now() - started,
+        firstProgressMs, firstTextMs,
         outcome: result ? (result.finishReason === 'length' ? 'incomplete' : 'completed') : 'failed',
         ...(failure ? {category: errorCategory(failure)} : {}),
         ...(failure instanceof ModelTimeoutError ? {timeoutPhase: failure.phase} : {}),

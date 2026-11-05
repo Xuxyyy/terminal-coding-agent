@@ -1,5 +1,10 @@
 # Print mode: running a turn with no terminal
 
+Print mode saves execution timing as JSONL separately from resumable sessions.
+The final JSON result includes `trace.path`, `trace.runId`, and
+`trace.summaryPath` for the plain-text timing tree when saved. Plain mode
+prints the paths on stderr. See [execution traces](tracing.md).
+
 Status: built.
 Covers: `src/core/headless/host.ts`, `src/core/headless/run.ts`,
 `src/core/headless/output.ts`, `src/core/step-policy.ts`, `src/ui/args.ts`, `src/cli.tsx`,

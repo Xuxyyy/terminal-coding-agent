@@ -10,6 +10,7 @@ Start with the [installation instructions](../README.md#quick-start).
 - [Permissions](permissions.md): modes, rules, and the permission judge.
 - [Sandbox](sandbox.md): controls, access grants, platforms, and limits.
 - [Sessions](sessions.md): storage, resume, rewind, and persistent subagents.
+- [Execution traces](tracing.md): plain-text timing trees and JSONL execution records.
 - [Print mode](headless.md): noninteractive tasks and structured output.
 - [Evaluation](evals.md): offline tests, permission-judge evaluation, and package/CLI checks.
 

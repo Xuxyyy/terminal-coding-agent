@@ -1,3 +1,5 @@
+import type {TraceScope} from './trace.js';
+
 export type DiffRow = {
   kind: 'context' | 'add' | 'remove' | 'gap';
   line?: number;
@@ -27,6 +29,8 @@ export type RequestEvidence = {
   startedAt: string; elapsedMs: number; outcome: string; category?: string;
   timeoutPhase?: string; usage: ModelTokenUsage | null; missingUsageFields?: string[];
   partial?: {reasoning?: string; content: string; toolCalls: {id: string; name: string; args: string}[]};
+  firstProgressMs?: number;
+  firstTextMs?: number;
 };
 
 export type AgentEvent =
@@ -48,6 +52,7 @@ export type AgentEvent =
       result: string;
       diff: DiffPayload | null;
       execution?: string;
+      failure?: boolean;
     }
   | {type: 'turn_end'; usage: Usage}
   | {type: 'context_threshold_reached'}
@@ -97,4 +102,6 @@ export interface Host {
   deadlineMs?: number;
   maxSteps?: number;
   onDiagnostic?(event: AgentEvent): void;
+  trace?: TraceScope;
+  traceObserver?: TraceScope;
 }

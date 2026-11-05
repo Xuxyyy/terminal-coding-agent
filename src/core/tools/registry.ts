@@ -13,6 +13,7 @@ import {resolveTarget} from './paths.js';
 import type {BackgroundTasks} from '../background.js';
 import type {SessionStore} from '../store.js';
 import type {AgentRuntime} from '../agent-runtime.js';
+import {traceHost} from '../trace.js';
 
 export type Judge = (
   request: Request,
@@ -29,6 +30,7 @@ export type ToolContext = {
   choice?: ModelChoice;
   backup?: (path: string, snapshot: Buffer | null) => void;
   judge?: Judge;
+  judgeFactory?: (host: Host) => Judge | undefined;
   denied?: string[];
   sandboxAccess?: SandboxAccess;
   backgroundTasks?: BackgroundTasks;
@@ -195,7 +197,12 @@ export async function runTool(
   let started = false;
   let readOnly = false;
   try {
-    const permission = await permitted(tool, parsed.data, ctx);
+    const permission = ctx.host.trace
+      ? await ctx.host.trace.operation('permission decision', {tool: name, mode: ctx.mode}, (scope) => {
+        const host = traceHost(ctx.host, scope);
+        return permitted(tool, parsed.data, {...ctx, host, judge: ctx.judgeFactory?.(host) ?? ctx.judge});
+      }, (result) => result.interrupted ? 'cancelled' : result.denied ? 'denied' : 'allowed')
+      : await permitted(tool, parsed.data, ctx);
     if (permission.interrupted) return {text: INTERRUPTED, failure: true, execution: 'not_started'};
     if (permission.denied) return failed(permission.denied, 'not_started');
     const execution = {...ctx, sandboxAccess: permission.access};
