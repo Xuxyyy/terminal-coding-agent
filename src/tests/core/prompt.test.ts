@@ -21,7 +21,7 @@ test('the build embeds the exact Markdown prompt without runtime source files', 
 test('the base prompt uses reusable guidance with accurate ACC runtime instructions', () => {
   const prompt = systemPrompt(process.cwd());
 
-  assert.match(prompt, /You are an interactive agent that helps users with software engineering tasks/);
+  assert.match(prompt, /You are a software engineering agent that completes the user's tasks according to their requirements\./);
   assert.match(prompt, /denied by the user or by ACC's permission checks/);
   assert.match(prompt, /Never use another tool to bypass a permission denial/);
   assert.match(prompt, /Prefer the dedicated file\/search tools/);
