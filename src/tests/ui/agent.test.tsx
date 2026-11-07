@@ -1679,7 +1679,7 @@ test('the interrupted command is answered as interrupted, never as refused', asy
   const {stored} = await stoppedAtConfirm();
 
   const tools = stored.messages.filter((message) => message.role === 'tool');
-  assert.equal(tools.at(-1)!.content, INTERRUPTED);
+  assert.deepEqual(JSON.parse(tools.at(-1)!.content as string), {is_error: true, content: INTERRUPTED});
   assert.equal(JSON.stringify(stored.messages).includes(DENIED), false);
 });
 

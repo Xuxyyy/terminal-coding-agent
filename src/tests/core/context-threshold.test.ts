@@ -134,10 +134,9 @@ test('a recorded tool result crosses the projected line and compacts before the 
 
   const compactRequest = model.sent()[1]!;
   assert.equal(compactRequest.at(-1)?.content, compactionPrompt());
-  assert.ok(
-    compactRequest.some((message) => message.role === 'tool' && message.content === BIG_READ),
-    'the summarizer must receive the complete tool result',
-  );
+  const compactToolResult = compactRequest.find((message) => message.role === 'tool');
+  assert.ok(compactToolResult, 'the summarizer must receive the complete tool result');
+  assert.deepEqual(JSON.parse(compactToolResult.content as string), {is_error: false, content: BIG_READ});
 
   const followUp = model.sent()[2]!;
   assert.deepEqual(
@@ -152,7 +151,7 @@ test('a recorded tool result crosses the projected line and compacts before the 
     ),
   );
   assert.equal(
-    followUp.some((message) => message.role === 'tool' && message.content === BIG_READ),
+    followUp.some((message) => message.role === 'tool'),
     false,
   );
   assert.equal(active.messages.at(-1)?.content, 'done');
@@ -169,11 +168,9 @@ test('an estimated delta below the line sends the next request without compactio
   assert.equal(model.calls(), 2);
   assert.equal(count(events, 'context_threshold_reached'), 0);
   assert.equal(count(events, 'compact_start'), 0);
-  assert.ok(
-    model.sent()[1]!.some(
-      (message) => message.role === 'tool' && message.content === SMALL_READ,
-    ),
-  );
+  const toolResult = model.sent()[1]!.find((message) => message.role === 'tool');
+  assert.ok(toolResult);
+  assert.deepEqual(JSON.parse(toolResult.content as string), {is_error: false, content: SMALL_READ});
 });
 
 test('the threshold notice is emitted at most once across two compactions', async () => {

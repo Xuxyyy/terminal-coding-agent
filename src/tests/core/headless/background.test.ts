@@ -31,6 +31,14 @@ const notices = (request: Request) => request.messages.filter((message) =>
 const lifecycle = (result: HeadlessResult) => result.events.filter((event): event is Extract<AgentEvent, {type: 'background_task'}> =>
   event.type === 'background_task');
 
+function toolContent(message: Request['messages'][number]): string {
+  assert.equal(message.role, 'tool');
+  const output = JSON.parse(message.content);
+  assert.equal(output.is_error, false);
+  assert.equal(typeof output.content, 'string');
+  return output.content;
+}
+
 function root(t: TestContext) {
   loadSettings([]);
   const work = fs.mkdtempSync(path.join(directory, 'workspace-'));
@@ -87,7 +95,7 @@ test('a completion after a reply resumes the agent once and exposes failed outpu
       return calls({name: 'task_output', args: {task_id: id, offset: 0, limit: 6}});
     }
     assert.equal(nth, 4);
-    const output = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content);
+    const output = JSON.parse(toolContent(request.messages.filter((message) => message.role === 'tool').at(-1)!));
     assert.equal(output.task.id, id);
     assert.equal(output.task.code, 7);
     assert.equal(output.output, 'failed');
@@ -228,7 +236,7 @@ test('foreground timeout backgrounds the same command and completion resumes wit
     if (nth === 1) return calls(shell('echo $$ >> executions; while ! test -f release; do sleep 0.01; done; printf done', {timeout: 10}));
     if (nth === 2) {
       const output = (body as Request).messages.filter((message) => message.role === 'tool').at(-1);
-      assert.match(output!.content, /moved to the background/);
+      assert.match(toolContent(output!), /moved to the background/);
       setTimeout(() => fs.writeFileSync(path.join(work, 'release'), ''), 30);
       return reply('Waiting for the command.');
     }
@@ -268,7 +276,7 @@ test('each agent receives and reads only its own shell completion before reporti
       assert.match(events[0]!.content, /Use task_output.*read its saved output.*handle failures/);
       if (childRequests === 3) return calls({name: 'task_output', args: {task_id: childId}});
       assert.equal(childRequests, 4);
-      const output = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content);
+      const output = JSON.parse(toolContent(request.messages.filter((message) => message.role === 'tool').at(-1)!));
       assert.equal(output.output, 'B-failure');
       assert.equal(output.task.id, childId);
       childRead = true;
@@ -281,7 +289,7 @@ test('each agent receives and reads only its own shell completion before reporti
       {name: 'agent', args: {description: 'check own background shell', prompt: 'OWNED_BACKGROUND_PROBE'}},
     );
     if (parentRequests === 2) {
-      mainId = JSON.parse(request.messages.find((message) => message.role === 'tool')!.content.split('\n')[1]!).id;
+      mainId = JSON.parse(toolContent(request.messages.find((message) => message.role === 'tool')!).split('\n')[1]!).id;
       return reply('Main independent work finished.');
     }
     if (parentRequests === 3) {
@@ -297,7 +305,7 @@ test('each agent receives and reads only its own shell completion before reporti
     assert.ok(!events[0]!.content.includes(childId));
     if (parentRequests === 4) return calls({name: 'task_output', args: {task_id: mainId}});
     assert.equal(parentRequests, 5);
-    const output = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content);
+    const output = JSON.parse(toolContent(request.messages.filter((message) => message.role === 'tool').at(-1)!));
     assert.equal(output.output, 'A-success');
     assert.equal(output.task.code, 0);
     return reply('Main checked A-success and reported the child failure.');
@@ -404,8 +412,8 @@ test('subagent temporary services are stopped and reported when their owner fini
     if (nth === 2) return calls(shell('sleep 20', {run_in_background: true, lifetime: 'temporary_service'}));
     if (nth === 3) return reply('Child finished.');
     const result = (body as Request).messages.filter((message) => message.role === 'tool').at(-1)!;
-    assert.match(result.content, /Background commands stopped when this subagent finished/);
-    assert.match(result.content, /owning subagent finished/);
+    assert.match(toolContent(result), /Background commands stopped when this subagent finished/);
+    assert.match(toolContent(result), /owning subagent finished/);
     assert.equal(notices(body as Request).length, 0);
     return reply('Reviewed child cleanup.');
   });
@@ -446,12 +454,12 @@ test('the agent can stop a long-lived command through task_stop and finish norma
     const request = body as Request;
     if (nth === 2) {
       await waitFor(() => fs.existsSync(path.join(work, 'started')));
-      const launch = request.messages.filter((message) => message.role === 'tool').at(-1)!.content;
+      const launch = toolContent(request.messages.filter((message) => message.role === 'tool').at(-1)!);
       const info = JSON.parse(launch.split('\n')[1]!) as BackgroundTaskInfo;
       return calls({name: 'task_stop', args: {task_id: info.id}});
     }
     assert.equal(nth, 3);
-    const stopped = JSON.parse(request.messages.filter((message) => message.role === 'tool').at(-1)!.content) as BackgroundTaskInfo;
+    const stopped = JSON.parse(toolContent(request.messages.filter((message) => message.role === 'tool').at(-1)!)) as BackgroundTaskInfo;
     assert.equal(stopped.status, 'stopped');
     assert.equal(stopped.reason, 'stopped by the agent');
     assert.equal(notices(request).length, 1);
@@ -481,7 +489,7 @@ test('unverified retained services prompt for readiness instead of an idle backg
     if (nth === 1) return calls(shell('exec sleep 20', {run_in_background: true, lifetime: 'retained_service', required_by_task: 'User needs a service left running'}));
     const messages = (body as Request).messages;
     if (nth === 2) {
-      id = JSON.parse(messages.filter((message) => message.role === 'tool').at(-1)!.content.split('\n')[1]!).id;
+      id = JSON.parse(toolContent(messages.filter((message) => message.role === 'tool').at(-1)!).split('\n')[1]!).id;
       return reply('Finished.');
     }
     if (nth === 3) {
@@ -501,17 +509,19 @@ for (const ending of ['done', 'error', 'step_limit', 'cancelled', 'timeout'] as 
     const work = root(t);
     const controller = new AbortController();
     let id = '';
+    let reachedEnding = false;
     const {choice} = fakeModel((nth, body) => {
       if (nth === 1) return calls(shell('touch service-started; exec sleep 20', {
         run_in_background: true, lifetime: 'retained_service', required_by_task: 'User needs the service after exit',
       }));
       const messages = (body as Request).messages;
       if (nth === 2) {
-        id = JSON.parse(messages.filter((message) => message.role === 'tool').at(-1)!.content.split('\n')[1]!).id;
+        id = JSON.parse(toolContent(messages.filter((message) => message.role === 'tool').at(-1)!).split('\n')[1]!).id;
         return calls({name: 'task_handoff', args: {task_id: id, command: 'while ! test -f service-started; do sleep 0.01; done; printf ready', description: 'check fixture startup'}});
       }
       assert.equal(nth, 3);
-      assert.match(messages.filter((message) => message.role === 'tool').at(-1)!.content, /Readiness verified/);
+      assert.match(toolContent(messages.filter((message) => message.role === 'tool').at(-1)!), /Readiness verified/);
+      reachedEnding = true;
       if (ending === 'error') return new Error('scripted fatal failure');
       if (ending === 'cancelled') controller.abort();
       if (ending === 'timeout') return new Promise(() => {});
@@ -521,6 +531,8 @@ for (const ending of ['done', 'error', 'step_limit', 'cancelled', 'timeout'] as 
     const result = await runHeadless({root: work, task: 'leave the service running', choice, policy: 'yes', sandbox: 'off',
       maxSeconds: ending === 'timeout' ? 0.3 : 5, maxSteps: ending === 'step_limit' ? 3 : 5, signal: controller.signal});
     assert.equal(result.stopped, ending);
+    assert.equal(reachedEnding, true);
+    if (ending === 'error') assert.ok(result.events.some((event) => event.type === 'error' && event.message.includes('scripted fatal failure')));
     const last = lifecycle(result).at(-1)!;
     if (ending === 'done') {
       try {
