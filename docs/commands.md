@@ -20,7 +20,7 @@ See [sessions](sessions.md) for recovery details and [permissions](permissions.m
 for what a mode allows. Sandbox controls and access grants are described in
 [sandbox](sandbox.md).
 
-Context compacts automatically at 80% projected usage by default. `/context`
+Context compacts automatically at 25% projected usage by default. `/context`
 uses the last measured total when available; its parts are estimates.
 See [context management](agent-loop.md#context-pressure) for the thresholds and
 [configuration](configuration.md) for overrides.

@@ -218,8 +218,9 @@ Partial text and output-limited tool drafts share one automatic continuation
 per agent invocation. The allowance survives tool steps and cannot reset.
 When it is exhausted, the latest partial work is saved before the run stops.
 Context-limit recovery may compact once per pending
-step without resetting its transport attempt counter. Compaction retains failed
-call/result pairs and uncertain effects.
+step without resetting its transport attempt counter. Compaction summarizes unresolved
+tool failures, attempted repairs, and uncertain effects. Full failed call/result
+pairs remain in saved records rather than being copied into the replacement context.
 
 Tool failures return through normal tool messages. Their execution state says
 whether execution never started, returned a known result, or may have produced
@@ -242,16 +243,16 @@ remains the separate command that intentionally starts a new conversation.
 ### The two lines
 
 ```
-        0.8 × window            window − 64,000              window
+        0.25 × window           window − 64,000              window
              │                        │                        │
   ───────────┼────────────────────────┼────────────────────────┼──
      work    │ compact before the     │ stop before an         │ provider refuses
              │ next model request     │ oversized request      │
 ```
 
-| window | threshold (0.8) | floor | room between |
+| window | threshold (0.25) | floor | room between |
 | --- | --- | --- | --- |
-| 1,048,576 — all three configured models | 838,861 (rounded) | 984,576 | 145,715 (rounded) |
+| 1,048,576 — configured coding model | 262,144 | 984,576 | 722,432 |
 
 The threshold is the configurable compaction policy. The floor is the physical request-fit
 guard, which reserves the maximum 64,000-token reply. They are different checks.
@@ -261,7 +262,7 @@ room on review steps.
 ### The threshold
 
 At the top of every iteration, before `streamStep`, `overThreshold(session, env, registry)`
-(`session.ts`) compares the projection against `contextWindow * 0.8`.
+(`session.ts`) compares the projection against `contextWindow * 0.25`.
 
 On a yes, the loop emits `context_threshold_reached` at most once in the run, then emits
 `compact_start` and calls `compactSession` through `withoutText(host)`. Suppressing text keeps
@@ -344,19 +345,19 @@ whole conversation. `recordUsage` runs below the assistant-message push (`loop.t
 would count it twice in every later projection.
 
 On a fresh session `projectedTokens` falls back to `contextStatus(...).used`, so the trigger
-*can* fire before the first request. At a real 0.8 threshold it never does — a fresh session
-is a system prompt and tool definitions, a small prompt against an approximately 839,000-token threshold — but a test
-with an absurdly low `ACC_COMPACT_AT` will see it, and that is correct: the estimate is the
-only reading available, and it is the same one `/context` shows.
+can fire before the first request if the pending task is large enough. Ordinary short
+prompts stay below the default 262,144-token threshold. A lower `ACC_COMPACT_AT` can also
+trigger compaction earlier. The estimate is the only reading available before the first
+request, and it is the same one `/context` shows.
 
 `contextStatus` is left alone, so `/context` still prints the last measured total. The
 projection is for the trigger, which has to act; the readout is for the user, who is better
 served by the number the provider charged. The two differing by a little is correct, not a
 bug.
 
-`ACC_COMPACT_AT` overrides the fraction when it parses to a number in `(0, 1]`. It exists so
-a live test can fire the trigger at a few thousand tokens instead of approximately 839,000, and it stays as
-the escape hatch if 0.8 turns out to be wrong.
+`ACC_COMPACT_AT` overrides the fraction when it parses to a number in `(0, 1]`.
+Unset or invalid values use 0.25. The default is a fraction of the configured window,
+not a fixed token count; it is 262,144 tokens for the current 1,048,576-token window.
 
 ### The floor below the trigger
 
@@ -378,8 +379,8 @@ just refused. Summarizing is the one move unavailable at the wall. So the wall h
 coming.
 
 `MAX_OUTPUT_TOKENS` (64,000, `models.ts`) is the right reserve because the reply has to fit
-too. Note what this implies about the window: the reserve only sits above the 0.8 line when
-the window is at least 320,000 tokens. Every configured model in the table has 1,048,576 tokens, so
+too. Note what this implies about the window: the reserve only sits above the 0.25 line when
+the window is greater than 85,333 tokens. Every configured model in the table has 1,048,576 tokens, so
 this holds today — but a small-window model added later would trip the floor below its own
 compaction line.
 

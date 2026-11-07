@@ -151,18 +151,19 @@ export const grep: Tool = {
     const program = executable('rg');
     if (!program) throw new Error(MISSING_RG);
     const run: Run = await runCommand({root: ctx.root, sandbox: ctx.sandbox, program, args: argv(args, searchPath), signal: ctx.host.signal, access: ctx.sandboxAccess, timeoutMs: TIMEOUT_MS});
-    if (run.code === 124) {
-      return {text: `search timed out after ${TIMEOUT_MS / 1000}s; narrow it with glob or path`};
-    }
     const {body, stats} = splitStats(stripHere(run.stdout));
-    if (stats && stats.searched === 0) {
-      return {text: nothingFound(args, stats, where)};
-    }
-    if (run.code === 2) {
-      if (ctx.sandbox === 'on' && /Operation not permitted|Permission denied/.test(run.stderr)) {
-        return {text: capSearch(body ? `${body}\n[sandbox skipped protected files]` : 'sandbox blocked search access')};
-      }
-      return {text: `invalid pattern: ${run.stderr.trim() || 'ripgrep exited 2'}`};
+    if (run.code !== 0 && run.code !== 1) {
+      const detail = run.stderr.trim() || `ripgrep exited ${run.code}`;
+      const reason = run.code === 124
+        ? `search timed out after ${TIMEOUT_MS / 1000}s; narrow it with glob or path`
+        : /regex parse error|error parsing regex/i.test(detail)
+          ? `invalid pattern: ${detail}`
+          : `${body ? 'search incomplete' : 'search failed'}: ${detail}`;
+      return {
+        text: capSearch(body ? `${reason}\nPartial results:\n${body}` : reason),
+        failure: true,
+        execution: 'known_result',
+      };
     }
     if (run.code === 1 || body === '') {
       return {text: nothingFound(args, stats, where)};

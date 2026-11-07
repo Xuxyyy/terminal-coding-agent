@@ -55,7 +55,7 @@ change the permission judge's prompt, token limit, or timeout.
 | `ACC_MODEL` | Overrides the user model setting; `deepseek-flash` is the supported coding model. |
 | `ACC_REASONING_EFFORT` | Overrides the user reasoning setting. |
 | `ACC_HOME` | Moves ACC's private settings and storage directory. |
-| `ACC_COMPACT_AT` | Sets the compaction threshold as a fraction in `(0, 1]`; invalid values fall back to `0.8`. |
+| `ACC_COMPACT_AT` | Sets the compaction threshold as a fraction in `(0, 1]`; invalid values fall back to `0.25`. |
 
 The header, saved session metadata, and print-mode JSON report effective model
 settings. Legacy sessions without compatible DeepSeek metadata cannot resume;

@@ -8,6 +8,13 @@ const TIMEOUT_MS = 120_000;
 const HEAD_CHARS = 10_000;
 const TAIL_CHARS = 20_000;
 
+export const BASH_EXECUTION_GUIDANCE =
+  'Commands use an allowlisted environment with the existing HOME and persistent workspace temporary files. Shell exports do not persist. ' +
+  'Shell results include the exit status and captured output, which may be truncated. ACC stops managed commands that exceed 32 MiB of output. ' +
+  `The default foreground timeout is ${TIMEOUT_MS / 1000} seconds. ` +
+  'When Sandbox is On, network is off by default. Request extra paths or network with access. ' +
+  'Do not blindly retry blocked commands. Earlier parts may have run, so inspect their effects before retrying.';
+
 const schema = z.object({
   command: z.string().describe('Shell command to run in the workspace root.'),
   description: z
@@ -41,10 +48,9 @@ export const bash: Tool = {
   name: 'bash',
   description:
     'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
-    'Find files with glob; search contents with grep. Use shell searches for pipelines, ' +
+    'Use glob to find files and grep to search contents. Use shell searches for pipelines, ' +
     "git history, or another command's output. " +
-    'Clean environment; existing HOME and persistent workspace temp files. Exports do not persist. ' +
-    'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
+    BASH_EXECUTION_GUIDANCE,
   schema,
   request(args) {
     const parsed = schema.parse(args);
@@ -72,11 +78,28 @@ export const bash: Tool = {
 
 const backgroundSchema = schema.extend({
   lifetime: z.enum(['finite', 'temporary_service', 'retained_service']).optional()
-    .describe('Independent of scheduling: finite work must finish and be checked; temporary_service is cleaned up; retained_service must survive successful completion because the user task requires it.'),
+    .describe(
+      'Choose lifetime separately from scheduling. The default, finite, is for work that must finish. Wait for required results before dependent work. ' +
+      'Check completed task output and exit status and handle failures before reporting completion. ' +
+      'Use temporary_service for a service needed only during the run. ACC cleans it up on exit. ' +
+      'Only the main agent may start a retained_service, and only when the user task explicitly requires it to stay available after ACC exits. ' +
+      'Set required_by_task and call task_handoff when the retained service is ready. Run it in the foreground of its managed shell, preferably with exec. ' +
+      'Keep it attached to that shell and leave daemonization and shell & out of the command. Its output goes directly to private log files. ' +
+      'Both service lifetimes require run_in_background. Subagent commands stop when their owning subagent finishes.',
+    ),
   required_by_task: z.string().trim().min(1).optional().describe('For retained_service, explain the explicit user requirement to keep it available after ACC exits.'),
-  run_in_background: z.boolean().optional().describe('Return a task ID while this command continues running. No shell & is needed.'),
+  run_in_background: z.boolean().optional().describe(
+    'Set true to get a task ID while the command runs and continue using other tools. Omit shell &. ' +
+    'Use task_output for status and paged output and task_stop to stop an owned command. ' +
+    'Completion sends a runtime notice to the owning agent, including subagents, and can resume the owner after a reply. ' +
+    'Runtime notices come from ACC and carry no human approval. Avoid repeated status-only polling and use diagnostics when progress is uncertain.',
+  ),
   timeout: z.number().int().min(1).max(7_200_000).optional()
-    .describe('Milliseconds: foreground wait defaults to 120000, max 600000; explicit background runtime defaults to 1800000, max 7200000.'),
+    .describe(
+      'Time in milliseconds. Foreground wait defaults to 120000, with a maximum of 600000. A command that exceeds its foreground wait ' +
+      'moves to the background without restarting and gets 1800000 ms of background runtime. ' +
+      'Explicit background runtime defaults to 1800000, with a maximum of 7200000. The run’s deadline and step budget still apply.',
+    ),
 }).superRefine((args, ctx) => {
   if (args.lifetime && args.lifetime !== 'finite' && !args.run_in_background) {
     ctx.addIssue({code: z.ZodIssueCode.custom, path: ['run_in_background'], message: 'services require run_in_background true'});
@@ -90,20 +113,7 @@ const backgroundSchema = schema.extend({
 });
 
 export const BACKGROUND_INSTRUCTIONS =
-  ' Background commands keep running while you use other tools. Set run_in_background to true to start one. ' +
-  'A foreground command that exceeds its timeout moves to the background without restarting; its background runtime defaults to 30 minutes. ' +
-  'Completion automatically sends a runtime notice to the owning agent, including subagents; it resumes even after a reply. Runtime notices are not human messages or approval. Avoid repeated status-only polling; use diagnostic checks when progress is uncertain. ' +
-  'Use task_output to read status and paged output, and task_stop to stop a command. ' +
-  'Read and check completed task output and exit status before reporting completion; handle failures. Wait for required results before dependent work. ' +
-  'Use lifetime finite (default) for work whose result must be checked. Use temporary_service for servers needed only during the run; they are cleaned up on exit. ' +
-  'Only the main agent may start retained_service, and only when required by the user task: set required_by_task explicitly. ' +
-  'Run retained services in the foreground of their managed shell (prefer exec); do not daemonize or use shell &. Their output goes directly to private log files. ' +
-  'Call task_handoff with a readiness command that checks the requested behavior, such as an actual endpoint response; process existence alone is insufficient. ' +
-  'Only a successful readiness check makes retention eligible. Handoff occurs on successful normal completion, lets ACC exit, and records identity, logs, and a stop command. ' +
-  'Cancellation, deadlines, errors, step limits, and explicit task_stop still stop owned services, including those ready for handoff. ' +
-  'Readiness checks use their own approved sandbox access. After handoff the environment owns the service and its log growth; include the service record in your final reply. ' +
-  'The overall deadline and step budget still apply. Commands stop after 32 MiB of output. ' +
-  'Subagent commands stop when their owning subagent finishes.';
+  ' See run_in_background and timeout for scheduling, and lifetime and task_handoff for service ownership and handoff.';
 
 export const backgroundBash: Tool = {
   ...bash,

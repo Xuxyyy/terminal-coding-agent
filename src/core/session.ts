@@ -167,7 +167,7 @@ export function projectedTokens(
   return Math.max(0, session.lastContextTokens + since);
 }
 
-export const THRESHOLD_AT = 0.8;
+export const THRESHOLD_AT = 0.25;
 
 export function contextThreshold(
   env: NodeJS.ProcessEnv = process.env,

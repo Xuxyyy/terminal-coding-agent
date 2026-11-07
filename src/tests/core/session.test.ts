@@ -182,8 +182,8 @@ test('the context breakdown adds up before and after a turn', () => {
   }
 });
 
-test('the threshold is 0.8 unless the environment overrides it', () => {
-  assert.equal(contextThreshold({}), THRESHOLD_AT);
+test('the threshold is 0.25 unless the environment overrides it', () => {
+  assert.equal(contextThreshold({}), 0.25);
   assert.equal(contextThreshold({ACC_COMPACT_AT: '0.5'}), 0.5);
   assert.equal(contextThreshold({ACC_COMPACT_AT: '1'}), 1);
 });
@@ -202,13 +202,22 @@ function measured(tokens: number): Session {
 
 test('the line is crossed at the threshold, not before it', () => {
   assert.equal(overThreshold(measured(0), {}, []), false);
-  assert.equal(overThreshold(measured(799), {}, []), false);
-  assert.equal(overThreshold(measured(800), {}, []), true);
+  assert.equal(overThreshold(measured(249), {}, []), false);
+  assert.equal(overThreshold(measured(250), {}, []), true);
   assert.equal(overThreshold(measured(950), {}, []), true);
 });
 
+test('the default configured window compacts at 262,144 projected tokens', () => {
+  const session = createSession(process.cwd(), 'rules', 1_048_576);
+  setMeasured(session, 262_143);
+  assert.equal(overThreshold(session, {}, []), false);
+  setMeasured(session, 262_144);
+  assert.equal(overThreshold(session, {}, []), true);
+  assert.equal(overThreshold(session, {ACC_COMPACT_AT: '0.8'}, []), false);
+});
+
 test('tool results pushed since the measurement count against the line', () => {
-  const session = measured(700);
+  const session = measured(200);
   assert.equal(overThreshold(session, {}), false);
 
   session.messages.push({
@@ -221,14 +230,14 @@ test('tool results pushed since the measurement count against the line', () => {
 });
 
 test('an emptied result puts the session back under the line', () => {
-  const session = measured(700);
+  const session = measured(200);
   const result = {
     role: 'tool' as const,
     tool_call_id: 'call-1',
     content: 'x'.repeat(4_000),
   };
   session.messages.push(result);
-  setMeasured(session, 1_700);
+  setMeasured(session, 1_200);
   assert.equal(overThreshold(session, {}), true);
 
   result.content = '';

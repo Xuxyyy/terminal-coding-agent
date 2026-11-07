@@ -78,6 +78,27 @@ test('streamed tool calls and token usage survive the relay', async () => {
   } finally { await relay.close(); }
 });
 
+test('runtime background notifications retain their name through the relay', async () => {
+  const seen: Record<string, unknown>[] = [];
+  const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
+    invoke: async (body) => {
+      seen.push(body);
+      return streamOf(textChunk('Continuing'), finishChunk('stop'), usageChunk(12, 3));
+    }});
+  try {
+    const messages = [
+      {role: 'user' as const, content: 'Complete the task'},
+      {role: 'user' as const, name: 'acc_runtime', content: '[runtime background task completion notice]\nTask search has stopped.'},
+    ];
+    const {host} = fakeHost();
+    const result = await streamStep({client: deepseekClient('', relayInvoke(endpoint(relay))),
+      model, label: 'relay', contextWindow: 100_000}, messages, [], host);
+    assert.equal(result.content, 'Continuing');
+    assert.equal(seen.length, 1);
+    assert.deepEqual(seen[0]?.messages, messages);
+  } finally { await relay.close(); }
+});
+
 test('the relay uses DeepSeek for coding and permission judging', async () => {
   const seen: Record<string, unknown>[] = [];
   const relay = await startModelRelay({apiKey: sentinel, model, maxSeconds: 10, bindHost: '127.0.0.1',
@@ -118,6 +139,8 @@ test('the relay rejects unknown routes, other models, built-in tools and excessi
       {...request(), url: 'https://another-host.example'},
       {...request(), store: true},
       {...request(), max_tokens: 64_001},
+      {...request(), messages: [{role: 'user', content: 'Hi', name: 42}]},
+      {...request(), messages: [{role: 'user', content: 'Hi', name: 'acc_runtime', unexpected: true}]},
     ]) {
       const result = await fetch(endpoint(relay), {method: 'POST', body: JSON.stringify(body)});
       assert.equal(result.status, 400);

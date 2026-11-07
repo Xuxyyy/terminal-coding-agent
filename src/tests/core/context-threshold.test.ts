@@ -107,7 +107,7 @@ async function withThreshold(
 
 test('a recorded tool result crosses the projected line and compacts before the next request', async () => {
   const model = recordingModel((nth) => {
-    if (nth === 1) return toolResponse(nth, 700_000);
+    if (nth === 1) return toolResponse(nth, 150_000);
     if (nth === 2) return textResponse(STORY);
     return textResponse('done');
   });
@@ -160,7 +160,7 @@ test('a recorded tool result crosses the projected line and compacts before the 
 
 test('an estimated delta below the line sends the next request without compaction', async () => {
   const model = recordingModel((nth) =>
-    nth === 1 ? toolResponse(nth, 700_000) : textResponse('done'),
+    nth === 1 ? toolResponse(nth, 150_000) : textResponse('done'),
   );
   const {host, events} = fakeHost();
 

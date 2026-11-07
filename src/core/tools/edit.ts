@@ -5,11 +5,11 @@ import {displayPath, resolveTarget} from './paths.js';
 import {fileOperation} from '../sandbox/files.js';
 
 const schema = z.object({
-  path: z.string().describe('File to change, relative to the workspace root.'),
+  path: z.string().describe('Existing file to change. Relative paths are resolved from the workspace root.'),
   old_string: z
     .string()
     .describe(
-      'Exact text to replace. It must appear exactly once in the file, so include surrounding lines when needed.',
+      'Non-empty text to match exactly, including whitespace. Include surrounding lines when needed to identify one location.',
     ),
   new_string: z.string().describe('Text to put in its place.'),
 });
@@ -17,7 +17,9 @@ const schema = z.object({
 export const editFile: Tool = {
   name: 'edit_file',
   description:
-    'Replace one exact, unique piece of text in a file. Read the file first so old_string matches byte for byte.',
+    'Replace one exact text match in an existing UTF-8 text file. Read the relevant content before editing. ' +
+    'The tool rejects an empty old_string, no match, or multiple non-overlapping matches. ' +
+    'Success confirms the replacement was applied. Verify the affected behavior when needed.',
   schema,
   request(args) {
     return {kind: 'write', path: schema.parse(args).path};

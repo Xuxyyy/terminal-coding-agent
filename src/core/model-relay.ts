@@ -10,7 +10,7 @@ import {DEFAULT_MODEL, MAX_OUTPUT_TOKENS} from './models.js';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const messageSchema = z.discriminatedUnion('role', [
-  z.object({role: z.enum(['system', 'developer', 'user']), content: z.string()}).strict(),
+  z.object({role: z.enum(['system', 'developer', 'user']), content: z.string(), name: z.string().optional()}).strict(),
   z.object({
     role: z.literal('assistant'), content: z.string().nullable(), reasoning_content: z.string().optional(),
     tool_calls: z.array(z.object({

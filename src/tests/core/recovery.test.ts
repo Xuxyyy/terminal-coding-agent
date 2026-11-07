@@ -317,15 +317,19 @@ test('text continuation for nested socket errors is separate from transport retr
   assert.ok(events.some((event) => event.type === 'error' && /continuation exhausted/.test(event.message)));
 });
 
-test('context compaction preserves failure pairs and pending requests share the original attempt counter', async () => {
+test('context compaction summarizes failures and pending requests share the original attempt counter', async () => {
   const session = createSession('/tmp', 'rules', 1_000_000);
   session.messages.push({role: 'assistant', content: 'old details '.repeat(5000)});
   session.messages.push({role: 'assistant', content: '', tool_calls: [{id: 'bad', type: 'function', function: {name: 'bash', arguments: '{"command":"change"}'}}]});
   session.messages.push({role: 'tool', tool_call_id: 'bad', content: 'Error: failed\n[execution: uncertain]'});
   const {choice, calls} = fakeModel((nth, body) => {
     if (nth === 1) return Object.assign(statusError(400, 'context length exceeded'), {code: 'context_length_exceeded'});
-    if (nth === 2) return streamOf(textChunk('The earlier command failed with uncertain effects. Inspect its outcome before any retry. '.repeat(2)), finishChunk('stop'));
-    assert.ok(JSON.stringify(body).includes('execution: uncertain'));
+    if (nth === 2) {
+      assert.ok(JSON.stringify(body).includes('execution: uncertain'));
+      return streamOf(textChunk('The earlier command failed with uncertain effects. Inspect its outcome before any retry. '.repeat(2)), finishChunk('stop'));
+    }
+    assert.ok(JSON.stringify(body).includes('failed with uncertain effects'));
+    assert.ok(!JSON.stringify(body).includes('tool_call_id'));
     return streamOf(textChunk('finished'), finishChunk('stop'));
   });
   const {host, events} = fakeHost();
@@ -334,7 +338,7 @@ test('context compaction preserves failure pairs and pending requests share the 
   const starts = events.filter((event) => event.type === 'model_attempt_start');
   assert.equal(starts[0]!.requestId, starts[2]!.requestId);
   assert.deepEqual([starts[0]!.attempt, starts[2]!.attempt], [1, 2]);
-  assert.equal(session.messages.filter((message) => message.role === 'tool').length, 1);
+  assert.equal(session.messages.filter((message) => message.role === 'tool').length, 0);
 });
 
 test('repeated context errors compact once then stop', async () => {

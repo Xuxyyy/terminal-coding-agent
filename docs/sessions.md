@@ -58,7 +58,9 @@ Partial text is marked incomplete and receives at most one automatic continuatio
 per agent invocation. Cancellation stops requests and backoff immediately.
 Authentication, exhausted credits, and unsupported configuration stop explicitly.
 Tool errors stay in the conversation, including their execution state and output.
-Compaction preserves failed call/result pairs and uncertain effects.
+Compaction summarizes unresolved tool failures, attempted repairs, and uncertain
+effects without copying full failed call/result pairs into the replacement context.
+The original call and result records remain in the saved session log.
 
 ## What a session stores
 

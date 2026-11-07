@@ -105,7 +105,7 @@ function streamed(events: AgentEvent[]): string {
 test('a pending user task counts toward the step-zero threshold', async () => {
   const active = createSession(process.cwd(), 'rules', 1_000_000);
   active.messages.push({role: 'assistant', content: STORY});
-  setMeasured(active, 799_990);
+  setMeasured(active, 249_990);
   addTask(active, 'x'.repeat(1_000));
   const {choice, calls} = fakeModel((nth) =>
     nth === 1 ? textResponse(STORY) : textResponse('done'),

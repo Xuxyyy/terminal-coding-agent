@@ -29,6 +29,55 @@ function fixture(t: {after(fn: () => void): void}) {
   return {root, parent};
 }
 
+test('failure-heavy compaction keeps the summary active and original failure evidence saved', async (t) => {
+  const {root, parent} = fixture(t);
+  const session = createSession(root, 'rules', 1_000_000);
+  addTask(session, 'Inspect the service state before retrying the failed restart.');
+  const failure = '[exit 1]\nRAW_FAILURE_DETAIL '.repeat(1_000) +
+    '\nConfiguration changed; service restart failed.\n[execution: uncertain; inspect effects before retrying]';
+  for (let index = 0; index < 12; index++) {
+    session.messages.push({role: 'assistant', content: null, tool_calls: [{
+      id: `failed-${index}`, type: 'function',
+      function: {name: 'bash', arguments: JSON.stringify({command: 'update-config && restart-service'})},
+    }]});
+    session.messages.push({role: 'tool', tool_call_id: `failed-${index}`, content: failure});
+  }
+  parent.appendStep(session.messages, NO_USAGE);
+  const file = path.join(parent.dir, 'session.jsonl');
+  const originalRecords = fs.readFileSync(file, 'utf8');
+  const summary = 'The configuration was changed, but the service restart failed. The service state remains uncertain. ' +
+    'Inspect the service and configuration before retrying; do not assume the failed command had no effects.';
+  const model = fakeModel((nth, body) => {
+    const messages = (body as {messages: typeof session.messages}).messages;
+    if (nth === 1) {
+      assert.equal(messages.filter((message) => message.role === 'tool').length, 12);
+      assert.ok(messages.some((message) => message.content === failure));
+      assert.equal(messages.at(-1)!.content, compactionPrompt());
+      assert.match(compactionPrompt(), /Unresolved failures, attempted repairs, and uncertain effects/);
+      return streamOf(textChunk(summary), finishChunk('stop'));
+    }
+    assert.equal(messages.some((message) => message.role === 'tool'), false);
+    assert.equal(messages.some((message) => message.role === 'assistant' && message.tool_calls?.length), false);
+    assert.ok(messages.some((message) => message.content === SUMMARY_PREFIX + summary));
+    assert.doesNotMatch(JSON.stringify(messages), /RAW_FAILURE_DETAIL/);
+    return streamOf(textChunk('The uncertain service state still needs inspection.'), finishChunk('stop'));
+  });
+  setMeasured(session, 900_000);
+  const {host, events} = fakeHost();
+
+  await runAgent(session, model.choice, host, [], parent, {durableTools: true, maxSteps: 2});
+
+  assert.equal(model.calls(), 2);
+  const compact = events.find((event) => event.type === 'compact_end');
+  assert.ok(compact?.type === 'compact_end');
+  assert.ok(compact.after < compact.before / 10);
+  assert.ok(fs.readFileSync(file, 'utf8').startsWith(originalRecords));
+  const records = parent.records();
+  assert.deepEqual(messagesOf(records), session.messages.slice(1));
+  assert.equal(records.filter((record) => record.kind === 'compact').length, 1);
+  assert.ok(records.some((record) => record.kind === 'messages' && record.messages.some((message) => message.content === failure)));
+});
+
 for (const requireSave of [false, true]) {
   test(`compaction save failure ${requireSave ? 'rejects without replacing context' : 'keeps existing best-effort behavior'}`, async () => {
     const session = createSession('/tmp', 'rules', 1_000_000);

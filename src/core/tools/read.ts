@@ -30,7 +30,7 @@ export function capLines(lines: string[]): {body: string; kept: number} {
 }
 
 const schema = z.object({
-  path: z.string().describe('File to read, relative to the workspace root.'),
+  path: z.string().describe('File to read. Relative paths are resolved from the workspace root.'),
   offset: z
     .number()
     .int()
@@ -48,7 +48,9 @@ const schema = z.object({
 export const readFile: Tool = {
   name: 'read_file',
   description:
-    'Read a text file from the workspace. Returns numbered lines so you can quote them exactly in edit_file.',
+    'Read numbered lines from a UTF-8 text file. Missing files, directories, and files over 512 KiB are rejected. ' +
+    'The result may cover only part of the file, and long lines may be truncated. Use offset and limit to read other lines. ' +
+    'Use untruncated file text without the displayed line numbers when quoting or preparing an edit.',
   schema,
   request(args) {
     return {kind: 'read', path: schema.parse(args).path};

@@ -41,16 +41,18 @@ export const taskStop: Tool = {
 
 const handoffSchema = z.object({
   task_id: taskId,
-  command: z.string().min(1).describe('Readiness check for the user-requested behavior. Must exit zero only when usable. Checking a PID alone is insufficient.'),
+  command: z.string().min(1).describe('Check the requested behavior, such as an actual endpoint response. Exit zero only when the service is usable. Checking a PID alone is insufficient.'),
   description: z.string().min(1).describe('What requested behavior this readiness check verifies.'),
-  access: accessSchema.optional(),
+  access: accessSchema.optional().describe('Extra sandbox access for this readiness check when Sandbox is On. Requires approval for this call.'),
 });
 
 export const taskHandoff: Tool = {
   name: 'task_handoff',
-  description: 'Verify a retained_service is ready for handoff using a shell check (10 second limit). ' +
-    'A successful check makes it eligible to survive successful normal ACC completion. Until then cancellation and task_stop still stop it. ' +
-    'Use a check of the requested behavior, not just process existence. Logs and a stop command are saved in the service record.',
+  description: 'Check a running retained_service you started using a shell check with a 10-second limit. ' +
+    'A successful readiness check makes it eligible for handoff on successful normal ACC completion. ' +
+    'Until handoff, cancellation, deadlines, errors, step limits, and task_stop still stop owned services, including those ready for handoff. ' +
+    'Handoff lets ACC exit and records the service identity, logs, and stop command. Include the service record in your final reply. ' +
+    'After handoff, the environment owns the service and its log growth.',
   schema: handoffSchema,
   request(args) {
     const parsed = handoffSchema.parse(args);

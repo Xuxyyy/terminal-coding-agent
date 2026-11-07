@@ -79,7 +79,7 @@ Configuration includes these environment variables: `ACC_MODEL` picks the
 model id, `ACC_HOME` moves the session store off `~/.acc`, and `ACC_COMPACT_AT`
 overrides the fraction of the window at which the agent compacts itself. The
 last one is accepted only when it parses to a number in `(0, 1]`; anything else
-is ignored and 0.8 is used.
+is ignored and 0.25 is used.
 
 ## Permissions
 
@@ -305,7 +305,7 @@ the summary. The spinner reads `Compacting…` while the summary is in flight. A
 summary that fails, or that comes back too short or carrying tool-call markup,
 is retried once and then changes nothing.
 
-Past 80% of the window the agent compacts automatically at the next model-request
+At 25% of the window the agent compacts automatically at the next model-request
 boundary. That boundary exists both before a new user turn and after a completed
 tool round in an active run. A tool result is appended first, so its actual text
 counts toward the projected trigger and the summarizer sees the complete evidence.
@@ -402,7 +402,7 @@ live child progress, hot reload, and per-agent token, turn, timeout,
 temperature, or reasoning settings.
 
 Reacting to a provider's context-length rejection by compacting and
-retrying — the safety net under the 80% trigger — is also still open: the error
+retrying — the safety net under the 25% trigger — is also still open: the error
 shape differs per provider and none of it can be tested without paying for a
 deliberate failure.
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import test from 'node:test';
+import test, {type TestContext} from 'node:test';
 import type {ConfirmDecision, ConfirmRequest, Host} from '../../../core/host.js';
 import {bash} from '../../../core/tools/bash.js';
 import {grep} from '../../../core/tools/grep.js';
@@ -56,7 +56,17 @@ function seeded(): string {
 async function search(root: string, args: object, answers: ConfirmDecision[] = ['once']) {
   const {host, asked} = hostThatAnswers(...answers);
   const output = await runTool(registry, 'grep', JSON.stringify(args), context(root, host));
-  return {text: output.text, asked};
+  return {...output, asked};
+}
+
+function fakeRipgrep(t: TestContext, root: string, stdout: string, stderr: string, code: number): void {
+  const original = process.env.PATH;
+  t.after(() => { process.env.PATH = original; });
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin);
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  fs.writeFileSync(path.join(bin, 'rg'), `#!/bin/sh\nprintf '%s' ${quote(stdout)}\nprintf '%s' ${quote(stderr)} >&2\nexit ${code}\n`, {mode: 0o755});
+  process.env.PATH = bin;
 }
 
 test('a search of credential storage is refused before it runs', async () => {
@@ -98,10 +108,11 @@ test('count mode returns per-file counts and a total', async () => {
 test('an absent pattern says how many files it searched', async () => {
   const root = seeded();
 
-  const {text} = await search(root, {pattern: 'nosuchthing'});
+  const {text, failure} = await search(root, {pattern: 'nosuchthing'});
 
   assert.match(text, /^no matches — searched (\d+) files$/);
   assert.ok(Number(/searched (\d+) files/.exec(text)![1]) > 0);
+  assert.notEqual(failure, true);
 });
 
 test('a glob that selects nothing names the glob', async () => {
@@ -115,10 +126,63 @@ test('a glob that selects nothing names the glob', async () => {
 test('an invalid pattern is reported and does not throw', async () => {
   const root = seeded();
 
-  const {text} = await search(root, {pattern: 'a['});
+  const {text, failure, execution} = await search(root, {pattern: 'a['});
 
-  assert.match(text, /^invalid pattern: /);
+  assert.match(text, /^Error: invalid pattern: /);
   assert.match(text, /unclosed character class/);
+  assert.equal(failure, true);
+  assert.equal(execution, 'known_result');
+});
+
+for (const sandbox of ['off', 'on'] as const) {
+  test(`an unreadable search is an error with sandbox ${sandbox}`, async (t) => {
+    const root = seeded();
+    fakeRipgrep(t, root, '\n0 matches\n0 matched lines\n0 files contained matches\n0 files searched\n', 'rg: blocked: Permission denied (os error 13)\n', 2);
+    const {host} = hostThatAnswers('once');
+    const output = await runTool(registry, 'grep', JSON.stringify({pattern: 'widget'}), {...context(root, host), sandbox});
+
+    assert.equal(output.failure, true);
+    assert.equal(output.execution, 'known_result');
+    assert.match(output.text, /^Error: search failed:/);
+    assert.match(output.text, /Permission denied/);
+    assert.doesNotMatch(output.text, /no files|no matches|invalid pattern/);
+  });
+
+  test(`a partial search keeps matches and reports incomplete coverage with sandbox ${sandbox}`, async (t) => {
+    const root = seeded();
+    fakeRipgrep(t, root, './a.ts:1:const widget = 1;\n\n1 matches\n1 matched lines\n1 files contained matches\n1 files searched\n', 'rg: blocked: Permission denied (os error 13)\n', 2);
+    const {host} = hostThatAnswers('once');
+    const output = await runTool(registry, 'grep', JSON.stringify({pattern: 'widget', output_mode: 'content'}), {...context(root, host), sandbox});
+
+    assert.equal(output.failure, true);
+    assert.match(output.text, /^Error: search incomplete:/);
+    assert.match(output.text, /Permission denied/);
+    assert.match(output.text, /^a\.ts:1:const widget = 1;$/m);
+    assert.doesNotMatch(output.text, /invalid pattern|matches in \d+ files/);
+  });
+}
+
+test('an unexpected search exit is not an empty result', async (t) => {
+  const root = seeded();
+  fakeRipgrep(t, root, '', '', 3);
+  const {host} = hostThatAnswers('once');
+  const output = await runTool(registry, 'grep', JSON.stringify({pattern: 'widget'}), {...context(root, host), sandbox: 'off'});
+
+  assert.equal(output.failure, true);
+  assert.match(output.text, /^Error: search failed: ripgrep exited 3/);
+});
+
+test('capped partial search output keeps the failure visible', async (t) => {
+  const root = seeded();
+  fakeRipgrep(t, root, 'a.ts:1:widget\n'.repeat(4_000), 'rg: blocked: Permission denied\n', 2);
+  const {host} = hostThatAnswers('once');
+  const output = await runTool(registry, 'grep', JSON.stringify({pattern: 'widget'}), {...context(root, host), sandbox: 'off'});
+
+  assert.equal(output.failure, true);
+  assert.match(output.text, /^Error: search incomplete:/);
+  assert.match(output.text, /^a\.ts:1:widget$/m);
+  assert.match(output.text, /truncated/);
+  assert.ok(output.text.length < 32_000 + 300);
 });
 
 test('a path outside the workspace is searched once approved', async () => {

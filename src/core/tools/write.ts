@@ -7,14 +7,16 @@ import {fileOperation} from '../sandbox/files.js';
 const schema = z.object({
   path: z
     .string()
-    .describe('File to write, relative to the workspace root. Parent directories are created.'),
+    .describe('File to write. Relative paths are resolved from the workspace root. Missing parent directories are created.'),
   content: z.string().describe('Full contents of the file.'),
 });
 
 export const writeFile: Tool = {
   name: 'write_file',
   description:
-    'Create a file or replace its whole contents. Prefer edit_file when changing part of an existing file.',
+    'Create a UTF-8 file or replace an existing file’s whole contents. Inspect an existing file before overwriting it. ' +
+    'Directory targets are rejected. Success confirms the supplied content was written. Verify the resulting file or affected behavior when needed. ' +
+    'Prefer edit_file for changing part of an existing file.',
   schema,
   request(args) {
     return {kind: 'write', path: schema.parse(args).path};

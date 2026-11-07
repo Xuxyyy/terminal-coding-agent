@@ -718,9 +718,10 @@ function eventTypes(items: Item[]): string[] {
 test('auto compaction shows one notice, hides the summary, and keeps going', async () => {
   const root = workspace();
   const home = process.env.ACC_HOME!;
+  const summary = SUMMARY + ' The attempted nope tool failed because it was unknown and did not execute.';
   const {choice, calls} = fakeModel((nth) => {
     if (nth === 1) return crossingResponse();
-    if (nth === 2) return summaryOf(SUMMARY);
+    if (nth === 2) return summaryOf(summary);
     return answer('done');
   });
   const {agent, unmount} = mount(root, choice);
@@ -741,12 +742,12 @@ test('auto compaction shows one notice, hides the summary, and keeps going', asy
   const stored = loadSession(root, null, home);
   assert.deepEqual(
     stored.messages.map((message) => message.role),
-    ['user', 'assistant', 'assistant', 'tool', 'assistant'],
+    ['user', 'assistant', 'assistant'],
   );
   assert.equal(stored.messages[0]!.content, 'fix the cart');
-  assert.ok(String(stored.messages[1]!.content).includes(SUMMARY));
+  assert.ok(String(stored.messages[1]!.content).includes(summary));
   assert.equal(stored.messages.at(-1)!.content, 'done');
-  assert.match(String(stored.messages[3]!.content), /Error:/);
+  assert.equal(stored.messages.some((message) => message.role === 'assistant' && message.tool_calls?.length), false);
   assert.equal(occurrences(stored.messages, 'fix the cart'), 1);
 });
 

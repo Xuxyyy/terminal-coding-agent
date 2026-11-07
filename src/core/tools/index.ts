@@ -1,5 +1,5 @@
 import type {Mode} from '../permission/mode.js';
-import {bash, backgroundBash, BACKGROUND_INSTRUCTIONS} from './bash.js';
+import {bash, backgroundBash, BACKGROUND_INSTRUCTIONS, BASH_EXECUTION_GUIDANCE} from './bash.js';
 import {editFile} from './edit.js';
 import {grep} from './grep.js';
 import {glob} from './glob.js';
@@ -19,14 +19,13 @@ const AUTO_DESCRIPTIONS: Record<string, string> = {
     'so /rewind can use their existing backups when available. This is a preference, not a restriction; shell edits remain allowed. ' +
     'Keep searches narrow and avoid sensitive files; shell searches do not inherit the grep tool\'s exclusions. ' +
     'Keep edits targeted. Shell changes are not backed up for /rewind, and git cannot reliably recover overwritten uncommitted work. ' +
-    'Clean environment; existing HOME and persistent workspace temp files. Exports do not persist. ' +
-    'When Sandbox is On, network is off; request extra paths or network with access. Do not blindly retry blocked commands: earlier parts may have run.',
+    BASH_EXECUTION_GUIDANCE,
   edit_file:
-    'Replace one exact, unique piece of text in a file. Read the file first so old_string matches byte for byte. ' +
-    'Prefer this tool for changing part of an existing file so /rewind can use its existing backups when available.',
+    editFile.description +
+    ' Prefer this tool for changing part of an existing file so /rewind can use its existing backups when available.',
   write_file:
-    'Create a file or replace its whole contents. Prefer this tool for creating files or replacing their whole contents ' +
-    'so /rewind can use its existing backups when available. Prefer edit_file for changing part of an existing file.',
+    writeFile.description +
+    ' Prefer this tool for creating files or replacing their whole contents so /rewind can use its existing backups when available.',
 };
 
 export function toolsFor(mode: Mode, background = false): Tool[] {

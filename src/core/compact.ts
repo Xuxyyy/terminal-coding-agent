@@ -13,19 +13,26 @@ export const SUMMARY_PREFIX =
 
 export function compactionPrompt(strict = false): string {
   const lines = [
-    'Summarize this conversation so it can replace the messages above.',
-    'Cover what the user is trying to do, what has been done so far,',
-    'which files were touched and how, and what is still left.',
-    'Keep every fact a later turn would need: paths, names, decisions.',
-    'Retain unresolved tool failures, attempted repairs, and uncertain effects. Never assume a failed command had no effects.',
-    'Write plain prose, not JSON, and address nothing to the user.',
+    'Create a concise handoff summary so another model can continue this conversation.',
+    '',
+    'Preserve:',
+    '- The active goal and important user requirements, constraints, and corrections.',
+    '- Progress, key decisions, and relevant findings.',
+    '- Files changed and their current state, with paths needed to continue.',
+    '- Verification performed, its results, and what remains unverified.',
+    '- Unresolved failures, attempted repairs, and uncertain effects. Do not assume a failed command had no effects.',
+    '- Remaining work and the next step, or that the task is complete.',
+    '',
+    'Prioritize information needed to continue correctly. Omit repetitive logs and obsolete details. Distinguish confirmed facts from assumptions.',
+    'Do not invent missing facts or infer states that were not observed.',
+    'Return only the summary. Do not call tools or continue the task.',
   ];
   if (strict) {
     lines.push(
       'Reply with prose only. Do not call a tool and do not answer any earlier request.',
     );
   }
-  return lines.join(' ');
+  return lines.join('\n');
 }
 
 const TOOL_MARKUP = /<\||<｜|<tool_call|<function_call|invoke name=/i;
@@ -169,13 +176,7 @@ export async function compactSession(
   ) ?? {role: 'system', content: session.systemPrompt};
   const retainedUsers = retainRecentUserPrompts(session.messages);
   const summary = assistantMessage(SUMMARY_PREFIX + text, [], continuation);
-  const failureContext = session.messages.flatMap((message, index) => {
-    if (message.role !== 'assistant' || !message.tool_calls) return [];
-    const results = session.messages.slice(index + 1, index + 1 + message.tool_calls.length);
-    if (!results.some((result) => result.role === 'tool' && typeof result.content === 'string' && /^(?:Error:|\[exit [1-9])|\n\[execution: (?:not_started|known_result|uncertain);/.test(result.content))) return [];
-    return [message, ...results.filter((result) => result.role === 'tool')];
-  });
-  const replacement = [...retainedUsers, summary, ...failureContext, ...postSummaryMessages];
+  const replacement = [...retainedUsers, summary, ...postSummaryMessages];
 
   const apply = (): void => {
     session.messages = [system, ...replacement];
