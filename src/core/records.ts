@@ -5,6 +5,7 @@ import type {Usage} from './host.js';
 import type {TraceLink} from './trace.js';
 import {
   assistantMessage,
+  toolMessage,
   type AssistantContinuation,
 } from './messages.js';
 
@@ -118,10 +119,11 @@ export function recoverToolResults(messages: Message[]): {messages: Message[]; r
     for (const call of message.tool_calls) {
       const saved = following.find((candidate) => candidate.role === 'tool' && candidate.tool_call_id === call.id && !moved.has(candidate));
       if (saved) { ordered.push(saved); moved.add(saved); continue; }
-      const result: Message = {
-        role: 'tool', tool_call_id: call.id,
-        content: `[runtime: ${call.function.name} was interrupted before its result was saved. Execution is uncertain; effects may have occurred. Inspect current state before repeating this action. For agent calls, list existing children before creating or resuming work. No old tool call was replayed.]`,
-      };
+      const result = toolMessage(call.id, {
+        text: `[runtime: ${call.function.name} was interrupted before its result was saved. Execution is uncertain; effects may have occurred. Inspect current state before repeating this action. For agent calls, list existing children before creating or resuming work. No old tool call was replayed.]`,
+        failure: true,
+        execution: 'uncertain',
+      });
       ordered.push(result);
       recovered.push(result);
     }

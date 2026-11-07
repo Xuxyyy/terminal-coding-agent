@@ -1,4 +1,13 @@
 import type OpenAI from 'openai';
+import type {ToolOutput} from './tools/registry.js';
+
+export function toolMessage(id: string, output: ToolOutput): OpenAI.ChatCompletionToolMessageParam {
+  return {
+    role: 'tool',
+    tool_call_id: id,
+    content: JSON.stringify({is_error: output.failure === true, content: output.text}),
+  };
+}
 
 export type AssistantContinuation = {
   kind: 'reasoning_content';

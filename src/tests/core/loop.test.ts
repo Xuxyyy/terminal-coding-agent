@@ -34,6 +34,9 @@ import {loadSession, startSession} from '../../core/store.js';
 import {writeFile} from '../../core/tools/write.js';
 import type {Tool} from '../../core/tools/registry.js';
 import {estimateMessage} from '../../core/tokens.js';
+import {toolMessage} from '../../core/messages.js';
+import {bash} from '../../core/tools/bash.js';
+import {recoverToolResults} from '../../core/records.js';
 
 const noop: Tool = {
   name: 'noop',
@@ -59,6 +62,67 @@ function toolResponse(n: number): AsyncIterable<unknown> {
 function finalResponse(): AsyncIterable<unknown> {
   return streamOf(textChunk('done'), finishChunk('stop'), usageChunk(10, 2));
 }
+
+test('model requests expose tool error status while preserving raw event output', async () => {
+  const cases = [
+    {name: 'bash', args: JSON.stringify({command: "printf 'Error: sample text\\n'"}), error: false, execution: 'known_result', output: /\[exit 0\]/},
+    {name: 'bash', args: JSON.stringify({command: 'acc_missing_command_test_47d1'}), error: true, execution: 'known_result', output: /\[exit 127\]/},
+    {name: 'bash', args: JSON.stringify({command: 'acc_missing_command_test_47d1 2>&1 | head -5'}), error: false, execution: 'known_result', output: /\[exit 0\]/},
+    {name: 'bash', args: '{', error: true, execution: 'not_started', output: /not valid JSON/},
+    {name: 'missing_tool', args: '{}', error: true, execution: 'not_started', output: /unknown tool/},
+  ];
+  for (const entry of cases) {
+    let received: {is_error: boolean; content: string} | undefined;
+    const {choice, calls} = fakeModel((nth, body) => {
+      if (nth === 1) return streamOf(toolCallChunk('checked', entry.name, entry.args), finishChunk('tool_calls'));
+      const messages = (body as {messages: OpenAI.ChatCompletionMessageParam[]}).messages;
+      const message = messages.find((item) => item.role === 'tool' && item.tool_call_id === 'checked')!;
+      assert.deepEqual(Object.keys(message).sort(), ['content', 'role', 'tool_call_id']);
+      received = JSON.parse(message.content as string);
+      return finalResponse();
+    });
+    const {host, events} = fakeHost();
+
+    await runAgent(session(), choice, host, [bash]);
+
+    assert.equal(calls(), 2);
+    assert.equal(received!.is_error, entry.error);
+    assert.deepEqual(Object.keys(received!).sort(), ['content', 'is_error']);
+    assert.match(received!.content, entry.output);
+    const event = events.find((item) => item.type === 'tool_end');
+    assert.ok(event?.type === 'tool_end');
+    assert.equal(received!.content, event.result);
+    assert.equal(event.execution, entry.execution);
+  }
+});
+
+test('a running tool result is not labeled complete and preserves its task handle', async () => {
+  const running: Tool = {...noop, async run() { return {text: 'Task task-123 is still running.'}; }};
+  const {choice} = fakeModel((nth, body) => {
+    if (nth === 1) return toolResponse(1);
+    const messages = (body as {messages: OpenAI.ChatCompletionMessageParam[]}).messages;
+    const reply = messages.find((item) => item.role === 'tool')!;
+    assert.deepEqual(JSON.parse(reply.content as string), {is_error: false, content: 'Task task-123 is still running.'});
+    return finalResponse();
+  });
+
+  await runAgent(session(), choice, fakeHost().host, [running]);
+});
+
+test('recovered missing results expose errors with uncertain effects without rewriting saved replies', () => {
+  const saved: OpenAI.ChatCompletionToolMessageParam = {role: 'tool', tool_call_id: 'saved', content: 'legacy output'};
+  const recovery = recoverToolResults([
+    {role: 'assistant', tool_calls: ['saved', 'missing'].map((id) => ({id, type: 'function' as const, function: {name: 'bash', arguments: '{}'}}))},
+    saved,
+  ]);
+
+  assert.equal(recovery.messages[1], saved);
+  const recovered = JSON.parse(recovery.recovered[0]!.content as string);
+  assert.equal(recovered.is_error, true);
+  assert.deepEqual(Object.keys(recovered).sort(), ['content', 'is_error']);
+  assert.match(recovered.content, /Execution is uncertain/);
+  assert.match(recovered.content, /Inspect current state before repeating/);
+});
 
 test('the next tool-enabled request receives opaque continuation state', async () => {
   const sent: OpenAI.ChatCompletionMessageParam[][] = [];
@@ -254,7 +318,7 @@ test('the request-fit guard counts a reminder once and sends it only when it fit
               '40 model turns remain before the next continuation checkpoint, at turn 60.' +
               `\n\n${COMPLETION_AUDIT}`,
           };
-          const toolResult = {role: 'tool' as const, tool_call_id: 'call-20', content: 'ok'};
+          const toolResult = toolMessage('call-20', {text: 'ok'});
           active.contextWindow = projectedTokens(active, [tool]) +
             estimateMessage(toolResult) + estimateMessage(reminder) + MAX_OUTPUT_TOKENS -
             (fits ? 0 : 1);
@@ -472,8 +536,8 @@ test('an interrupted step is saved complete', async () => {
     replies.map((reply) => reply.tool_call_id),
     assistant.tool_calls!.map((call) => call.id),
   );
-  assert.equal(replies[0]!.content, 'ran before the stop');
-  assert.equal(replies[1]!.content, INTERRUPTED);
+  assert.deepEqual(JSON.parse(replies[0]!.content as string), {is_error: false, content: 'ran before the stop'});
+  assert.deepEqual(JSON.parse(replies[1]!.content as string), {is_error: true, content: INTERRUPTED});
 });
 
 test('an interrupted stream keeps what arrived', async () => {
@@ -547,8 +611,8 @@ test('an interrupted tool batch puts the marker after the tool replies', async (
   await runAgent(active, choice, host, [stopper]);
 
   assert.deepEqual(active.messages.slice(-3), [
-    {role: 'tool', tool_call_id: 'call-a', content: 'ran before the stop'},
-    {role: 'tool', tool_call_id: 'call-b', content: INTERRUPTED},
+    toolMessage('call-a', {text: 'ran before the stop'}),
+    toolMessage('call-b', {text: INTERRUPTED, failure: true, execution: 'not_started'}),
     {role: 'user', content: INTERRUPTED_TURN},
   ]);
 });

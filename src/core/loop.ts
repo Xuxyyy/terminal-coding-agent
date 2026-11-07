@@ -10,7 +10,7 @@ import {
 import {INTERRUPTED, INTERRUPTED_TURN, type Host, type Usage} from './host.js';
 import {explainError} from './errors.js';
 import {compactSession, CompactionSaveError, withoutText} from './compact.js';
-import {assistantDraftMessage, assistantMessage} from './messages.js';
+import {assistantDraftMessage, assistantMessage, toolMessage} from './messages.js';
 import {
   projectedTokens,
   recordToolUsage,
@@ -397,11 +397,7 @@ export async function runAgent(
       if (durableRound) save(result.usage, true);
       for (const call of result.toolCalls) {
         if (host.signal.aborted) {
-          session.messages.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: INTERRUPTED,
-          });
+          session.messages.push(toolMessage(call.id, {text: INTERRUPTED, failure: true, execution: 'not_started'}));
           continue;
         }
         let args: unknown = call.args;
@@ -438,11 +434,7 @@ export async function runAgent(
           addUsage(total, output.usage);
           recordToolUsage(session, output.usage);
         }
-        session.messages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          content: output.text,
-        });
+        session.messages.push(toolMessage(call.id, output));
         host.onEvent({
           type: 'tool_end',
           id: call.id,
