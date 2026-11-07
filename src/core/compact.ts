@@ -15,7 +15,8 @@ export function compactionPrompt(strict = false): string {
   const lines = [
     'Create a concise handoff summary so another model can continue this conversation.',
     '',
-    'Preserve:',
+    '# Preserve:',
+    '',
     '- The active goal and important user requirements, constraints, and corrections.',
     '- Progress, key decisions, and relevant findings.',
     '- Files changed and their current state, with paths needed to continue.',
@@ -23,12 +24,18 @@ export function compactionPrompt(strict = false): string {
     '- Unresolved failures, attempted repairs, and uncertain effects. Do not assume a failed command had no effects.',
     '- Remaining work and the next step, or that the task is complete.',
     '',
-    'Prioritize information needed to continue correctly. Omit repetitive logs and obsolete details. Distinguish confirmed facts from assumptions.',
-    'Do not invent missing facts or infer states that were not observed.',
+    '# Summary guidance',
+    '',
+    '- Prioritize information needed to continue correctly. Omit repetitive logs and obsolete details.',
+    '- Distinguish confirmed facts from assumptions. Do not invent missing facts or infer states that were not observed.',
+    '',
+    '# Output',
+    '',
     'Return only the summary. Do not call tools or continue the task.',
   ];
   if (strict) {
     lines.push(
+      '',
       'Reply with prose only. Do not call a tool and do not answer any earlier request.',
     );
   }

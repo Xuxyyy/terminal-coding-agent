@@ -15,7 +15,7 @@ test('the build embeds the exact Markdown prompt without runtime source files', 
   const embedded = await import(pathToFileURL(standalone).href);
 
   assert.equal(embedded.default, source);
-  assert.ok(systemPrompt(process.cwd()).startsWith(`${source}\n\nSandbox:`));
+  assert.ok(systemPrompt(process.cwd()).startsWith(`${source}\n\n# Sandbox\n\nSandbox:`));
 });
 
 test('the base prompt uses reusable guidance with accurate ACC runtime instructions', () => {

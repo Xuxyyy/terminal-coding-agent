@@ -9,11 +9,12 @@ const HEAD_CHARS = 10_000;
 const TAIL_CHARS = 20_000;
 
 export const BASH_EXECUTION_GUIDANCE =
-  'Commands use an allowlisted environment with the existing HOME and persistent workspace temporary files. Shell exports do not persist. ' +
-  'Shell results include the exit status and captured output, which may be truncated. ACC stops managed commands that exceed 32 MiB of output. ' +
-  `The default foreground timeout is ${TIMEOUT_MS / 1000} seconds. ` +
-  'When Sandbox is On, network is off by default. Request extra paths or network with access. ' +
-  'Do not blindly retry blocked commands. Earlier parts may have run, so inspect their effects before retrying.';
+  '\n\n## Execution guidance\n\n' +
+  '- Commands use an allowlisted environment with the existing HOME and persistent workspace temporary files. Shell exports do not persist.\n' +
+  '- Shell results include the exit status and captured output, which may be truncated. ACC stops managed commands that exceed 32 MiB of output.\n' +
+  `- The default foreground timeout is ${TIMEOUT_MS / 1000} seconds.\n` +
+  '- When Sandbox is On, network is off by default. Request extra paths or network with access.\n' +
+  '- Do not blindly retry blocked commands. Earlier parts may have run, so inspect their effects before retrying.';
 
 const schema = z.object({
   command: z.string().describe('Shell command to run in the workspace root.'),
@@ -49,7 +50,7 @@ export const bash: Tool = {
   description:
     'Run a shell command in the workspace root. Use it to run tests, use git, and delete files. ' +
     'Use glob to find files and grep to search contents. Use shell searches for pipelines, ' +
-    "git history, or another command's output. " +
+    "git history, or another command's output." +
     BASH_EXECUTION_GUIDANCE,
   schema,
   request(args) {
@@ -113,7 +114,8 @@ const backgroundSchema = schema.extend({
 });
 
 export const BACKGROUND_INSTRUCTIONS =
-  ' See run_in_background and timeout for scheduling, and lifetime and task_handoff for service ownership and handoff.';
+  '\n\n## Background execution\n\n' +
+  'See run_in_background and timeout for scheduling, and lifetime and task_handoff for service ownership and handoff.';
 
 export const backgroundBash: Tool = {
   ...bash,

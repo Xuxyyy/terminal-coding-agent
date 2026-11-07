@@ -34,12 +34,12 @@ import {waitForChange} from './wait-for-change.js';
 
 export {NORMAL_STEP_POLICY};
 
-export const COMPLETION_AUDIT =
-  'Reassess the original request and the evidence collected. ' +
-  'If all required work is complete and verified, stop using tools and answer. ' +
-  'Otherwise, identify the essential work still missing and take the next useful action. ' +
-  'Prioritize required behavior and necessary verification before optional improvements. ' +
-  'Avoid repeating checks unless new evidence makes them useful. Do not claim completion without evidence.';
+export const COMPLETION_AUDIT = `# Completion audit
+
+- Reassess the original request and the evidence collected.
+- If all required work is complete and verified, stop using tools and answer. Otherwise, identify the essential work still missing and take the next useful action.
+- Prioritize required behavior and necessary verification before optional improvements.
+- Avoid repeating checks unless new evidence makes them useful. Do not claim completion without evidence.`;
 
 export {INTERRUPTED, INTERRUPTED_TURN};
 
@@ -70,7 +70,7 @@ function reminderForStep(
   const progress = `Progress review: ${step} model turns completed. ` +
     `${remaining} model turns remain before the next ${boundaryName}, at turn ${boundary}.`;
   const closing = remaining <= NORMAL_STEP_POLICY.finalWarningAt
-    ? '\n\nPlan the remaining implementation and verification work within this budget segment. ' +
+    ? '\n- Plan the remaining implementation and verification work within this budget segment. ' +
       'If completion is not possible, clearly report what remains unfinished.'
     : '';
   return {role: 'system', content: `${progress}\n\n${COMPLETION_AUDIT}${closing}`};

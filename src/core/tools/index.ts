@@ -18,7 +18,7 @@ const AUTO_DESCRIPTIONS: Record<string, string> = {
     'including tests, formatters, and generators. Prefer edit_file and write_file for ordinary file changes ' +
     'so /rewind can use their existing backups when available. This is a preference, not a restriction; shell edits remain allowed. ' +
     'Keep searches narrow and avoid sensitive files; shell searches do not inherit the grep tool\'s exclusions. ' +
-    'Keep edits targeted. Shell changes are not backed up for /rewind, and git cannot reliably recover overwritten uncommitted work. ' +
+    'Keep edits targeted. Shell changes are not backed up for /rewind, and git cannot reliably recover overwritten uncommitted work.' +
     BASH_EXECUTION_GUIDANCE,
   edit_file:
     editFile.description +
