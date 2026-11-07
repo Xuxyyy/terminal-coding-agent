@@ -138,6 +138,6 @@ export const backgroundBash: Tool = {
     const notice = result.moved
       ? `Command did not complete within its ${(parsed.timeout ?? TIMEOUT_MS) / 1000}s foreground wait and was moved to the background.`
       : 'Command started in the background.';
-    return {text: `${notice}\n${JSON.stringify(result.task)}\nUse task_output for output. Completion will notify you automatically.`};
+    return {failure: false, text: `${notice}\n${JSON.stringify(result.task)}\nUse task_output for output. Completion will notify you automatically.`};
   },
 };

@@ -56,7 +56,7 @@ test('cancelling automatic main wait removes shell and child subscriptions witho
   const f = await fixture(t);
   f.agents.start('child', 'active child', async (signal) => {
     await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), {once: true}));
-    return {text: 'interrupted'};
+    return {failure: true, text: 'interrupted'};
   }, true, 'assignment');
   let subscribed = 0;
   let unsubscribed = 0;

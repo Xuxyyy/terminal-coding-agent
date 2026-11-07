@@ -248,3 +248,26 @@ test('headless normal cancellation and an expired deadline save their timing sec
     }
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });
+
+test('tool trace outcomes follow explicit failure rather than Error: content', (t) => {
+  const dir = temp();
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  const trace = new TraceRun(dir);
+  const host = traceHost(fakeHost().host, trace.main);
+  for (const failure of [false, true]) {
+    const id = String(failure);
+    host.onEvent({type: 'tool_start', id, name: id, args: {}});
+    host.onEvent({type: 'tool_end', id, name: id, result: failure ? 'could not finish' : 'Error:example.txt', failure, diff: null});
+  }
+  for (const failure of [false, true]) {
+    const id = `interruption-${failure}`;
+    host.onEvent({type: 'tool_start', id, name: id, args: {}});
+    host.onEvent({type: 'tool_end', id, name: id, result: '[interrupted by the user]', failure, diff: null});
+  }
+  trace.finish('done');
+  const saved = records(trace);
+  assert.equal(saved.find((r) => r.name === 'tool: interruption-false' && r.phase === 'end')?.outcome, 'completed');
+  assert.equal(saved.find((r) => r.name === 'tool: interruption-true' && r.phase === 'end')?.outcome, 'cancelled');
+  assert.equal(saved.find((r) => r.name === 'tool: false' && r.phase === 'end')?.outcome, 'completed');
+  assert.equal(saved.find((r) => r.name === 'tool: true' && r.phase === 'end')?.outcome, 'failed');
+});

@@ -36,7 +36,7 @@ const noop: Tool = {
   description: 'does nothing',
   schema: z.object({}),
   async run() {
-    return {text: 'ok'};
+    return {failure: false, text: 'ok'};
   },
 };
 

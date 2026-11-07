@@ -266,7 +266,7 @@ test('incomplete tool generation uses four attempts and never invents completion
 
 test('a complete invalid tool argument is returned to the model without execution', async () => {
   let executions = 0;
-  const tool: Tool = {name: 'change', description: '', schema: z.object({value: z.string()}), async run() { executions++; return {text: 'changed'}; }};
+  const tool: Tool = {name: 'change', description: '', schema: z.object({value: z.string()}), async run() { executions++; return {failure: false, text: 'changed'}; }};
   const {host} = fakeHost();
   const result = await runTool([tool], 'change', '{', {root: '/tmp', host, mode: 'auto-edits', allowed: new Set(), rules: {allow: [], ask: [], deny: []}});
   assert.equal(result.execution, 'not_started');
@@ -298,7 +298,7 @@ test('failed tools preserve uncertain effects and completed tools are not replay
 
 test('text continuation for nested socket errors is separate from transport retries and cannot reset after tools', async () => {
   let executions = 0;
-  const tool: Tool = {name: 'inspect', description: '', schema: z.object({}), async run() { executions++; return {text: 'seen'}; }};
+  const tool: Tool = {name: 'inspect', description: '', schema: z.object({}), async run() { executions++; return {failure: false, text: 'seen'}; }};
   const session = createSession('/tmp', 'rules', 1_000_000);
   const {choice, calls} = fakeModel((nth) => nth === 2
     ? streamOf(toolCallChunk('one', 'inspect', '{}'), finishChunk('tool_calls'))

@@ -281,3 +281,12 @@ test('nothing still teaches the model to search with grep -rn', () => {
 test('the default bash description names the grep tool', () => {
   assert.match(bash.description, /\bgrep\b/);
 });
+
+test('grep filenames starting with Error: remain successful', async (t) => {
+  const root = workspace();
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  write(root, 'Error:example.txt', 'needle');
+  const output = await search(root, {pattern: 'needle'});
+  assert.equal(output.failure, false);
+  assert.equal(output.text, 'Error:example.txt');
+});

@@ -27,6 +27,7 @@ export const writeFile: Tool = {
     const shown = displayPath(ctx.root, target);
     const {before} = await fileOperation({kind: 'write', target, content: parsed.content}, ctx);
     return {
+      failure: false,
       text: `Wrote ${parsed.content.length} chars to '${shown}'.`,
       diff: diffPayload(shown, before, parsed.content),
     };

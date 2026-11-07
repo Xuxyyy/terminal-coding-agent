@@ -77,7 +77,7 @@ export class AgentRuntime {
       }
       if (job.state === 'idle' && this.mail.pending(id).length && !this.closed && !this.host.signal.aborted) {
         void this.wakes.get(id)?.().then((resumed) => {
-          if (resumed.failure || resumed.text.startsWith('Error:')) this.send(id, 'main', `Queued messages need attention: ${resumed.text}`, 'attention');
+          if (resumed.failure) this.send(id, 'main', `Queued messages need attention: ${resumed.text}`, 'attention');
         }).catch((error) => { this.failure = error; this.changed(); });
       }
       return output;

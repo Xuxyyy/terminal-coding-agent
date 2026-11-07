@@ -23,10 +23,10 @@ export const sendMessage: Tool = {
       const saved = runtime.list().find((entry) => entry.agent_id === args.agent_id)!;
       if (saved.status === 'idle' && ctx.store) {
         const output = await makeSubagent().run({resume: args.agent_id, description: saved.description, prompt: 'Process queued messages.', background: true}, {...ctx, mailboxOnly: true});
-        if (output.failure || output.text.startsWith('Error:')) return {text: `Message ${event.id} saved; child could not resume. ${output.text}`, failure: true};
-      } else return {text: `message_id: ${event.id}\nQueued. Use agent with resume to explicitly resume this interrupted, failed, or unsaved child.`};
+        if (output.failure) return {text: `Message ${event.id} saved; child could not resume. ${output.text}`, failure: true};
+      } else return {failure: false, text: `message_id: ${event.id}\nQueued. Use agent with resume to explicitly resume this interrupted, failed, or unsaved child.`};
     }
-    return {text: `message_id: ${event.id}\nMessage queued for automatic delivery.`};
+    return {failure: false, text: `message_id: ${event.id}\nMessage queued for automatic delivery.`};
   },
 };
 
@@ -43,7 +43,7 @@ export const waitAgents: Tool = {
     if (!ctx.agents || ctx.inboxId && ctx.inboxId !== 'main') throw new Error('only main can wait for children');
     const args = waitSchema.parse(raw);
     const events = await ctx.agents.wait(args.agent_ids ?? [], args.timeout_ms ?? Infinity, ctx.host.signal);
-    return {text: JSON.stringify({events: events.map(({id, from, kind}) => ({id, from, kind})), agents: ctx.agents.list().filter((entry) => !args.agent_ids || args.agent_ids.includes(entry.agent_id))})};
+    return {failure: false, text: JSON.stringify({events: events.map(({id, from, kind}) => ({id, from, kind})), agents: ctx.agents.list().filter((entry) => !args.agent_ids || args.agent_ids.includes(entry.agent_id))})};
   },
 };
 
@@ -56,6 +56,6 @@ export const stopAgent: Tool = {
     if (!ctx.agents || ctx.inboxId && ctx.inboxId !== 'main') throw new Error('only main can stop children');
     const args = stopSchema.parse(raw);
     await ctx.agents.stop(args.agent_ids);
-    return {text: JSON.stringify(ctx.agents.list().filter((entry) => args.agent_ids.includes(entry.agent_id)))};
+    return {failure: false, text: JSON.stringify(ctx.agents.list().filter((entry) => args.agent_ids.includes(entry.agent_id)))};
   },
 };

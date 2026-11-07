@@ -70,7 +70,7 @@ function recordingBash() {
     },
     async run(args) {
       ran.push((args as {command: string}).command);
-      return {text: '[exit 0]\nran'};
+      return {failure: false, text: '[exit 0]\nran'};
     },
   };
   return {tool, ran};

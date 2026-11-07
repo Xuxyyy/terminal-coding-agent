@@ -171,17 +171,14 @@ export function formatResult(name: string, result: string): string {
   return result.trimEnd();
 }
 
-export function resultStatus(name: string, result: string): string {
-  if (result.startsWith('Error:')) {
-    const message = result.slice('Error:'.length).trim().split('\n')[0]?.trim();
+export function resultStatus(name: string, result: string, failure: boolean): string {
+  const exit = COMMAND_TOOLS.has(name) ? result.match(/^\[exit (\d+)\]/) : null;
+  if (failure) {
+    if (exit && exit[1] !== '0') return `exit ${exit[1]}`;
+    const message = result.replace(/^Error: ?/, '').trim().split('\n')[0]?.trim();
     return message ? `failed: ${elide(message, 50)}` : 'failed';
   }
-  if (COMMAND_TOOLS.has(name)) {
-    const match = result.match(/^\[exit (\d+)\]/);
-    if (!match) return 'done';
-    return match[1] === '0' ? 'exit 0' : `exit ${match[1]}`;
-  }
-  return 'done';
+  return exit ? `exit ${exit[1]}` : 'done';
 }
 
 export const FAILURE_OUTPUT_LINES = 10;

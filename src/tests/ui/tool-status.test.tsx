@@ -77,3 +77,15 @@ test('only the tool being confirmed reads as waiting', () => {
   assert.match(output, /waiting for approval…/);
   assert.match(output, /running…/);
 });
+
+test('completed tool rows preserve explicit failure through history rendering', () => {
+  for (const [result, failure] of [['Error:example.txt', false], ['could not finish', true], ['[interrupted by the user]', true]] as const) {
+    const items: Item[] = [
+      {kind: 'event', event: {type: 'tool_start', id: 'c1', name: 'glob', args: {pattern: '*'}}},
+      {kind: 'event', event: {type: 'tool_end', id: 'c1', name: 'glob', result, failure, diff: null}},
+    ];
+    const output = renderHistory(items, false);
+    if (failure) assert.ok(output.includes(`failed: ${result}`), output);
+    else assert.doesNotMatch(output, /failed/);
+  }
+});

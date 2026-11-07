@@ -30,6 +30,7 @@ export const editFile: Tool = {
     const shown = displayPath(ctx.root, target);
     const {before, after} = await fileOperation({kind: 'edit', target, old: parsed.old_string, replacement: parsed.new_string, display: shown}, ctx);
     return {
+      failure: false,
       text: `Edited '${shown}'.`,
       diff: diffPayload(shown, before, after),
     };

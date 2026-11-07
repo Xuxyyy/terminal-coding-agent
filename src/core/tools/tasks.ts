@@ -19,7 +19,7 @@ export const taskOutput: Tool = {
   async run(args, ctx) {
     const parsed = outputSchema.parse(args);
     if (!ctx.backgroundTasks) throw new Error('background tasks are unavailable in this run');
-    return {text: JSON.stringify(await ctx.backgroundTasks.output(parsed.task_id, parsed.offset, parsed.limit))};
+    return {failure: false, text: JSON.stringify(await ctx.backgroundTasks.output(parsed.task_id, parsed.offset, parsed.limit))};
   },
 };
 
@@ -74,6 +74,6 @@ export const taskHandoff: Tool = {
         failure: true, execution: result.interrupted || result.timedOut || result.outputIncomplete ? 'uncertain' : 'known_result'};
     }
     const task = ctx.backgroundTasks.verify(parsed.task_id, {command: parsed.command, verifiedAt: new Date().toISOString(), output});
-    return {text: `Readiness verified. Service will be handed off only on successful normal completion.\n${JSON.stringify(task)}`};
+    return {failure: false, text: `Readiness verified. Service will be handed off only on successful normal completion.\n${JSON.stringify(task)}`};
   },
 };

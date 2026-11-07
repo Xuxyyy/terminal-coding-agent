@@ -42,8 +42,8 @@ export const glob: Tool = {
       access: ctx.sandboxAccess,
       timeoutMs: 30_000,
     });
-    if (result.interrupted) return {text: INTERRUPTED};
-    if (result.timedOut) return {text: 'Error: search timed out after 30s; narrow pattern or path'};
+    if (result.interrupted) return {text: INTERRUPTED, failure: true, execution: 'known_result'};
+    if (result.timedOut) return {text: 'Error: search timed out after 30s; narrow pattern or path', failure: true, execution: 'known_result'};
     if (result.code !== 0 || !result.stdout.trim()) {
       throw new Error(`glob failed: ${result.stderr.trim() || 'worker did not return a result'}`);
     }
@@ -62,6 +62,6 @@ export const glob: Tool = {
     const kept = lines.length;
     if (kept < files.length) lines.push(`... [truncated; showing ${kept} of ${files.length} files; narrow pattern or path]`);
     if (output.skipped) lines.push('[search incomplete: some paths could not be accessed]');
-    return {text: lines.join('\n') || `no files matched glob '${args.pattern}'`};
+    return {failure: false, text: lines.join('\n') || `no files matched glob '${args.pattern}'`};
   },
 };

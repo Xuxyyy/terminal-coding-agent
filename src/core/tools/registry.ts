@@ -41,7 +41,7 @@ export type ToolContext = {
   mailboxOnly?: boolean;
 };
 
-export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage; failure?: boolean; execution?: 'not_started' | 'known_result' | 'uncertain'};
+export type ToolOutput = {text: string; diff?: DiffPayload | null; usage?: Usage; failure: boolean; execution?: 'not_started' | 'known_result' | 'uncertain'};
 
 export type Tool = {
   name: string;
@@ -217,7 +217,7 @@ export async function runTool(
     readOnly = tool.request?.(parsed.data).kind === 'read';
     started = true;
     const output = await tool.run(permission.args, execution);
-    if (output.failure || output.text.startsWith('Error:')) {
+    if (output.failure) {
       const state = output.execution ?? 'known_result';
       const detail = failed(output.text.replace(/^Error: ?/, ''), state);
       return {...output, ...detail, text: output.text.startsWith('[exit ') ? output.text + detail.text.slice(detail.text.indexOf('\n[execution:')) : detail.text};

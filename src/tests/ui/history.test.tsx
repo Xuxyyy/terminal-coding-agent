@@ -61,6 +61,7 @@ test('historyRows pairs a tool result with its call', () => {
     name: 'bash',
     args: {command: 'ls'},
     result: '[exit 0]',
+    failure: false,
     diff: null,
   });
   assert.equal(rows[1]?.kind, 'standard');

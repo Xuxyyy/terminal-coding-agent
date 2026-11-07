@@ -175,7 +175,10 @@ test('glob reports missing ripgrep and cancels an active search', async (t) => {
   const {ctx, controller} = context(root);
   const timer = setTimeout(() => controller.abort(), 250);
   t.after(() => clearTimeout(timer));
-  assert.equal(await search(ctx, {pattern: '**/*'}), INTERRUPTED);
+  const output = await runTool([glob], 'glob', JSON.stringify({pattern: '**/*'}), ctx);
+  assert.equal(output.failure, true);
+  assert.equal(output.execution, 'known_result');
+  assert.ok(output.text.includes(INTERRUPTED));
 });
 
 test('glob preserves partial results and marks access errors', async (t) => {
@@ -200,4 +203,12 @@ test('glob reports a timeout rather than an empty match', {timeout: 40_000}, asy
   fs.writeFileSync(path.join(bin, 'rg'), '#!/bin/sh\nexec /bin/sleep 60\n', {mode: 0o755});
   process.env.PATH = bin;
   assert.equal(await search(context(root).ctx, {pattern: '**/*'}), 'Error: search timed out after 30s; narrow pattern or path\n[execution: known_result; the result is known; earlier actions may still have produced effects]');
+});
+
+test('glob filenames starting with Error: remain successful', async (t) => {
+  const root = workspace(t);
+  write(root, 'Error:example.txt');
+  const output = await runTool([glob], 'glob', JSON.stringify({pattern: '*.txt'}), context(root).ctx);
+  assert.equal(output.failure, false);
+  assert.equal(output.text, 'Error:example.txt');
 });

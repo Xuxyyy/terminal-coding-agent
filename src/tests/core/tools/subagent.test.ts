@@ -136,6 +136,8 @@ test('omitted or true background requires the main runtime without starting a mo
     for (const background of [undefined, true]) {
       const output = await subagent.run({...job, background}, context(root, fakeHost().host, model.choice));
       assert.match(output.text, /background agents require the main agent runtime/);
+      assert.equal(output.failure, true);
+      assert.equal(output.execution, 'not_started');
     }
     assert.equal(model.calls(), 0);
   } finally {
@@ -302,6 +304,8 @@ test('a run with no model to lend says so instead of throwing', async () => {
   const output = await subagent.run(job, context(root, host));
 
   assert.match(output.text, /^the sub-agent could not start: /);
+  assert.equal(output.failure, true);
+  assert.equal(output.execution, 'not_started');
   assert.equal(output.usage, undefined);
   assert.deepEqual(events, []);
   assert.deepEqual(asked, []);

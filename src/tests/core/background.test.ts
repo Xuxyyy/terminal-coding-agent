@@ -410,3 +410,19 @@ test('background commands preserve sandbox restrictions and use only approved ex
   await f.tasks.wait();
   assert.equal(f.tasks.drain()[0]?.status, 'failed');
 });
+
+test('successful background starts and output retrieval do not inherit task failure', async (t) => {
+  const f = fixture(t);
+  const started = await runTool([backgroundBash], 'bash', JSON.stringify({
+    command: 'while ! test -f release; do sleep 0.01; done; exit 7', run_in_background: true,
+  }), f.ctx);
+  assert.equal(started.failure, false);
+  assert.match(started.text, /Command started in the background/);
+  const running = JSON.parse(started.text.split('\n')[1]!);
+  assert.equal(running.status, 'running');
+  fs.writeFileSync(path.join(f.root, 'release'), '');
+  await f.tasks.wait();
+  const output = await runTool([taskOutput], 'task_output', JSON.stringify({task_id: running.id}), f.ctx);
+  assert.equal(output.failure, false);
+  assert.equal(JSON.parse(output.text).task.status, 'failed');
+});

@@ -612,7 +612,7 @@ const fakeBash: Tool = {
     return {kind: 'command', command: (args as {command: string}).command};
   },
   async run() {
-    return {text: '[exit 0]'};
+    return {failure: false, text: '[exit 0]'};
   },
 };
 

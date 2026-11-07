@@ -33,19 +33,19 @@ test('glob displays its pattern and search directory', () => {
 
 test('resultStatus keeps the failure reason on the line', () => {
   assert.equal(
-    resultStatus('read_file', 'Error: no such file: src/main.ts'),
+    resultStatus('read_file', 'Error: no such file: src/main.ts', true),
     'failed: no such file: src/main.ts',
   );
   assert.equal(
-    resultStatus('edit_file', 'Error: old_string not found\nsecond line'),
+    resultStatus('edit_file', 'Error: old_string not found\nsecond line', true),
     'failed: old_string not found',
   );
-  assert.equal(resultStatus('read_file', 'Error:'), 'failed');
+  assert.equal(resultStatus('read_file', 'Error:', true), 'failed');
 });
 
 test('resultStatus shortens a long failure reason from the middle', () => {
   assert.equal(
-    resultStatus('bash', `Error: ${'x'.repeat(80)}`),
+    resultStatus('bash', `Error: ${'x'.repeat(80)}`, true),
     `failed: ${'x'.repeat(25)}…${'x'.repeat(25)}`,
   );
 });
@@ -54,6 +54,7 @@ test('resultStatus keeps the reason when a long path fills the line', () => {
   const status = resultStatus(
     'read_file',
     "Error: reads '/private/tmp/claude-501/scratchpad/outside/secret.txt' outside the project",
+    true,
   );
 
   assert.match(status, /^failed: reads '\/private/);
@@ -61,9 +62,9 @@ test('resultStatus keeps the reason when a long path fills the line', () => {
 });
 
 test('resultStatus summarizes tool outcomes', () => {
-  assert.equal(resultStatus('bash', '[exit 0]\npassed\n'), 'exit 0');
-  assert.equal(resultStatus('bash', '[exit 2]\nfailed\n'), 'exit 2');
-  assert.equal(resultStatus('read_file', 'x = 1'), 'done');
+  assert.equal(resultStatus('bash', '[exit 0]\npassed\n', false), 'exit 0');
+  assert.equal(resultStatus('bash', '[exit 2]\nfailed\n', true), 'exit 2');
+  assert.equal(resultStatus('read_file', 'x = 1', false), 'done');
 });
 
 test('formatArgs hides a redundant bash workspace change', () => {
@@ -348,4 +349,11 @@ test('a grep row says nothing when the arguments are unusable', () => {
   assert.equal(searchCommand(null), '');
   assert.equal(formatArgs('grep', {}), '');
   assert.equal(toolDescription('grep', {}), '');
+});
+
+test('resultStatus uses explicit failure for arbitrary result text', () => {
+  assert.equal(resultStatus('glob', 'Error:example.txt', false), 'done');
+  assert.equal(resultStatus('glob', '[interrupted by the user]', false), 'done');
+  assert.equal(resultStatus('glob', 'could not finish', true), 'failed: could not finish');
+  assert.equal(resultStatus('glob', '[interrupted by the user]', true), 'failed: [interrupted by the user]');
 });

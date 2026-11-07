@@ -131,7 +131,7 @@ export class TraceRun {
     }
     if (event.type === 'tool_end') {
       const id = scope.tools.get(event.id);
-      if (id) this.end(id, event.result.includes('[interrupted by the user]') ? 'cancelled' : event.failure || event.result.startsWith('Error:') ? 'failed' : 'completed', {execution: event.execution, resultChars: event.result.length, ...(scope.transcript ? {} : {result: event.result.slice(0, 12000)})});
+      if (id) this.end(id, event.failure ? event.result.includes('[interrupted by the user]') ? 'cancelled' : 'failed' : 'completed', {execution: event.execution, resultChars: event.result.length, ...(scope.transcript ? {} : {result: event.result.slice(0, 12000)})});
       scope.tools.delete(event.id);
       return;
     }

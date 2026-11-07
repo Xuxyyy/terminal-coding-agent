@@ -38,7 +38,7 @@ function reader(body: string): Tool {
     description: 'returns a fixture',
     schema: z.object({}),
     async run() {
-      return {text: body};
+      return {failure: false, text: body};
     },
   };
 }

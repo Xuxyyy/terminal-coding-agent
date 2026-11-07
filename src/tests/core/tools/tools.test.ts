@@ -55,7 +55,7 @@ const fakeBash: Tool = {
   },
   async run(args) {
     ran.push((args as {command: string}).command);
-    return {text: '[exit 0]\nran'};
+    return {failure: false, text: '[exit 0]\nran'};
   },
 };
 
@@ -794,7 +794,7 @@ function rawTool(parameters: Record<string, unknown>): Tool {
     description: 'search a workspace',
     schema: z.record(z.unknown()),
     parameters,
-    run: async (args) => ({text: JSON.stringify(args)}),
+    run: async (args) => ({failure: false, text: JSON.stringify(args)}),
   };
 }
 

@@ -124,7 +124,7 @@ for (const sandbox of ['off', 'on'] as const) {
     assert.equal(f.tasks.hasPending(), true);
     await waitFor(() => fs.readFileSync(service.logPath, 'utf8').includes('service error'));
     const checked = await f.verify(service.id);
-    assert.equal(checked.failure, undefined);
+    assert.equal(checked.failure, false);
     assert.equal(f.tasks.hasPending(), false);
     const [retained] = await f.tasks.close('normal completion', true);
     assert.equal(retained!.status, 'handed_off');

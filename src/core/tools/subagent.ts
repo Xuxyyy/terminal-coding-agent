@@ -94,7 +94,7 @@ export function report(events: AgentEvent[]): ToolOutput {
   const spoken = turns.map((turn) => turn.trim()).filter(Boolean);
   const said = spoken[spoken.length - 1] ?? '';
   const text = [said, ...errors].filter(Boolean).join('\n');
-  return {text: text || NOTHING, usage};
+  return {text: text || NOTHING, usage, failure: errors.length > 0};
 }
 
 export function makeSubagent(
@@ -129,30 +129,30 @@ export function makeSubagent(
         action?: 'run' | 'list'; description?: string; prompt?: string; resume?: string; agent?: string; background?: boolean;
       };
       if (args.action === 'list') {
-        if (args.resume || args.prompt || args.agent || args.background) return {text: 'Error: list does not accept an assignment or agent selection.'};
-        if (ctx.agents) return {text: JSON.stringify(ctx.agents.list())};
-        if (!ctx.store) return {text: 'No saved subagents: this run has no parent session store.'};
-        return {text: JSON.stringify(listSubagents(ctx.store).map((meta) => ({
+        if (args.resume || args.prompt || args.agent || args.background) return {failure: true, execution: 'not_started', text: 'Error: list does not accept an assignment or agent selection.'};
+        if (ctx.agents) return {failure: false, text: JSON.stringify(ctx.agents.list())};
+        if (!ctx.store) return {failure: false, text: 'No saved subagents: this run has no parent session store.'};
+        return {failure: false, text: JSON.stringify(listSubagents(ctx.store).map((meta) => ({
           agent_id: meta.id, description: meta.description, agent: meta.agent,
           status: meta.status, updated_at: meta.updatedAt,
         })))};
       }
       if (!args.description?.trim() || !args.prompt?.trim()) {
-        return {text: 'Error: run requires description and prompt.'};
+        return {failure: true, execution: 'not_started', text: 'Error: run requires description and prompt.'};
       }
       const background = args.background ?? true;
-      if (background && !ctx.agents) return {text: 'Error: background agents require the main agent runtime.'};
+      if (background && !ctx.agents) return {failure: true, execution: 'not_started', text: 'Error: background agents require the main agent runtime.'};
       if (ctx.host.signal.aborted) return {text: INTERRUPTED, failure: true, execution: 'not_started'};
-      if (args.resume && ctx.agents?.running(args.resume)) return {text: 'Error: agent already has active work; use send_message to queue instructions.'};
-      if (args.resume && args.agent) return {text: 'Error: resume keeps the saved agent type; omit agent.'};
-      if (args.resume && !ctx.store) return {text: 'Error: resume requires the saved parent session. Reopen it with /resume.'};
+      if (args.resume && ctx.agents?.running(args.resume)) return {failure: true, execution: 'not_started', text: 'Error: agent already has active work; use send_message to queue instructions.'};
+      if (args.resume && args.agent) return {failure: true, execution: 'not_started', text: 'Error: resume keeps the saved agent type; omit agent.'};
+      if (args.resume && !ctx.store) return {failure: true, execution: 'not_started', text: 'Error: resume requires the saved parent session. Reopen it with /resume.'};
       const saved = args.resume ? loadSubagent(ctx.store!, args.resume) : undefined;
-      if (saved && saved.meta.workspace !== ctx.root) return {text: 'Error: subagent belongs to another workspace.'};
+      if (saved && saved.meta.workspace !== ctx.root) return {failure: true, execution: 'not_started', text: 'Error: subagent belongs to another workspace.'};
       const definition = args.agent
         ? sorted.find((candidate) => candidate.name === args.agent)
         : undefined;
       if (args.agent && !definition) {
-        return {text: `Error: unknown agent type '${args.agent}'. Choose one of: ${sorted.map((one) => one.name).join(', ')}.`};
+        return {failure: true, execution: 'not_started', text: `Error: unknown agent type '${args.agent}'. Choose one of: ${sorted.map((one) => one.name).join(', ')}.`};
       }
       const model = saved?.meta.modelSettings.model ?? definition?.model;
       const effort = saved?.meta.modelSettings.reasoningEffort ?? ctx.choice?.reasoningEffort;
@@ -162,12 +162,12 @@ export function makeSubagent(
           choice = clientFactory(model, effort);
           if (effort !== undefined) choice = {...choice, reasoningEffort: effort};
         } catch (error) {
-          return {text: `Error: agent '${saved?.meta.agent ?? definition?.name ?? args.resume}' could not start: ${(error as Error).message}`};
+          return {failure: true, execution: 'not_started', text: `Error: agent '${saved?.meta.agent ?? definition?.name ?? args.resume}' could not start: ${(error as Error).message}`};
         }
       } else if (choice && saved) {
         choice = {...choice, reasoningEffort: effort};
       }
-      if (!choice) return {text: NO_CHOICE};
+      if (!choice) return {text: NO_CHOICE, failure: true, execution: 'not_started'};
       const configuredMode = saved?.meta.mode ?? definition?.permissionMode;
       const mode = configuredMode ? stricterMode(ctx.mode, configuredMode) : ctx.mode;
       const sandbox = saved?.meta.sandbox === 'on' || ctx.sandbox === 'on' ? 'on' : ctx.sandbox ?? DEFAULT_SANDBOX;
@@ -175,7 +175,7 @@ export function makeSubagent(
       const allow = saved?.meta.tools ?? definition?.tools;
       if (allow) {
         const missing = allow.filter((name) => !available.some((tool) => tool.name === name));
-        if (missing.length > 0) return {text: `Error: agent '${saved?.meta.agent ?? definition?.name ?? args.resume}' cannot start because these tools are unavailable: ${missing.join(', ')}`};
+        if (missing.length > 0) return {failure: true, execution: 'not_started', text: `Error: agent '${saved?.meta.agent ?? definition?.name ?? args.resume}' cannot start because these tools are unavailable: ${missing.join(', ')}`};
       }
       const tools = allow ? allow.map((name) => available.find((tool) => tool.name === name)!) : available;
       const role = saved?.meta.role ?? definition?.prompt;
@@ -274,7 +274,7 @@ export function makeSubagent(
       if (!ctx.agents) return execute(ctx.host.signal);
       if (ctx.store) ctx.agents.onIdle(agentId, () => makeSubagent(definitions, clientFactory).run({resume: agentId, description: args.description, prompt: 'Process queued messages.', background: true}, {...ctx, mailboxOnly: true}));
       const done = ctx.agents.start(agentId, args.description, execute, background, assignmentId);
-      if (background) return {text: `agent_id: ${agentId}\nstatus: running${persisted ? '' : ' (not saved; this run has no parent session store)'}`};
+      if (background) return {failure: false, text: `agent_id: ${agentId}\nstatus: running${persisted ? '' : ' (not saved; this run has no parent session store)'}`};
       return done;
     },
   };

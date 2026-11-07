@@ -66,6 +66,7 @@ export const readFile: Tool = {
     const shown = lines.slice(offset - 1, offset - 1 + limit);
     if (shown.length === 0) {
       return {
+        failure: false,
         text: `[file has ${lines.length} lines; nothing to show from line ${offset}.]`,
       };
     }
@@ -83,6 +84,6 @@ export const readFile: Tool = {
     const note = partial
       ? `\n[file has ${lines.length} lines; showing ${offset}-${offset + kept - 1}.]`
       : '';
-    return {text: body + note};
+    return {failure: false, text: body + note};
   },
 };

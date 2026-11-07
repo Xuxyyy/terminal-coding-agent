@@ -166,13 +166,14 @@ export const grep: Tool = {
       };
     }
     if (run.code === 1 || body === '') {
-      return {text: nothingFound(args, stats, where)};
+      return {failure: false, text: nothingFound(args, stats, where)};
     }
     if (args.output_mode === 'count' && stats) {
       return {
+        failure: false,
         text: capSearch(`${body}\n\n${stats.matches} matches in ${stats.files} files`),
       };
     }
-    return {text: capSearch(body)};
+    return {failure: false, text: capSearch(body)};
   },
 };

@@ -43,7 +43,7 @@ const noop: Tool = {
   description: 'does nothing',
   schema: z.object({}),
   async run() {
-    return {text: 'ok'};
+    return {failure: false, text: 'ok'};
   },
 };
 
@@ -64,7 +64,11 @@ function finalResponse(): AsyncIterable<unknown> {
 }
 
 test('model requests expose tool error status while preserving raw event output', async () => {
+  const explicit: Tool = {...noop, name: 'explicit', schema: z.object({failure: z.boolean(), text: z.string()}),
+    async run(args) { return args as {failure: boolean; text: string}; }};
   const cases = [
+    {name: 'explicit', args: JSON.stringify({failure: true, text: 'could not finish'}), error: true, execution: 'known_result', output: /could not finish/},
+    {name: 'explicit', args: JSON.stringify({failure: false, text: 'Error: successful content'}), error: false, execution: undefined, output: /^Error: successful content$/},
     {name: 'bash', args: JSON.stringify({command: "printf 'Error: sample text\\n'"}), error: false, execution: 'known_result', output: /\[exit 0\]/},
     {name: 'bash', args: JSON.stringify({command: 'acc_missing_command_test_47d1'}), error: true, execution: 'known_result', output: /\[exit 127\]/},
     {name: 'bash', args: JSON.stringify({command: 'acc_missing_command_test_47d1 2>&1 | head -5'}), error: false, execution: 'known_result', output: /\[exit 0\]/},
@@ -83,7 +87,7 @@ test('model requests expose tool error status while preserving raw event output'
     });
     const {host, events} = fakeHost();
 
-    await runAgent(session(), choice, host, [bash]);
+    await runAgent(session(), choice, host, [bash, explicit]);
 
     assert.equal(calls(), 2);
     assert.equal(received!.is_error, entry.error);
@@ -97,7 +101,7 @@ test('model requests expose tool error status while preserving raw event output'
 });
 
 test('a running tool result is not labeled complete and preserves its task handle', async () => {
-  const running: Tool = {...noop, async run() { return {text: 'Task task-123 is still running.'}; }};
+  const running: Tool = {...noop, async run() { return {failure: false, text: 'Task task-123 is still running.'}; }};
   const {choice} = fakeModel((nth, body) => {
     if (nth === 1) return toolResponse(1);
     const messages = (body as {messages: OpenAI.ChatCompletionMessageParam[]}).messages;
@@ -318,12 +322,12 @@ test('the request-fit guard counts a reminder once and sends it only when it fit
               '40 model turns remain before the next continuation checkpoint, at turn 60.' +
               `\n\n${COMPLETION_AUDIT}`,
           };
-          const toolResult = toolMessage('call-20', {text: 'ok'});
+          const toolResult = toolMessage('call-20', {text: 'ok', failure: false});
           active.contextWindow = projectedTokens(active, [tool]) +
             estimateMessage(toolResult) + estimateMessage(reminder) + MAX_OUTPUT_TOKENS -
             (fits ? 0 : 1);
         }
-        return {text: 'ok'};
+        return {failure: false, text: 'ok'};
       },
     };
 
@@ -505,7 +509,7 @@ test('an interrupted step is saved complete', async () => {
     schema: z.object({}),
     async run() {
       controller.abort();
-      return {text: 'ran before the stop'};
+      return {failure: false, text: 'ran before the stop'};
     },
   };
   const saved: OpenAI.ChatCompletionMessageParam[][] = [];
@@ -603,7 +607,7 @@ test('an interrupted tool batch puts the marker after the tool replies', async (
     schema: z.object({}),
     async run() {
       controller.abort();
-      return {text: 'ran before the stop'};
+      return {failure: false, text: 'ran before the stop'};
     },
   };
   const active = session();
@@ -611,7 +615,7 @@ test('an interrupted tool batch puts the marker after the tool replies', async (
   await runAgent(active, choice, host, [stopper]);
 
   assert.deepEqual(active.messages.slice(-3), [
-    toolMessage('call-a', {text: 'ran before the stop'}),
+    toolMessage('call-a', {text: 'ran before the stop', failure: false}),
     toolMessage('call-b', {text: INTERRUPTED, failure: true, execution: 'not_started'}),
     {role: 'user', content: INTERRUPTED_TURN},
   ]);
@@ -658,7 +662,7 @@ test('an interrupted turn carries the marker exactly once', async () => {
     schema: z.object({}),
     async run() {
       controller.abort();
-      return {text: 'ran before the stop'};
+      return {failure: false, text: 'ran before the stop'};
     },
   };
   const active = session();
@@ -686,7 +690,7 @@ test('a tool is handed the same model the run was started with', async () => {
     schema: z.object({}),
     async run(_args, ctx) {
       seen = ctx.choice;
-      return {text: 'ok'};
+      return {failure: false, text: 'ok'};
     },
   };
 
@@ -702,7 +706,7 @@ const reporter: Tool = {
   description: 'reports tokens of its own',
   schema: z.object({}),
   async run() {
-    return {text: 'ok', usage: TOOL_USAGE};
+    return {failure: false, text: 'ok', usage: TOOL_USAGE};
   },
 };
 

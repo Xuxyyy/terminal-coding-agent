@@ -221,7 +221,7 @@ test('automatic event waits wake and reject when a child result cannot be saved'
   f.agents.mail.send = () => { throw new Error('mail evidence unavailable'); };
   const running = f.agents.start('child', 'result failure', async () => {
     await gate.promise;
-    return {text: 'result'};
+    return {failure: false, text: 'result'};
   }, true, 'assignment');
   const rejected = assert.rejects(running, /mail evidence unavailable/);
   const waiting = assert.rejects(f.agents.waitForEvent(f.controller.signal), /mail evidence unavailable/);

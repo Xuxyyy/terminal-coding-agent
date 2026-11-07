@@ -20,9 +20,10 @@ function statusNode(
   result: string | null,
   diff: DiffPayload | null,
   awaitingApproval: boolean,
+  failure: boolean,
 ): ReactNode {
   if (result === null) return awaitingApproval ? 'waiting for approval…' : 'running…';
-  const status = resultStatus(name, result);
+  const status = resultStatus(name, result, failure);
   if (status !== 'done' && status !== 'exit 0') return status;
   if (diff && diffSummary(diff)) {
     return (
@@ -61,6 +62,7 @@ export function ToolEntry({
   diff,
   workspaceRoot,
   awaitingApproval = false,
+  failure = false,
 }: {
   name: string;
   args: unknown;
@@ -68,13 +70,14 @@ export function ToolEntry({
   diff: DiffPayload | null;
   workspaceRoot?: string;
   awaitingApproval?: boolean;
+  failure?: boolean;
 }) {
   const description = toolDescription(name, args);
-  const status = statusNode(name, result, diff, awaitingApproval);
+  const status = statusNode(name, result, diff, awaitingApproval, failure);
   const summaryArgs = formatArgs(name, args, workspaceRoot);
   const below = summaryArgs !== '' && splitsCommand(name, description);
   const inline = description || (below ? '' : summaryArgs);
-  const failure = result === null ? null : failureOutput(name, result);
+  const failureText = result === null || !failure ? null : failureOutput(name, result);
   const notice = result === null ? null : noticeText(result);
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -100,9 +103,9 @@ export function ToolEntry({
           <DiffView diff={diff} />
         </Box>
       ) : null}
-      {failure ? (
+      {failureText ? (
         <Box marginLeft={3}>
-          <Text color={theme.muted}>{failure}</Text>
+          <Text color={theme.muted}>{failureText}</Text>
         </Box>
       ) : null}
     </Box>

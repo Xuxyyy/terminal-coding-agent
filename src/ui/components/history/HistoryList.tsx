@@ -16,6 +16,7 @@ type ToolRow = {
   name: string;
   args: unknown;
   result: string | null;
+  failure: boolean;
   diff: DiffPayload | null;
 };
 
@@ -33,6 +34,7 @@ export function historyRows(items: Item[]): HistoryRow[] {
         name: item.event.name,
         args: item.event.args,
         result: null,
+        failure: false,
         diff: null,
       };
       pending.set(item.event.id, row);
@@ -43,6 +45,7 @@ export function historyRows(items: Item[]): HistoryRow[] {
       const row = pending.get(item.event.id);
       if (row) {
         row.result = item.event.result;
+        row.failure = item.event.failure === true;
         row.diff = item.event.diff;
         pending.delete(item.event.id);
         continue;
@@ -99,6 +102,7 @@ export function HistoryList({
         name={row.name}
         args={row.args}
         result={row.result}
+        failure={row.failure}
         diff={row.diff}
         workspaceRoot={root}
         awaitingApproval={waiting}
