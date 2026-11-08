@@ -53,6 +53,8 @@ function aborted(error: unknown, host: Host): boolean {
 
 const NO_USAGE: Usage = {prompt: 0, completion: 0, total: 0};
 
+class SessionSaveError extends Error {}
+
 function shouldAudit(step: number): boolean {
   return step > 0 && step % NORMAL_STEP_POLICY.softAuditEvery === 0;
 }
@@ -166,7 +168,9 @@ export async function runAgent(
     try {
       store.appendStep(session.messages, usage);
     } catch (error) {
-      if (required) throw error;
+      if (required) {
+        throw new SessionSaveError(`could not save the session. The run stopped. ${(error as Error).message}`, {cause: error});
+      }
       if (warned) return;
       warned = true;
       host.onEvent({
@@ -393,11 +397,11 @@ export async function runAgent(
         return;
       }
 
-      const durableRound = durable || result.toolCalls.some((call) => ['agent', 'send_message', 'wait_agents', 'stop_agent'].includes(call.name));
-      if (durableRound) save(result.usage, true);
+      save(result.usage, true);
       for (const call of result.toolCalls) {
         if (host.signal.aborted) {
           session.messages.push(toolMessage(call.id, {text: INTERRUPTED, failure: true, execution: 'not_started'}));
+          save(NO_USAGE, true);
           continue;
         }
         let args: unknown = call.args;
@@ -444,12 +448,12 @@ export async function runAgent(
           execution: output.execution,
           failure: output.failure,
         });
-        if (durableRound) save(NO_USAGE, true);
+        save(NO_USAGE, true);
       }
-      save(durableRound ? NO_USAGE : result.usage, durableRound);
     }
   } catch (error) {
-    if (error instanceof CompactionSaveError) {
+    if (error instanceof SessionSaveError && options.durableTools) throw error;
+    if (error instanceof CompactionSaveError || error instanceof SessionSaveError) {
       let message = error.message;
       if (store) {
         try {

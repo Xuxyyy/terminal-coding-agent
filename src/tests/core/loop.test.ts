@@ -452,45 +452,84 @@ test('an approved segment receives another audit and another gate', async () => 
   assert.equal(calls(), 120);
 });
 
-test('a session is written after every step', async () => {
-  const {choice} = finishesAt(3);
-  const {host} = fakeHost();
-  const seen: number[] = [];
-  const store = fakeStore({
-    appendStep(messages) {
-      seen.push(messages.length);
-    },
+function twoToolResponse(): AsyncIterable<unknown> {
+  return streamOf(
+    toolCallChunk('call-a', 'noop', '{}', 0),
+    toolCallChunk('call-b', 'noop', '{}', 1),
+    finishChunk('tool_calls'),
+    usageChunk(10, 2),
+  );
+}
+
+test('a saved tool batch records calls before execution and results before the next tool', async (t) => {
+  const home = tempDir('acc-home-');
+  const work = tempDir('acc-work-');
+  const active = createSession(work, 'rules', 1_000_000);
+  const store = startSession(work, home);
+  t.after(() => {
+    store.close();
+    fs.rmSync(home, {recursive: true, force: true});
+    fs.rmSync(work, {recursive: true, force: true});
   });
-  const active = session();
+  store.appendMessage(addTask(active, 'run two tools'));
+  const {choice} = fakeModel((nth) => nth === 1 ? twoToolResponse() : finalResponse());
+  const {host} = fakeHost();
+  const seen: ReturnType<typeof loadSession>[] = [];
 
-  await runAgent(active, choice, host, [noop], store);
+  await runAgent(active, choice, {
+    ...host,
+    onEvent(event) {
+      if (event.type === 'tool_start') seen.push(loadSession(work, store.id, home));
+    },
+  }, [noop], store);
 
-  assert.equal(seen.length, 3);
-  assert.ok(seen[0]! < seen[1]! && seen[1]! < seen[2]!);
-  assert.equal(seen[2], active.messages.length);
+  assert.equal(seen.length, 2);
+  const first = seen[0]!.messages;
+  assert.deepEqual(first.map((message) => message.role), ['user', 'assistant']);
+  const assistant = first[1]!;
+  assert.equal(assistant.role, 'assistant');
+  assert.deepEqual(assistant.tool_calls?.map((call) => call.id), ['call-a', 'call-b']);
+  assert.deepEqual(seen[1]!.messages.slice(0, first.length), first);
+  const firstResult = seen[1]!.messages.at(-1);
+  assert.equal(firstResult?.role, 'tool');
+  assert.equal(firstResult.tool_call_id, 'call-a');
+  assert.equal(seen[1]!.lastUsage?.total, 12);
+  const saved = loadSession(work, store.id, home);
+  assert.deepEqual(saved.messages, active.messages.slice(1));
+  assert.equal(saved.meta.usage.total, 24);
 });
 
-test('a failed write does not kill the run', async () => {
-  const {choice, calls} = finishesAt(3);
-  const {host, events} = fakeHost();
-  const fails = (): never => {
-    throw new Error('disk full');
-  };
-  const store = fakeStore({
-    appendMessage: fails,
-    appendStep: fails,
-    appendView: fails,
-    rewind: fails,
-    close: fails,
-  });
+test('a failed tool history write stops the batch and restores the saved Context', async (t) => {
+  for (const failAt of [1, 2]) {
+    const home = tempDir('acc-home-');
+    const work = tempDir('acc-work-');
+    const active = createSession(work, 'rules', 1_000_000);
+    const store = startSession(work, home);
+    t.after(() => {
+      store.close();
+      fs.rmSync(home, {recursive: true, force: true});
+      fs.rmSync(work, {recursive: true, force: true});
+    });
+    store.appendMessage(addTask(active, 'run two tools'));
+    const {choice, calls} = fakeModel(() => twoToolResponse());
+    const {host, events} = fakeHost();
+    let writes = 0;
 
-  await runAgent(session(), choice, host, [noop], store);
+    await runAgent(active, choice, host, [noop], {
+      ...store,
+      appendStep(messages, usage) {
+        if (++writes === failAt) throw new Error('disk full');
+        store.appendStep(messages, usage);
+      },
+    });
 
-  assert.equal(calls(), 3);
-  const reported = errors(events);
-  assert.equal(reported.length, 1);
-  assert.match(reported[0]!, /save/);
-  assert.ok(events.some((event) => event.type === 'turn_end'));
+    const started = events.flatMap((event) => event.type === 'tool_start' ? [event.id] : []);
+    assert.deepEqual(started, failAt === 1 ? [] : ['call-a']);
+    assert.equal(calls(), 1);
+    assert.deepEqual(active.messages.slice(1), loadSession(work, store.id, home).messages);
+    assert.deepEqual(errors(events), ['could not save the session. The run stopped. disk full']);
+    assert.equal(events.at(-1)?.type, 'turn_end');
+  }
 });
 
 test('an interrupted step is saved complete', async () => {
@@ -521,13 +560,13 @@ test('an interrupted step is saved complete', async () => {
 
   await runAgent(session(), choice, host, [stopper], store);
 
-  assert.equal(saved.length, 2);
-  const marked = saved[1]!;
+  assert.equal(saved.length, 4);
+  const marked = saved[3]!;
   assert.deepEqual(marked[marked.length - 1], {
     role: 'user',
     content: INTERRUPTED_TURN,
   });
-  const messages = saved[0]!;
+  const messages = saved[2]!;
   const assistant = messages.find(
     (message): message is OpenAI.ChatCompletionAssistantMessageParam =>
       message.role === 'assistant' && Boolean(message.tool_calls),

@@ -85,7 +85,7 @@ export function lastUsageOf(records: SessionRecord[]): Usage | null {
   for (let at = records.length - 1; at >= 0; at--) {
     const record = records[at];
     if (record && record.kind === 'compact') return null;
-    if (record && record.kind === 'messages') return record.usage;
+    if (record?.kind === 'messages' && record.usage.total > 0) return record.usage;
   }
   return null;
 }

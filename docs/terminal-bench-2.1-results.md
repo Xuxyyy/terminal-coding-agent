@@ -14,8 +14,6 @@ Terminal Coding Agent (ACC), using DeepSeek Flash with high reasoning effort, co
 
 ## Task results
 
-Evidence links contain selected, sanitized metadata, not full original logs.
-
 | Task | Raw verifier reward | Outcome | Observation | Sanitized evidence |
 | --- | ---: | --- | --- | --- |
 | `fix-git` | 1.0 | Verifier pass | — | [Sanitized result](evaluation-results/terminal-bench-2.1/fix-git.json) |

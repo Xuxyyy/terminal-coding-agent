@@ -85,7 +85,7 @@ Six record types interleave in the one file:
 | record | written when | holds |
 |---|---|---|
 | `{kind:'message', id, message}` | a task is sent | the user message alone |
-| `{kind:'messages', messages, usage}` | a model turn ends | what that turn added |
+| `{kind:'messages', messages, usage}` | before tool execution, after each result, or when a text response ends | new conversation messages and any model usage |
 | `{kind:'view', items}` | the screen commits | the `Item[]` the terminal drew |
 | `{kind:'compact', summary, replaced, replacement?}` | `/compact` succeeds | compatibility summary fields and the exact new active context |
 | `{kind:'code', path, before}` | a tool is about to write | the path, and the sha of its old bytes |
@@ -264,10 +264,12 @@ child metadata before publishing the result. Recovery can recreate a missing
 result event without executing the child again. Child usage is counted in the
 live parent and recorded with result delivery, once per result ID.
 
-If main was interrupted between a saved tool call and its result, recovery also
-fills that parent batch with uncertain outcomes before the next model request.
-Existing results stay intact, and new user messages follow the repaired batch.
-Recovery records are appended; original transcript bytes remain unchanged.
+In a saved main session, the assistant's tool calls are written before execution.
+Each tool result is written before the loop advances. If a required write fails,
+the turn stops and reloads the saved Context. On resume, recovery fills missing
+results with uncertain outcomes before the next model request. Existing results
+stay intact, and new user messages follow the repaired batch. Recovery appends
+records to the existing transcript.
 
 Restart never schedules interrupted child work automatically. Pending messages
 stay queued, and main receives an interruption notice. Use `agent` with `resume`

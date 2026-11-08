@@ -165,9 +165,9 @@ model a workspace it cannot explain. Two places in `loop.ts` do this:
 
 - In the tool loop, an aborted call is not skipped, it is answered with `INTERRUPTED`, and
   the batch answers its *remaining* calls rather than breaking out. Every `tool_call` keeps
-  a matching `tool` reply, which is the only shape the API will replay. The `save()` at the
-  end of the round then runs as usual, and the abort check at the top of the loop stops the
-  run.
+  a matching `tool` reply, which is the only shape the API will replay. In a saved session,
+  the loop writes the calls before execution and each reply as it becomes available.
+  A failed required write or the next abort check stops the run.
 - In the `catch`, `save()` happens before the abort check, so a stream cut in the middle keeps
   its partial text. Only the text — `partial.toolCalls` can hold calls with truncated JSON
   args, and writing those would create the dangling calls the rule above exists to prevent.

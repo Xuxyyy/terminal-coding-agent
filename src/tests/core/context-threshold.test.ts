@@ -114,8 +114,8 @@ test('a recorded tool result crosses the projected line and compacts before the 
   const {host, events} = fakeHost();
   const order: string[] = [];
   const store = fakeStore({
-    appendStep() {
-      order.push('step');
+    appendStep(messages) {
+      order.push(messages.at(-1)!.role);
     },
     appendCompact() {
       order.push('compact');
@@ -126,7 +126,7 @@ test('a recorded tool result crosses the projected line and compacts before the 
   await runAgent(active, model.choice, host, [reader(BIG_READ)], store);
 
   assert.equal(model.calls(), 3);
-  assert.deepEqual(order, ['step', 'compact', 'step']);
+  assert.deepEqual(order, ['assistant', 'tool', 'compact', 'assistant']);
   assert.equal(count(events, 'context_threshold_reached'), 1);
   assert.equal(count(events, 'compact_start'), 1);
   assert.equal(count(events, 'compact_end'), 1);
