@@ -50,7 +50,7 @@ export async function runHeadless(options: {
   if (!Number.isFinite(options.maxSeconds)) throw new Error('maxSeconds must be finite');
   if (options.deadlineMs !== undefined && !Number.isFinite(options.deadlineMs)) throw new Error('deadlineMs must be finite');
   const deadlineMs = Math.min(Date.now() + options.maxSeconds * 1000, options.deadlineMs ?? Infinity);
-  const monotonicDeadline = performance.now() + deadlineMs - Date.now();
+  const monotonicDeadline = performance.now() + (deadlineMs - Date.now());
   const maxSteps = validateMaxSteps(options.maxSteps ?? DEFAULT_MAX_STEPS);
   const session = createSession(
     options.root,
@@ -66,17 +66,12 @@ export async function runHeadless(options: {
   const interrupt = () => controller.abort(options.signal?.reason ?? new DOMException('Headless run interrupted', 'AbortError'));
   options.signal?.addEventListener('abort', interrupt, {once: true});
   if (options.signal?.aborted) interrupt();
-  const {host: rawHost, events, prompts, tokenUsage} = createHeadlessHost({
-    policy: options.policy,
-    signal: controller.signal,
-    deadlineMs, maxSteps, onEvent: options.onEvent,
-  });
   const trace = options.trace === false ? undefined : options.trace ?? TraceRun.headless(options.root, {task: options.task.slice(0, 120), model: modelSettings(options.choice), permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion()});
-  const host = traceHost(rawHost, trace?.main);
 
   let timedOut = false;
   let timer: NodeJS.Timeout | null = null;
-  const remainingMs = monotonicDeadline - performance.now();
+  const timerStarted = performance.now();
+  const remainingMs = Math.min(monotonicDeadline - timerStarted, 2_147_483_647);
   if (remainingMs <= 0) {
     timedOut = true;
     controller.abort(new DOMException('Trial deadline reached', 'TimeoutError'));
@@ -84,8 +79,16 @@ export async function runHeadless(options: {
     timer = setTimeout(() => {
       timedOut = true;
       controller.abort(new DOMException('Trial deadline reached', 'TimeoutError'));
-    }, Math.min(remainingMs, 2_147_483_647));
+    }, remainingMs);
   }
+
+  const {host: rawHost, events, prompts, tokenUsage} = createHeadlessHost({
+    policy: options.policy,
+    signal: controller.signal,
+    remainingTimeMs: () => remainingMs - (performance.now() - timerStarted),
+    maxSteps, onEvent: options.onEvent,
+  });
+  const host = traceHost(rawHost, trace?.main);
 
   host.onEvent({type: 'run_start', schemaVersion: 2, settings: {startedAt, deadlineMs, permissionMode: session.mode, policy: options.policy, sandbox: session.sandbox, maxSteps, source: sourceVersion(), model: modelSettings(options.choice)}});
 

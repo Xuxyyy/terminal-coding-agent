@@ -282,7 +282,7 @@ test('each agent receives and reads only its own shell completion before reporti
       childRead = true;
       return reply('Child checked B-failure and exit 7.');
     }
-    if (request.messages.at(-1)?.content.includes('Permission required:')) return reply('Permission handling is in progress.');
+    if (request.messages.at(-2)?.content.includes('Permission required:')) return reply('Permission handling is in progress.');
     parentRequests++;
     if (parentRequests === 1) return calls(
       shell('while ! test -f release-main; do sleep 0.01; done; printf A-success; touch main-finished', {run_in_background: true}),
@@ -493,7 +493,7 @@ test('unverified retained services prompt for readiness instead of an idle backg
       return reply('Finished.');
     }
     if (nth === 3) {
-      assert.match(messages.at(-1)!.content, /retained services still need readiness verification/);
+      assert.match(messages.at(-2)!.content, /retained services still need readiness verification/);
       return calls({name: 'task_stop', args: {task_id: id}});
     }
     return reply('Stopped the unverified service.');

@@ -59,7 +59,7 @@ function decide(
 export function createHeadlessHost(options: {
   policy: HeadlessPolicy;
   signal: AbortSignal;
-  deadlineMs?: number;
+  remainingTimeMs?: Host['remainingTimeMs'];
   maxSteps?: number;
   onEvent?: (event: AgentEvent) => void;
 }): HeadlessHost {
@@ -74,7 +74,7 @@ export function createHeadlessHost(options: {
   const host: Host = {
     signal: options.signal,
     agentId: 'main',
-    deadlineMs: options.deadlineMs,
+    remainingTimeMs: options.remainingTimeMs,
     maxSteps: options.maxSteps,
     onEvent(event) {
       events.push(event);

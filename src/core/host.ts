@@ -99,7 +99,7 @@ export interface Host {
   onModelUsage?(usage: ModelTokenUsage): void;
   signal: AbortSignal;
   agentId?: string;
-  deadlineMs?: number;
+  remainingTimeMs?(): number;
   maxSteps?: number;
   onDiagnostic?(event: AgentEvent): void;
   trace?: TraceScope;

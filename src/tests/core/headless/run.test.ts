@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test, {after} from 'node:test';
+import type OpenAI from 'openai';
 import type {ModelChoice} from '../../../core/client.js';
 import {runHeadless} from '../../../core/headless/run.js';
 import {systemPrompt} from '../../../core/prompt.js';
@@ -12,6 +13,7 @@ import type {HeadlessPolicy} from '../../../core/headless/host.js';
 import {
   fakeModel,
   finishChunk,
+  statusError,
   streamOf,
   textChunk,
   toolCallChunk,
@@ -82,6 +84,38 @@ test('an answer with no tool call finishes and returns the deltas joined', async
   assert.equal(result.text, 'one two three');
   assert.deepEqual(result.prompts, []);
   assert.equal(result.error, undefined);
+});
+
+test('headless requests refresh the inherited time limit on retries and after tools', async (t) => {
+  const wallTime = Date.now();
+  let monotonicTime = 5_000;
+  t.mock.method(Date, 'now', () => wallTime);
+  t.mock.method(performance, 'now', () => monotonicTime);
+  const root = tempDir();
+  fs.writeFileSync(path.join(root, 'note.txt'), 'read me\n');
+  const requests: OpenAI.ChatCompletionMessageParam[][] = [];
+  const {choice} = fakeModel((nth, body) => {
+    requests.push((body as {messages: OpenAI.ChatCompletionMessageParam[]}).messages);
+    monotonicTime += 2_000;
+    if (nth === 1) return Object.assign(statusError(503), {headers: {'retry-after-ms': '0'}});
+    if (nth === 2) return callResponse('read_file', {path: 'note.txt'});
+    return textResponse(['done']);
+  });
+
+  const result = await runHeadless({root, task: 'read the note', choice, policy: 'deny', maxSeconds: 30, deadlineMs: wallTime + 12_000, trace: false});
+
+  assert.equal(result.stopped, 'done');
+  assert.equal(result.execution?.deadlineMs, wallTime + 12_000);
+  assert.deepEqual(requests.map((messages) => messages.slice(1).map((message) => message.role)), [
+    ['user', 'system'], ['user', 'system'], ['user', 'assistant', 'tool', 'system'],
+  ]);
+  assert.deepEqual(requests.map((messages) => messages.at(-1)?.content), [
+    'Execution time remaining is about 12s.',
+    'Execution time remaining is about 10s.',
+    'Execution time remaining is about 8s.',
+  ]);
+  assert.deepEqual(requests[0]?.slice(0, -1), requests[1]?.slice(0, -1));
+  assert.deepEqual(requests[1]?.slice(0, -1), requests[2]?.slice(0, 2));
 });
 
 test('headless startup uses auto-edits by default and preserves saved permission modes', async () => {
@@ -322,7 +356,7 @@ test('a larger headless budget finishes beyond sixty turns under either policy',
     assert.equal(result.text, 'finished');
     assert.deepEqual(result.prompts, []);
     assert.match(sent[0]![0]!, /at most 90 model turns/);
-    assert.match(sent[80]!.at(-1)!, /10 model turns remain/);
+    assert.match(sent[80]!.at(-2)!, /10 model turns remain/);
     assert.equal(sent[80]!.filter((text) => text?.startsWith('Progress review:')).length, 4);
     assert.ok(sent.every((messages) => messages[0] === sent[0]![0]));
   }
@@ -340,10 +374,10 @@ test('a custom budget stops exactly at its limit and preserves usage', async () 
   const result = await headless({root: work, choice, maxSteps: 37});
 
   assert.equal(calls(), 37);
-  assert.match(sent[20]!.at(-1)!, /20 model turns completed.*17 model turns remain.*turn 37/);
-  assert.match(sent[27]!.at(-1)!, /27 model turns completed.*10 model turns remain.*turn 37/);
+  assert.match(sent[20]!.at(-2)!, /20 model turns completed.*17 model turns remain.*turn 37/);
+  assert.match(sent[27]!.at(-2)!, /27 model turns completed.*10 model turns remain.*turn 37/);
   assert.deepEqual(sent.at(-1)!.filter((text) => text?.startsWith('Progress review:')), [
-    sent[20]!.at(-1), sent[27]!.at(-1),
+    sent[20]!.at(-2), sent[27]!.at(-2),
   ]);
   assert.ok(sent.every((messages) => messages[0] === sent[0]![0]));
   assert.equal(result.stopped, 'step_limit');

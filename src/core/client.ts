@@ -230,6 +230,16 @@ async function attemptStep(
   snapshot(soFar());
 
   try {
+    let requestMessages = choice.model === DEFAULT_MODEL ? messages.map((message) =>
+      message.role === 'assistant'
+        ? {...message, reasoning_content: (message as {reasoning_content?: string}).reasoning_content ?? ''}
+        : message,
+    ) : messages;
+    const remainingMs = host.remainingTimeMs?.();
+    if (remainingMs !== undefined) {
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      requestMessages = [...requestMessages, {role: 'system', content: `Execution time remaining is about ${remainingSeconds}s.`}];
+    }
     const stream = await choice.client.chat.completions.create(
       {
         model: choice.model,
@@ -237,11 +247,7 @@ async function attemptStep(
           reasoning_effort: choice.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
           thinking: {type: choice.reasoningEffort === 'none' ? 'disabled' : 'enabled'},
         } : {}),
-        messages: choice.model === DEFAULT_MODEL ? messages.map((message) =>
-          message.role === 'assistant'
-            ? {...message, reasoning_content: (message as {reasoning_content?: string}).reasoning_content ?? ''}
-            : message,
-        ) : messages,
+        messages: requestMessages,
         ...(toolDefs.length ? {tools: toolDefs as OpenAI.ChatCompletionTool[]} : {}),
         stream: true,
         stream_options: {include_usage: true},
