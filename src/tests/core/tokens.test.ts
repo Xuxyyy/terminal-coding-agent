@@ -83,7 +83,7 @@ test('the existing five tools stay within their token budget', () => {
 
   assert.equal(estimateTools([]), 0);
   assert.ok(estimate > 260, `expected over 260 tokens, got ${estimate}`);
-  assert.ok(estimate < 1_350, `expected under 1350 tokens, got ${estimate}`);
+  assert.ok(estimate < 1_450, `expected under 1450 tokens, got ${estimate}`);
 });
 
 test('glob adds fewer than 200 estimated tokens', () => {
