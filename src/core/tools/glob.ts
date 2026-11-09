@@ -23,7 +23,8 @@ const schema = z.object({
 export const glob: Tool = {
   name: 'glob',
   description:
-    'Find files by name pattern. Returns up to 100 paths, newest first. Includes hidden and gitignored files but excludes sensitive files. Use grep to search contents.',
+    'Find files by name pattern. Returns up to 100 paths, newest first. Includes hidden and gitignored files but excludes sensitive files. Use grep to search contents. ' +
+    'Search further only to resolve a specific uncertainty that could change your next action. Proceed when the evidence is sufficient.',
   schema,
   request(raw) {
     return {kind: 'read', path: schema.parse(raw).path ?? '.'};

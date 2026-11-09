@@ -50,7 +50,8 @@ export const readFile: Tool = {
   description:
     'Read numbered lines from a UTF-8 text file. Missing files, directories, and files over 512 KiB are rejected. ' +
     'The result may cover only part of the file, and long lines may be truncated. Use offset and limit to read other lines. ' +
-    'Use untruncated file text without the displayed line numbers when quoting or preparing an edit.',
+    'Use untruncated file text without the displayed line numbers when quoting or preparing an edit. ' +
+    'Read more only to resolve a specific uncertainty that could change your next action. Proceed when the evidence is sufficient.',
   schema,
   request(args) {
     return {kind: 'read', path: schema.parse(args).path};

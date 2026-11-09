@@ -12,6 +12,7 @@ export const BASH_EXECUTION_GUIDANCE =
   '\n\n## Execution guidance\n\n' +
   '- Commands use an allowlisted environment with the existing HOME and persistent workspace temporary files. Shell exports do not persist.\n' +
   '- Shell results include the exit status and captured output, which may be truncated. ACC stops managed commands that exceed 32 MiB of output.\n' +
+  '- When using Bash to inspect, gather more evidence only to resolve a specific uncertainty that could change your next action. Proceed when the evidence is sufficient.\n' +
   `- The default foreground timeout is ${TIMEOUT_MS / 1000} seconds.\n` +
   '- When Sandbox is On, network is off by default. Request extra paths or network with access.\n' +
   '- Do not blindly retry blocked commands. Earlier parts may have run, so inspect their effects before retrying.';

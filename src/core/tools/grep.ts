@@ -135,7 +135,8 @@ function nothingFound(args: Args, stats: Stats | null, where: string): string {
 export const grep: Tool = {
   name: 'grep',
   description:
-    'Search file contents in the workspace with ripgrep. Returns matching file paths by default, so use it to find where something lives and then read_file to see it. Respects .gitignore.',
+    'Search file contents in the workspace with ripgrep. Returns matching file paths by default, so use it to find where something lives and then read_file to see it. Respects .gitignore. ' +
+    'Search further only to resolve a specific uncertainty that could change your next action. Proceed when the evidence is sufficient.',
   schema,
   request(rawArguments) {
     return {kind: 'read', path: schema.parse(rawArguments).path ?? '.'};
